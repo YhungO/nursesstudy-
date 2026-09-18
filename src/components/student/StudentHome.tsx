@@ -676,7 +676,7 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
                       {exam.totalQuestions} Questions
                     </span>
                     <span className="bg-slate-800/90 px-2.5 py-0.5 rounded-md text-[11px] font-semibold text-slate-300 border border-slate-700">
-                      Pass: {exam.passingScore}%
+                      Pass: {exam.passingScore}% ({Math.round(((exam.passingScore || 50) / 100) * exam.totalQuestions)}/{exam.totalQuestions})
                     </span>
                   </div>
                 </div>
@@ -687,7 +687,7 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
                     className="w-full py-2.5 px-3 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md shadow-purple-900/30"
                   >
                     <Clock className="w-3.5 h-3.5" />
-                    <span>Start CBT Examination</span>
+                    <span>Start Exam</span>
                   </button>
                 </div>
               </div>

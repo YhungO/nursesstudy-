@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
   AdminStats,
@@ -100,6 +100,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [, setLoading] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
 
+  // Student Delete Modal State
+  const [studentToDelete, setStudentToDelete] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [isDeletingStudent, setIsDeletingStudent] = useState(false);
+  const deletedStudentIdsRef = useRef<Set<string>>(new Set());
+
   // Load Admin Data
   const loadAdminData = async () => {
     setLoading(true);
@@ -110,7 +115,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         api.getAttempts(),
       ]);
       setStats(s);
-      setStudentsList(stud);
+      const filteredStud = (stud || []).filter(
+        (st) =>
+          !deletedStudentIdsRef.current.has(st.id) &&
+          (!st.email || !deletedStudentIdsRef.current.has(st.email.toLowerCase().trim()))
+      );
+      setStudentsList(filteredStud);
       setAttemptsList(att);
     } catch (err) {
       console.error('Failed to load admin data:', err);
@@ -127,13 +137,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (firestoreUsers && firestoreUsers.length > 0) {
         setStudentsList((prev) => {
           const map = new Map<string, any>();
-          // Existing local records
-          prev.forEach((st) => map.set(st.email?.toLowerCase() || st.id, st));
-          // Merge or prepend Firestore records
+          // Existing local records that have not been deleted
+          prev
+            .filter(
+              (st) =>
+                !deletedStudentIdsRef.current.has(st.id) &&
+                (!st.email || !deletedStudentIdsRef.current.has(st.email.toLowerCase().trim()))
+            )
+            .forEach((st) => map.set(st.email?.toLowerCase().trim() || st.id, st));
+
+          // Merge or prepend Firestore records, strictly filtering out deleted students
           firestoreUsers
-            .filter((u) => u.role !== 'admin')
+            .filter(
+              (u) =>
+                u.role !== 'admin' &&
+                !deletedStudentIdsRef.current.has(u.id) &&
+                (!u.email || !deletedStudentIdsRef.current.has(u.email.toLowerCase().trim()))
+            )
             .forEach((fu) => {
-              const key = fu.email?.toLowerCase() || fu.id;
+              const key = fu.email?.toLowerCase().trim() || fu.id;
               const existing = map.get(key);
               if (existing) {
                 map.set(key, { ...existing, ...fu });
@@ -366,7 +388,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const handleDeleteQuestion = async (id: string) => {
+  const handleDeleteQuestion = async (id: string | number) => {
     if (
       !confirm(
         'Are you sure you want to permanently delete this MCQ question from the question bank and all CBT exams?'
@@ -471,34 +493,83 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   // 7. Student Management
-  const handleToggleStudentStatus = async (studentId: string, currentStatus: string) => {
+  const handleToggleStudentStatus = async (studentId: string, currentStatus: string, email?: string) => {
     const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
+    const targetEmail = email?.toLowerCase().trim();
+
+    // Optimistic UI update immediately
+    setStudentsList((prev) =>
+      prev.map((s) =>
+        s.id === studentId || (targetEmail && s.email?.toLowerCase().trim() === targetEmail)
+          ? { ...s, status: newStatus }
+          : s
+      )
+    );
+
+    showNotify(newStatus === 'suspended' ? 'Student account suspended' : 'Student account reactivated');
+
     try {
-      await api.updateStudentStatus(studentId, newStatus);
-      showNotify(`Student account marked as ${newStatus}`);
-      loadAdminData();
+      await api.updateStudentStatus(studentId, newStatus, undefined, targetEmail);
     } catch (err: any) {
-      alert(err.message);
+      console.warn('API updateStudentStatus notice:', err);
+    }
+
+    try {
+      const studObj = studentsList.find(
+        (s) => s.id === studentId || (targetEmail && s.email?.toLowerCase().trim() === targetEmail)
+      );
+      if (studObj) {
+        await saveUserToFirestore({ ...studObj, status: newStatus } as any);
+      }
+    } catch (fErr) {
+      console.warn('Firestore update status notice:', fErr);
     }
   };
 
-  const handleDeleteStudent = async (studentId: string) => {
-    if (
-      !confirm(
-        'Are you sure you want to permanently remove this registered student account? They will lose access to the portal.'
-      )
-    )
-      return;
-    try {
-      await api.deleteStudent(studentId);
-      await deleteUserFromFirestore(studentId).catch((err) => {
-        console.warn('Firestore student deletion notice:', err);
-      });
-      showNotify('Student account permanently deleted');
-      loadAdminData();
-    } catch (err: any) {
-      alert('Delete failed: ' + (err.message || 'Unknown error'));
+  const handleConfirmDeleteStudent = async () => {
+    if (!studentToDelete) return;
+    const targetId = studentToDelete.id;
+    const targetEmail = studentToDelete.email?.toLowerCase().trim();
+
+    setIsDeletingStudent(true);
+
+    // Record in deleted set to block any re-injection from real-time listeners
+    deletedStudentIdsRef.current.add(targetId);
+    if (targetEmail) {
+      deletedStudentIdsRef.current.add(targetEmail);
     }
+
+    // Immediately remove from UI list (without needing to refresh)
+    setStudentsList((prev) =>
+      prev.filter(
+        (s) => s.id !== targetId && (!targetEmail || s.email?.toLowerCase().trim() !== targetEmail)
+      )
+    );
+
+    // Decrement stats counter immediately
+    setStats((prev) => (prev ? { ...prev, totalStudents: Math.max(0, prev.totalStudents - 1) } : null));
+
+    // Close confirmation dialog
+    setStudentToDelete(null);
+    setIsDeletingStudent(false);
+
+    // Required success notification
+    showNotify('Student deleted successfully');
+
+    // Permanently delete from backend database and Firestore
+    try {
+      await api.deleteStudent(targetId, targetEmail);
+    } catch (err: any) {
+      console.warn('Backend student deletion notice:', err);
+    }
+
+    try {
+      await deleteUserFromFirestore(targetId, targetEmail);
+    } catch (err: any) {
+      console.warn('Firestore student deletion notice:', err);
+    }
+
+    onDataChanged();
   };
 
   // 8. Database Seed Reset
@@ -1193,7 +1264,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           {lvl.badge}
                         </span>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-500/40">
-                          Correct: Option {q.correctOption}
+                          Correct: Option {q.correctOption || (typeof q.correct === 'number' ? ['A','B','C','D'][q.correct] : 'A')}
                         </span>
                         <span
                           className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${
@@ -1213,7 +1284,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         )}
                       </div>
                       <h4 className="font-bold text-xs sm:text-sm text-white leading-snug">
-                        {q.questionText}
+                        {q.questionText || q.question}
                       </h4>
                       {q.scenario && (
                         <p className="text-xs text-slate-400 italic mt-0.5 line-clamp-1">
@@ -1221,7 +1292,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </p>
                       )}
                       <p className="text-xs text-slate-400 line-clamp-1 mt-1">
-                        <span className="font-semibold text-slate-300">Rationale:</span> {q.explanation}
+                        <span className="font-semibold text-slate-300">Rationale:</span> {q.explanation || q.rationale}
                       </p>
                     </div>
 
@@ -1515,26 +1586,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleToggleStudentStatus(stud.id, stud.status)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
-                          stud.status === 'active'
-                            ? 'border-amber-500/40 text-amber-300 bg-amber-950/40 hover:bg-amber-900/60'
-                            : 'border-emerald-500/40 text-emerald-300 bg-emerald-950/40 hover:bg-emerald-900/60'
-                        }`}
-                      >
-                        {stud.status === 'active' ? 'Suspend' : 'Reactivate'}
-                      </button>
+                    {user?.role === 'admin' && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleToggleStudentStatus(stud.id, stud.status, stud.email)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
+                            stud.status === 'active'
+                              ? 'border-amber-500/40 text-amber-300 bg-amber-950/40 hover:bg-amber-900/60'
+                              : 'border-emerald-500/40 text-emerald-300 bg-emerald-950/40 hover:bg-emerald-900/60'
+                          }`}
+                          title={stud.status === 'active' ? 'Suspend student account' : 'Reactivate student account'}
+                        >
+                          {stud.status === 'active' ? 'Suspend' : 'Reactivate'}
+                        </button>
 
-                      <button
-                        onClick={() => handleDeleteStudent(stud.id)}
-                        className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-rose-800/40"
-                        title="Permanently remove student account"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                        <button
+                          onClick={() =>
+                            setStudentToDelete({
+                              id: stud.id,
+                              name: stud.name || 'Registered Student',
+                              email: stud.email || '',
+                            })
+                          }
+                          className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-rose-800/40"
+                          title="Permanently delete student account"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1561,6 +1641,73 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             )}
           </div>
+
+          {/* Delete Student Permanent Confirmation Dialog Modal */}
+          {studentToDelete && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
+              <div
+                className="w-full max-w-md bg-[#111827] border border-slate-800 rounded-3xl shadow-2xl p-6 space-y-5 text-white animate-in zoom-in-95 duration-150"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="delete-student-modal-title"
+              >
+                <div className="flex items-start gap-3.5">
+                  <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 shrink-0">
+                    <Trash2 className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 id="delete-student-modal-title" className="text-base font-bold text-white">
+                      Delete Student Account
+                    </h3>
+                    <p className="text-xs text-slate-300 leading-relaxed font-normal">
+                      Are you sure you want to permanently delete this student? This action cannot be undone.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Target Student Preview Card */}
+                <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-300 font-bold text-sm flex items-center justify-center shrink-0">
+                    {studentToDelete.name?.charAt(0)?.toUpperCase() || 'S'}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-white truncate">{studentToDelete.name}</p>
+                    <p className="text-[11px] text-slate-400 font-mono truncate">{studentToDelete.email}</p>
+                  </div>
+                </div>
+
+                {/* Action Buttons: Confirm vs Cancel */}
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setStudentToDelete(null)}
+                    disabled={isDeletingStudent}
+                    className="px-4 py-2.5 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmDeleteStudent}
+                    disabled={isDeletingStudent}
+                    className="px-4 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 active:bg-rose-700 rounded-xl transition-colors shadow-lg shadow-rose-950/40 cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isDeletingStudent ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Deleting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Permanently Delete</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

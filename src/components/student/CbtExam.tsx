@@ -105,14 +105,14 @@ export const CbtExam: React.FC<CbtExamProps> = ({
     handleSubmitExam();
   };
 
-  const handleSelectOption = (questionId: string, option: 'A' | 'B' | 'C' | 'D') => {
+  const handleSelectOption = (questionId: string | number, option: 'A' | 'B' | 'C' | 'D') => {
     setSelectedAnswers((prev) => ({
       ...prev,
       [questionId]: option,
     }));
   };
 
-  const toggleFlag = (questionId: string) => {
+  const toggleFlag = (questionId: string | number) => {
     setFlaggedQuestions((prev) => ({
       ...prev,
       [questionId]: !prev[questionId],
@@ -176,8 +176,8 @@ export const CbtExam: React.FC<CbtExamProps> = ({
             {attempt.passed ? '🎉 Congratulations! You Passed' : '⚠️ Examination Not Passed'}
           </p>
           <p className="text-xs sm:text-sm text-slate-300 mt-1.5 max-w-md mx-auto leading-relaxed">
-            Passing benchmark was {selectedExam?.passingScore || 70}%. You scored{' '}
-            {attempt.correctCount} out of {attempt.totalQuestions} questions correctly in{' '}
+            Passing benchmark is {selectedExam?.passingScore ?? 50}% ({Math.round(((selectedExam?.passingScore ?? 50) / 100) * attempt.totalQuestions)}/{attempt.totalQuestions}). You scored{' '}
+            <strong className="text-white">{attempt.correctCount} out of {attempt.totalQuestions} questions</strong> ({attempt.score}%) in{' '}
             {Math.round(attempt.timeSpentSeconds / 60)} minutes.
           </p>
 
@@ -250,12 +250,18 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                 )}
 
                 <h3 className="font-bold text-sm text-white leading-snug mb-3">
-                  {item.questionText}
+                  {item.questionText || item.question}
                 </h3>
 
                 {/* Options Review */}
                 <div className="space-y-2 mb-4">
-                  {item.options?.map((opt: any) => {
+                  {((item.options || []).map((opt: any, optIdx: number) => {
+                    if (typeof opt === 'string') {
+                      const letters = ['A', 'B', 'C', 'D'];
+                      return { id: letters[optIdx] || 'A', text: opt };
+                    }
+                    return opt;
+                  })).map((opt: any) => {
                     const isOptionCorrect = opt.id === item.correctOption;
                     const isSelectedByStudent = opt.id === item.selectedOption;
 
@@ -298,7 +304,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                     <BookOpen className="w-3.5 h-3.5 text-teal-400" />
                     <span>Clinical Rationale</span>
                   </div>
-                  <p className="leading-relaxed">{item.explanation}</p>
+                  <p className="leading-relaxed">{item.explanation || item.rationale || 'No rationale available.'}</p>
                 </div>
               </div>
             );
@@ -330,7 +336,8 @@ export const CbtExam: React.FC<CbtExamProps> = ({
             </span>
             <div className="text-xs text-slate-300 font-medium mt-0.5">
               Question <span className="font-bold text-white">{currentIndex + 1}</span> of {totalQ} •{' '}
-              <span className="text-purple-300 font-bold">{answeredCount}</span> answered
+              <span className="text-purple-300 font-bold">{answeredCount}</span> answered •{' '}
+              <span className="text-slate-400 font-bold">{totalQ - answeredCount}</span> unanswered
             </div>
           </div>
 
@@ -360,22 +367,22 @@ export const CbtExam: React.FC<CbtExamProps> = ({
 
         {/* Question Palette Drawer / Matrix */}
         <div className="bg-[#111827] p-4 rounded-2xl border border-slate-800 shadow-md">
-          <div className="flex items-center justify-between mb-3 text-xs font-semibold text-slate-400">
+          <div className="flex items-center justify-between mb-3 text-xs font-semibold text-slate-400 flex-wrap gap-2">
             <span>Question Palette ({totalQ} items):</span>
-            <div className="flex items-center gap-3 text-[11px]">
+            <div className="flex items-center gap-3 text-[11px] flex-wrap">
               <span className="flex items-center gap-1">
-                <span className="w-2.5 h-2.5 rounded bg-purple-600"></span> Answered
+                <span className="w-2.5 h-2.5 rounded bg-purple-600"></span> Answered ({answeredCount})
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-2.5 h-2.5 rounded bg-amber-500"></span> Flagged
+                <span className="w-2.5 h-2.5 rounded bg-amber-500"></span> Flagged ({Object.values(flaggedQuestions).filter(Boolean).length})
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-2.5 h-2.5 rounded bg-slate-800"></span> Unanswered
+                <span className="w-2.5 h-2.5 rounded bg-slate-800 border border-slate-700"></span> Unanswered ({totalQ - answeredCount})
               </span>
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 max-h-52 overflow-y-auto pr-1">
             {examData.questions.map((q, idx) => {
               const isAnswered = !!selectedAnswers[q.id];
               const qFlagged = !!flaggedQuestions[q.id];
@@ -435,17 +442,21 @@ export const CbtExam: React.FC<CbtExamProps> = ({
             )}
 
             <h2 className="text-base sm:text-lg font-bold text-white leading-relaxed">
-              {currentQ.questionText}
+              {currentQ.questionText || currentQ.question}
             </h2>
 
             {/* Choices */}
             <div className="space-y-3">
-              {currentQ.options.map((option) => {
-                const isSelected = currentAnswer === option.id;
+              {(currentQ.options || []).map((option: any, optIdx: number) => {
+                const optObj = typeof option === 'string'
+                  ? { id: (['A', 'B', 'C', 'D'][optIdx] || 'A') as 'A'|'B'|'C'|'D', text: option }
+                  : option;
+
+                const isSelected = currentAnswer === optObj.id;
                 return (
                   <button
-                    key={option.id}
-                    onClick={() => handleSelectOption(currentQ.id, option.id)}
+                    key={optObj.id}
+                    onClick={() => handleSelectOption(currentQ.id, optObj.id)}
                     className={`w-full p-4 rounded-2xl border text-left flex items-start gap-3.5 transition-all text-xs sm:text-sm ${
                       isSelected
                         ? 'bg-purple-950/60 border-purple-500 text-white ring-1 ring-purple-500/40 font-medium'
@@ -457,9 +468,9 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                         isSelected ? 'bg-purple-500 text-slate-950' : 'bg-slate-800 text-slate-300'
                       }`}
                     >
-                      {option.id}
+                      {optObj.id}
                     </div>
-                    <span className="flex-1 leading-relaxed">{option.text}</span>
+                    <span className="flex-1 leading-relaxed">{optObj.text}</span>
                   </button>
                 );
               })}
@@ -624,7 +635,9 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                   </div>
                   <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
                     <span className="text-slate-500 block text-[10px]">Pass Benchmark</span>
-                    <strong className="text-white text-xs">{exam.passingScore}% Pass</strong>
+                    <strong className="text-white text-xs">
+                      {exam.passingScore}% Pass ({Math.round(((exam.passingScore || 50) / 100) * (exam.actualQuestionCount || exam.totalQuestions))}/{exam.actualQuestionCount || exam.totalQuestions})
+                    </strong>
                   </div>
                 </div>
               </div>
@@ -636,7 +649,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                   className="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-purple-900/30 flex items-center justify-center gap-1.5"
                 >
                   <Clock className="w-4 h-4" />
-                  <span>Begin Examination</span>
+                  <span>Start Exam</span>
                 </button>
               </div>
             </div>

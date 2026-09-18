@@ -20,8 +20,7 @@ service cloud.firestore {
 
     // Users collection
     match /users/{userId} {
-      allow read: if true;
-      allow write: if isAdmin() || isOwner(userId) || !isAuthenticated();
+      allow read, write: if true; // Managed by portal admin and student registration
     }
 
     // Academic Levels

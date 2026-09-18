@@ -523,19 +523,36 @@ app.get('/api/questions', (req, res) => {
   }
   if (search && typeof search === 'string') {
     const q = search.toLowerCase();
-    questions = questions.filter(item =>
-      item.questionText.toLowerCase().includes(q) ||
-      (item.scenario && item.scenario.toLowerCase().includes(q)) ||
-      item.topic.toLowerCase().includes(q)
-    );
+    questions = questions.filter(item => {
+      const qText = (item.questionText || item.question || '').toLowerCase();
+      const scen = (item.scenario || '').toLowerCase();
+      const top = (item.topic || '').toLowerCase();
+      return qText.includes(q) || scen.includes(q) || top.includes(q);
+    });
   }
 
-  // Enrich with subject name
+  const OPTION_KEYS: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
+
+  // Enrich with subject name and normalize fields
   const enriched = questions.map(q => {
     const subj = database.subjects.find(s => s.id === q.subjectId);
+    const formattedOptions = (q.options || []).map((opt, idx) => {
+      if (typeof opt === 'string') {
+        return { id: OPTION_KEYS[idx] || 'A', text: opt };
+      }
+      return opt;
+    });
+
     return {
       ...q,
-      subjectName: subj?.name || 'General Nursing',
+      question: q.question || q.questionText,
+      questionText: q.questionText || q.question,
+      options: formattedOptions,
+      rawOptions: q.options,
+      correctOption: q.correctOption || (typeof q.correct === 'number' ? OPTION_KEYS[q.correct] : 'A'),
+      explanation: q.explanation || q.rationale || '',
+      rationale: q.rationale || q.explanation || '',
+      subjectName: subj?.name || 'Anatomy',
       subjectColor: subj?.color || 'teal',
     };
   });
@@ -623,7 +640,7 @@ app.get('/api/exams', (req, res) => {
     const subj = database.subjects.find(s => s.id === exam.subjectId);
     return {
       ...exam,
-      subjectName: exam.subjectId === 'all' ? 'Comprehensive / All Subjects' : (subj?.name || 'General Nursing'),
+      subjectName: exam.subjectName || (exam.subjectId === 'all' ? 'Comprehensive / All Subjects' : (subj?.name || 'General Nursing')),
       subjectColor: subj?.color || 'teal',
       actualQuestionCount: exam.questionIds ? exam.questionIds.length : exam.totalQuestions,
     };
@@ -642,7 +659,9 @@ app.get('/api/exams/:id', (req, res) => {
   // Resolve questions
   let examQuestions: Question[] = [];
   if (exam.questionIds && exam.questionIds.length > 0) {
-    examQuestions = database.questions.filter(q => exam.questionIds!.includes(q.id));
+    examQuestions = database.questions.filter(q =>
+      exam.questionIds!.some(qid => String(qid) === String(q.id))
+    );
   } else {
     // If no specific IDs set, sample from subject or general questions
     let candidates = database.questions;
@@ -652,22 +671,36 @@ app.get('/api/exams/:id', (req, res) => {
     examQuestions = candidates.slice(0, exam.totalQuestions);
   }
 
+  const OPTION_KEYS: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
+
   // Sanitize questions for student: do not include correctOption or explanation during test session
-  const sanitizedQuestions = examQuestions.map(q => ({
-    id: q.id,
-    subjectId: q.id,
-    topic: q.topic,
-    scenario: q.scenario,
-    questionText: q.questionText,
-    options: q.options,
-    difficulty: q.difficulty,
-  }));
+  const sanitizedQuestions = examQuestions.map(q => {
+    const formattedOptions = (q.options || []).map((opt, idx) => {
+      if (typeof opt === 'string') {
+        return { id: OPTION_KEYS[idx] || 'A', text: opt };
+      }
+      return opt;
+    });
+
+    return {
+      id: q.id,
+      question: q.question || q.questionText,
+      questionText: q.questionText || q.question,
+      options: formattedOptions,
+      rawOptions: q.options,
+      subjectId: q.subjectId,
+      course: q.course || 'Anatomy',
+      topic: q.topic,
+      scenario: q.scenario,
+      difficulty: q.difficulty || 'Medium',
+    };
+  });
 
   const subj = database.subjects.find(s => s.id === exam.subjectId);
 
   res.json({
     ...exam,
-    subjectName: exam.subjectId === 'all' ? 'Comprehensive / All Subjects' : (subj?.name || 'General Nursing'),
+    subjectName: exam.subjectName || (exam.subjectId === 'all' ? 'Comprehensive / All Subjects' : (subj?.name || 'General Nursing')),
     questions: sanitizedQuestions,
   });
 });
@@ -740,7 +773,9 @@ app.post('/api/exams/:id/submit', requireAuth, (req, res) => {
   // Fetch actual questions
   let targetQuestions: Question[] = [];
   if (exam.questionIds && exam.questionIds.length > 0) {
-    targetQuestions = database.questions.filter(q => exam.questionIds!.includes(q.id));
+    targetQuestions = database.questions.filter(q =>
+      exam.questionIds!.some(qid => String(qid) === String(q.id))
+    );
   } else {
     let candidates = database.questions;
     if (exam.subjectId && exam.subjectId !== 'all') {
@@ -749,26 +784,50 @@ app.post('/api/exams/:id/submit', requireAuth, (req, res) => {
     targetQuestions = candidates.slice(0, exam.totalQuestions);
   }
 
+  const OPTION_KEYS: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
   let correctCount = 0;
   const detailedAnswers = targetQuestions.map(q => {
-    const selectedOption = answers ? (answers[q.id] || null) : null;
-    const isCorrect = selectedOption === q.correctOption;
+    const selectedOption = answers ? (answers[q.id] ?? answers[String(q.id)] ?? null) : null;
+    
+    // Normalize correct option
+    let expectedOption: string = q.correctOption || '';
+    if (!expectedOption && typeof q.correct === 'number') {
+      expectedOption = OPTION_KEYS[q.correct] || 'A';
+    }
+
+    const isCorrect = selectedOption !== null && (
+      selectedOption === expectedOption ||
+      (typeof q.correct === 'number' && (selectedOption === q.correct || selectedOption === OPTION_KEYS[q.correct]))
+    );
+
     if (isCorrect) correctCount++;
+
+    const formattedOptions = (q.options || []).map((opt, idx) => {
+      if (typeof opt === 'string') {
+        return { id: OPTION_KEYS[idx] || 'A', text: opt };
+      }
+      return opt;
+    });
+
     return {
       questionId: q.id,
+      id: q.id,
+      question: q.question || q.questionText,
+      questionText: q.questionText || q.question,
       selectedOption,
-      correctOption: q.correctOption,
+      correctOption: expectedOption,
+      correct: q.correct,
       isCorrect,
-      explanation: q.explanation,
+      explanation: q.explanation || q.rationale || '',
+      rationale: q.rationale || q.explanation || '',
       scenario: q.scenario,
-      questionText: q.questionText,
-      options: q.options,
+      options: formattedOptions,
     };
   });
 
   const totalQuestions = targetQuestions.length || 1;
   const scorePercent = Math.round((correctCount / totalQuestions) * 100);
-  const passed = scorePercent >= (exam.passingScore || 70);
+  const passed = scorePercent >= (exam.passingScore ?? 50);
 
   const subj = database.subjects.find(s => s.id === exam.subjectId);
 
@@ -779,7 +838,7 @@ app.post('/api/exams/:id/submit', requireAuth, (req, res) => {
     userEmail: user.email,
     examId: exam.id,
     examTitle: exam.title,
-    subjectName: exam.subjectId === 'all' ? 'Comprehensive Nursing' : (subj?.name || 'General Nursing'),
+    subjectName: exam.subjectName || (exam.subjectId === 'all' ? 'Comprehensive Nursing' : (subj?.name || 'General Nursing')),
     type: 'cbt_exam',
     score: scorePercent,
     correctCount,
@@ -787,9 +846,9 @@ app.post('/api/exams/:id/submit', requireAuth, (req, res) => {
     timeSpentSeconds: Number(timeSpentSeconds) || 0,
     passed,
     answers: detailedAnswers.map(a => ({
-      questionId: a.questionId,
-      selectedOption: a.selectedOption,
-      correctOption: a.correctOption,
+      questionId: String(a.questionId),
+      selectedOption: (a.selectedOption || 'A') as 'A' | 'B' | 'C' | 'D',
+      correctOption: (a.correctOption || 'A') as 'A' | 'B' | 'C' | 'D',
       isCorrect: a.isCorrect,
     })),
     createdAt: new Date().toISOString(),
@@ -812,22 +871,45 @@ app.post('/api/practice/submit', requireAuth, (req, res) => {
 
   const subj = database.subjects.find(s => s.id === subjectId);
   const questionIds = Object.keys(answers || {});
-  const questions = database.questions.filter(q => questionIds.includes(q.id));
+  const questions = database.questions.filter(q =>
+    questionIds.some(qid => String(qid) === String(q.id))
+  );
 
+  const OPTION_KEYS: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
   let correctCount = 0;
   const detailed = questions.map(q => {
-    const selectedOption = answers[q.id] || null;
-    const isCorrect = selectedOption === q.correctOption;
+    const selectedOption = answers ? (answers[q.id] ?? answers[String(q.id)] ?? null) : null;
+    let expectedOption: string = q.correctOption || '';
+    if (!expectedOption && typeof q.correct === 'number') {
+      expectedOption = OPTION_KEYS[q.correct] || 'A';
+    }
+
+    const isCorrect = selectedOption !== null && (
+      selectedOption === expectedOption ||
+      (typeof q.correct === 'number' && (selectedOption === q.correct || selectedOption === OPTION_KEYS[q.correct]))
+    );
+
     if (isCorrect) correctCount++;
+
+    const formattedOptions = (q.options || []).map((opt, idx) => {
+      if (typeof opt === 'string') {
+        return { id: OPTION_KEYS[idx] || 'A', text: opt };
+      }
+      return opt;
+    });
+
     return {
       questionId: q.id,
+      id: q.id,
       selectedOption,
-      correctOption: q.correctOption,
+      correctOption: expectedOption,
       isCorrect,
-      explanation: q.explanation,
+      explanation: q.explanation || q.rationale || '',
+      rationale: q.rationale || q.explanation || '',
       scenario: q.scenario,
-      questionText: q.questionText,
-      options: q.options,
+      questionText: q.questionText || q.question,
+      question: q.question || q.questionText,
+      options: formattedOptions,
     };
   });
 
@@ -849,9 +931,9 @@ app.post('/api/practice/submit', requireAuth, (req, res) => {
     timeSpentSeconds: Number(timeSpentSeconds) || 0,
     passed: score >= 70,
     answers: detailed.map(d => ({
-      questionId: d.questionId,
-      selectedOption: d.selectedOption,
-      correctOption: d.correctOption,
+      questionId: String(d.questionId),
+      selectedOption: (d.selectedOption || 'A') as 'A' | 'B' | 'C' | 'D',
+      correctOption: (d.correctOption || 'A') as 'A' | 'B' | 'C' | 'D',
       isCorrect: d.isCorrect,
     })),
     createdAt: new Date().toISOString(),
@@ -1056,8 +1138,13 @@ app.get('/api/admin/students', requireAdmin, (req, res) => {
 app.put('/api/admin/students/:id/status', requireAdmin, (req, res) => {
   const { id } = req.params;
   const { status, levelId } = req.body;
+  const emailParam = req.query.email ? String(req.query.email).toLowerCase().trim() : '';
   const database = db.get();
-  const index = database.users.findIndex(u => u.id === id);
+  const index = database.users.findIndex(u =>
+    u.id === id ||
+    (emailParam && u.email.toLowerCase() === emailParam) ||
+    u.email.toLowerCase() === id.toLowerCase()
+  );
 
   if (index === -1) return res.status(404).json({ error: 'Student not found' });
   if (status) database.users[index].status = status;
@@ -1070,10 +1157,32 @@ app.put('/api/admin/students/:id/status', requireAdmin, (req, res) => {
 
 app.delete('/api/admin/students/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
+  const emailParam = req.query.email ? String(req.query.email).toLowerCase().trim() : '';
   const database = db.get();
-  database.users = database.users.filter(u => u.id !== id);
+
+  const targetUser = database.users.find(u =>
+    u.id === id ||
+    (emailParam && u.email.toLowerCase() === emailParam) ||
+    u.email.toLowerCase() === id.toLowerCase()
+  );
+
+  const targetId = targetUser ? targetUser.id : id;
+  const targetEmail = targetUser ? targetUser.email.toLowerCase() : emailParam;
+
+  database.users = database.users.filter(u =>
+    u.id !== targetId &&
+    (!targetEmail || u.email.toLowerCase() !== targetEmail)
+  );
+
+  // Clean up any test attempts and bookmarks belonging to this student
+  database.attempts = database.attempts.filter(a =>
+    a.userId !== targetId &&
+    (!targetEmail || a.userEmail?.toLowerCase() !== targetEmail)
+  );
+  database.bookmarks = database.bookmarks.filter(b => b.userId !== targetId);
+
   db.save();
-  res.json({ success: true });
+  res.json({ success: true, deletedId: targetId });
 });
 
 // Restore sample seed dataset

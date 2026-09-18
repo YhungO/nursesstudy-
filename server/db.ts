@@ -56,18 +56,22 @@ export interface QuestionOption {
 }
 
 export interface Question {
-  id: string;
+  id: string | number;
+  question?: string;
+  questionText?: string;
+  options: (QuestionOption | string)[];
+  correct?: number;
+  correctOption?: 'A' | 'B' | 'C' | 'D';
+  rationale?: string;
+  explanation?: string;
+  course?: string;
   subjectId: string;
   topic: string;
-  levelId: string;
+  levelId?: string;
   scenario?: string;
-  questionText: string;
-  options: QuestionOption[];
-  correctOption: 'A' | 'B' | 'C' | 'D';
-  explanation: string;
-  difficulty: 'Easy' | 'Medium' | 'Hard';
-  tags: string[];
-  createdAt: string;
+  difficulty?: 'Easy' | 'Medium' | 'Hard';
+  tags?: string[];
+  createdAt?: string;
 }
 
 export interface CBTExam {
@@ -75,11 +79,12 @@ export interface CBTExam {
   title: string;
   description: string;
   subjectId: string; // 'all' or specific
+  subjectName?: string;
   levelId: string;
   durationMinutes: number;
   totalQuestions: number;
   passingScore: number;
-  questionIds: string[];
+  questionIds: (string | number)[];
   isPublished: boolean;
   instructions: string[];
   createdAt: string;

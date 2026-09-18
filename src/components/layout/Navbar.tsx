@@ -44,7 +44,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'home', label: 'Home', icon: Activity },
     { id: 'notes', label: 'Study Notes', icon: BookOpen },
     { id: 'practice', label: 'Practice MCQs', icon: HelpCircle },
-    { id: 'cbt', label: 'CBT Exams', icon: Clock },
+    { id: 'cbt', label: 'CBT Hall', icon: Clock },
     { id: 'results', label: 'My Results', icon: Award },
     { id: 'bookmarks', label: 'Bookmarks', icon: Bookmark },
   ];

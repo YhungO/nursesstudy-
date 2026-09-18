@@ -102,7 +102,7 @@ export async function seedFirestoreIfEmpty(initialData: {
 
     // Batch seed questions
     for (const q of initialData.questions) {
-      await setDoc(doc(db, COLLECTIONS.QUESTIONS, q.id), q);
+      await setDoc(doc(db, COLLECTIONS.QUESTIONS, String(q.id)), q);
     }
 
     // Batch seed exams
@@ -331,15 +331,15 @@ export async function deleteNoteFromFirestore(noteId: string) {
 
 export async function saveQuestionToFirestore(q: Question) {
   try {
-    await setDoc(doc(db, COLLECTIONS.QUESTIONS, q.id), q);
+    await setDoc(doc(db, COLLECTIONS.QUESTIONS, String(q.id)), q);
   } catch (err) {
     console.warn('[Firestore] Failed to save question:', err);
   }
 }
 
-export async function deleteQuestionFromFirestore(qId: string) {
+export async function deleteQuestionFromFirestore(qId: string | number) {
   try {
-    await deleteDoc(doc(db, COLLECTIONS.QUESTIONS, qId));
+    await deleteDoc(doc(db, COLLECTIONS.QUESTIONS, String(qId)));
   } catch (err) {
     console.warn('[Firestore] Failed to delete question:', err);
     throw err;
@@ -397,13 +397,31 @@ export async function saveUserToFirestore(user: User) {
   }
 }
 
-export async function deleteUserFromFirestore(userId: string) {
+export async function deleteUserFromFirestore(userId: string, email?: string) {
   try {
-    await deleteDoc(doc(db, COLLECTIONS.USERS, userId));
+    if (userId) {
+      await deleteDoc(doc(db, COLLECTIONS.USERS, userId)).catch((err) => {
+        console.warn('[Firestore] Error deleting user by doc id:', err);
+      });
+    }
+    if (email) {
+      try {
+        const q = query(
+          collection(db, COLLECTIONS.USERS),
+          where('email', '==', email.toLowerCase().trim())
+        );
+        const snap = await getDocs(q);
+        for (const userDoc of snap.docs) {
+          await deleteDoc(userDoc.ref).catch(() => {});
+        }
+      } catch (qErr) {
+        console.warn('[Firestore] Error deleting user by email query:', qErr);
+      }
+    }
     return true;
   } catch (err) {
     console.warn('[Firestore] Failed to delete user record:', err);
-    throw err;
+    return false;
   }
 }
 

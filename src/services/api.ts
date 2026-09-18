@@ -134,9 +134,9 @@ export const api = {
   },
   createQuestion: (data: Partial<Question>) =>
     request<Question>('/api/questions', { method: 'POST', body: JSON.stringify(data) }),
-  updateQuestion: (id: string, data: Partial<Question>) =>
+  updateQuestion: (id: string | number, data: Partial<Question>) =>
     request<Question>(`/api/questions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteQuestion: (id: string) =>
+  deleteQuestion: (id: string | number) =>
     request<{ success: boolean }>(`/api/questions/${id}`, { method: 'DELETE' }),
 
   // CBT Exams
@@ -205,13 +205,20 @@ export const api = {
     request<
       (User & { levelName: string; totalAttempts: number; avgScore: number })[]
     >('/api/admin/students'),
-  updateStudentStatus: (id: string, status?: string, levelId?: string) =>
-    request<User>(`/api/admin/students/${id}/status`, {
+  updateStudentStatus: (id: string, status?: string, levelId?: string, email?: string) => {
+    const query = email ? `?email=${encodeURIComponent(email)}` : '';
+    return request<User>(`/api/admin/students/${encodeURIComponent(id)}/status${query}`, {
       method: 'PUT',
       body: JSON.stringify({ status, levelId }),
-    }),
-  deleteStudent: (id: string) =>
-    request<{ success: boolean }>(`/api/admin/students/${id}`, { method: 'DELETE' }),
+    });
+  },
+  deleteStudent: (id: string, email?: string) => {
+    const query = email ? `?email=${encodeURIComponent(email)}` : '';
+    return request<{ success: boolean; deletedId?: string }>(
+      `/api/admin/students/${encodeURIComponent(id)}${query}`,
+      { method: 'DELETE' }
+    );
+  },
   resetDatabase: () =>
     request<{ success: boolean; message: string }>('/api/admin/reset-data', { method: 'POST' }),
 };

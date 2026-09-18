@@ -9,15 +9,18 @@ import {
   RotateCcw,
   Bookmark,
   Sparkles,
+  Clock,
+  ArrowRight,
 } from 'lucide-react';
 
 interface QuestionPracticeProps {
   questions: Question[];
   subjects: Subject[];
   initialSubjectId?: string | null;
-  bookmarkedQuestionIds: string[];
-  onToggleBookmark: (questionId: string) => void;
+  bookmarkedQuestionIds: (string | number)[];
+  onToggleBookmark: (questionId: string | number) => void;
   onRecordAttempt?: (score: number, total: number) => void;
+  onNavigateToCbt?: (examId?: string) => void;
 }
 
 export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
@@ -26,6 +29,7 @@ export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
   initialSubjectId = null,
   bookmarkedQuestionIds = [],
   onToggleBookmark,
+  onNavigateToCbt,
 }) => {
   const [selectedSubject, setSelectedSubject] = useState<string>(initialSubjectId || 'all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
@@ -59,7 +63,13 @@ export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
     if (!selectedOption || !currentQuestion || isAnswerSubmitted) return;
     setIsAnswerSubmitted(true);
 
-    const isCorrect = selectedOption === currentQuestion.correctOption;
+    const correctOpt =
+      currentQuestion.correctOption ||
+      (typeof currentQuestion.correct === 'number'
+        ? (['A', 'B', 'C', 'D'][currentQuestion.correct] as 'A' | 'B' | 'C' | 'D')
+        : 'A');
+
+    const isCorrect = selectedOption === correctOpt;
     setSessionResults((prev) => ({
       ...prev,
       [currentQuestion.id]: {
@@ -174,6 +184,35 @@ export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
         </div>
       </div>
 
+      {/* Timed CBT Hall Notification Banner */}
+      {onNavigateToCbt && (
+        <div className="bg-gradient-to-r from-purple-950/60 via-[#111827] to-teal-950/40 p-4 sm:p-5 rounded-2xl border border-purple-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-sm text-white">ND1 Nursing – Endocrine System CBT</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  45 Mins • 100 MCQs • 50% Pass
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                Looking for the official timed examination? The 100-question Endocrine System timed test is now live in the CBT Hall.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigateToCbt()}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-purple-900/30 shrink-0 flex items-center gap-1.5 self-stretch sm:self-auto justify-center"
+          >
+            <span>Enter CBT Hall</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Session Progress Tracker */}
       <div className="bg-[#111827] p-4 rounded-2xl border border-slate-800 shadow-md flex items-center justify-between gap-4 text-xs font-semibold">
         <div className="flex items-center gap-2">
@@ -255,16 +294,27 @@ export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
 
             {/* Question Stem */}
             <h2 className="text-base sm:text-lg font-bold text-white leading-snug">
-              {currentQuestion.questionText}
+              {currentQuestion.questionText || currentQuestion.question}
             </h2>
 
             {/* Options List */}
             <div className="space-y-3">
-              {currentQuestion.options.map((option) => {
-                const isSelected = selectedOption === option.id;
-                const isCorrect = isAnswerSubmitted && option.id === currentQuestion.correctOption;
+              {(currentQuestion.options || []).map((option: any, optIdx: number) => {
+                const optObj =
+                  typeof option === 'string'
+                    ? { id: (['A', 'B', 'C', 'D'][optIdx] || 'A') as 'A' | 'B' | 'C' | 'D', text: option }
+                    : option;
+
+                const correctOpt =
+                  currentQuestion.correctOption ||
+                  (typeof currentQuestion.correct === 'number'
+                    ? ['A', 'B', 'C', 'D'][currentQuestion.correct]
+                    : 'A');
+
+                const isSelected = selectedOption === optObj.id;
+                const isCorrect = isAnswerSubmitted && optObj.id === correctOpt;
                 const isWrongSelection =
-                  isAnswerSubmitted && isSelected && option.id !== currentQuestion.correctOption;
+                  isAnswerSubmitted && isSelected && optObj.id !== correctOpt;
 
                 let optionStyles = 'bg-slate-900/80 border-slate-800 hover:border-sky-500/60 text-slate-200';
 
@@ -280,9 +330,9 @@ export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
 
                 return (
                   <button
-                    key={option.id}
+                    key={optObj.id}
                     disabled={isAnswerSubmitted}
-                    onClick={() => handleSelectOption(option.id)}
+                    onClick={() => handleSelectOption(optObj.id)}
                     className={`w-full p-4 rounded-2xl border text-left flex items-start gap-3.5 transition-all text-xs sm:text-sm ${optionStyles} disabled:cursor-default`}
                   >
                     <div
@@ -296,9 +346,9 @@ export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
                           : 'bg-slate-800 text-slate-300'
                       }`}
                     >
-                      {option.id}
+                      {optObj.id}
                     </div>
-                    <span className="flex-1 leading-relaxed">{option.text}</span>
+                    <span className="flex-1 leading-relaxed">{optObj.text}</span>
                     {isCorrect && (
                       <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                     )}
@@ -323,7 +373,11 @@ export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
               /* In-depth Clinical Rationale */
               <div
                 className={`p-5 rounded-2xl border space-y-2 animate-in fade-in ${
-                  selectedOption === currentQuestion.correctOption
+                  selectedOption ===
+                  (currentQuestion.correctOption ||
+                    (typeof currentQuestion.correct === 'number'
+                      ? ['A', 'B', 'C', 'D'][currentQuestion.correct]
+                      : 'A'))
                     ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
                     : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
                 }`}
@@ -331,11 +385,16 @@ export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
                 <div className="flex items-center gap-2 font-bold text-sm">
                   <Sparkles className="w-4 h-4 text-sky-400" />
                   <span>
-                    Clinical Rationale (Correct Answer: {currentQuestion.correctOption})
+                    Clinical Rationale (Correct Answer:{' '}
+                    {currentQuestion.correctOption ||
+                      (typeof currentQuestion.correct === 'number'
+                        ? ['A', 'B', 'C', 'D'][currentQuestion.correct]
+                        : 'A')}
+                    )
                   </span>
                 </div>
                 <p className="text-xs sm:text-sm leading-relaxed text-slate-200">
-                  {currentQuestion.explanation || 'No rationale available.'}
+                  {currentQuestion.explanation || currentQuestion.rationale || 'No rationale available.'}
                 </p>
               </div>
             )}
