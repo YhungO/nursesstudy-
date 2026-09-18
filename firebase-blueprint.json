@@ -1,0 +1,174 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NursesStudy Blueprint",
+  "description": "Schema definitions and security parameters for NursesStudy CBT & Nursing Portal",
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role-based access control",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["student", "admin"] },
+        "levelId": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "suspended"] },
+        "school": { "type": "string" },
+        "gradYear": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "NursingLevel": {
+      "title": "NursingLevel",
+      "description": "Academic cohort level (ND 1, ND 2, HND, Year 1-4, RN Prep)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "order": { "type": "number" },
+        "badge": { "type": "string" }
+      },
+      "required": ["id", "name", "order", "badge"]
+    },
+    "Subject": {
+      "title": "Subject",
+      "description": "Nursing course subject",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "levelId": { "type": "string" },
+        "name": { "type": "string" },
+        "code": { "type": "string" },
+        "description": { "type": "string" },
+        "icon": { "type": "string" },
+        "color": { "type": "string" },
+        "order": { "type": "number" },
+        "isPublished": { "type": "boolean" }
+      },
+      "required": ["id", "name", "code", "isPublished"]
+    },
+    "StudyNote": {
+      "title": "StudyNote",
+      "description": "Clinical revision notes and high-yield pearls",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "levelId": { "type": "string" },
+        "title": { "type": "string" },
+        "topic": { "type": "string" },
+        "summary": { "type": "string" },
+        "content": { "type": "string" },
+        "keyPoints": { "type": "array", "items": { "type": "string" } },
+        "clinicalPearls": { "type": "array", "items": { "type": "string" } },
+        "readingTime": { "type": "number" },
+        "isPublished": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "subjectId", "title", "content", "isPublished"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "CBT question with rationale and clinical scenarios",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "topic": { "type": "string" },
+        "levelId": { "type": "string" },
+        "scenario": { "type": "string" },
+        "questionText": { "type": "string" },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "enum": ["A", "B", "C", "D"] },
+              "text": { "type": "string" }
+            }
+          }
+        },
+        "correctOption": { "type": "string", "enum": ["A", "B", "C", "D"] },
+        "explanation": { "type": "string" },
+        "difficulty": { "type": "string", "enum": ["Easy", "Medium", "Hard"] },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "subjectId", "questionText", "options", "correctOption"]
+    },
+    "CBTExam": {
+      "title": "CBTExam",
+      "description": "Timed Computer-Based Test exam",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "levelId": { "type": "string" },
+        "durationMinutes": { "type": "number" },
+        "totalQuestions": { "type": "number" },
+        "passingScore": { "type": "number" },
+        "questionIds": { "type": "array", "items": { "type": "string" } },
+        "isPublished": { "type": "boolean" },
+        "instructions": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "durationMinutes", "passingScore", "isPublished"]
+    },
+    "ExamAttempt": {
+      "title": "ExamAttempt",
+      "description": "Student score and response record for an exam or quiz",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "examId": { "type": "string" },
+        "examTitle": { "type": "string" },
+        "subjectName": { "type": "string" },
+        "type": { "type": "string", "enum": ["cbt_exam", "practice_quiz"] },
+        "score": { "type": "number" },
+        "correctCount": { "type": "number" },
+        "totalQuestions": { "type": "number" },
+        "timeSpentSeconds": { "type": "number" },
+        "passed": { "type": "boolean" },
+        "answers": { "type": "array" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "examId", "score", "passed", "createdAt"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Broadcast notice for nursing students",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "priority": { "type": "string", "enum": ["urgent", "high", "normal"] },
+        "targetLevel": { "type": "string" },
+        "author": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "content", "priority", "createdAt"]
+    },
+    "Bookmark": {
+      "title": "Bookmark",
+      "description": "Saved study material bookmarked by a student",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "noteId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "noteId", "createdAt"]
+    }
+  }
+}

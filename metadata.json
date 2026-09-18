@@ -1,0 +1,8 @@
+{
+  "name": "Remix NursesStudy",
+  "description": "A modern, professional nursing education and CBT exam preparation platform for nursing students and administrators.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
