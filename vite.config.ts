@@ -1,7 +1,7 @@
-import tailwindcss from '@tailwindcss/vite';
-import react from '@vitejs/plugin-react';
-import path from 'path';
-import {defineConfig} from 'vite';
+import tailwindcss from '@tailwindcss/vite'
+import react from '@vitejs/plugin-react'
+import path from 'path'
+import { defineConfig } from 'vite'
 
 export default defineConfig(() => {
   return {
@@ -12,11 +12,15 @@ export default defineConfig(() => {
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
-      hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      allowedHosts: true,
+      // HMR is disabled in AI Studio
+      // Do not modify file watching
+      hmr: process.env.DISABLE_HMR === 'true' ? false : undefined,
+      // Disable file watching when DISABLE_HMR is set
+      watch: process.env.DISABLE_HMR === 'true' ? null : undefined,
     },
-  };
-});
+    preview: {
+      allowedHosts: true,
+    },
+  }
+})
