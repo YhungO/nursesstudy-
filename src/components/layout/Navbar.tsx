@@ -52,7 +52,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <>
       {/* Top Navbar */}
-      <header className="sticky top-0 z-40 bg-[#0c121e]/95 backdrop-blur-xl border-b border-slate-800/80 shadow-md shadow-black/20 transition-all">
+      <header className="sticky top-0 z-40 bg-[#07070a]/95 backdrop-blur-md border-b border-slate-800/60 shadow-xs transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo & Brand Identity */}
@@ -324,56 +324,61 @@ export const Navbar: React.FC<NavbarProps> = ({
       </header>
 
       {/* Mobile Bottom Navigation Bar (Optimized for Thumb Reach in O3Schools Style) */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0c121e]/95 backdrop-blur-xl border-t border-slate-800/90 px-3 py-1.5 flex items-center justify-around shadow-[0_-4px_20px_rgba(0,0,0,0.5)]">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#090e17]/95 backdrop-blur-xl border-t border-slate-800/80 px-2 py-2 flex items-center justify-around shadow-[0_-4px_24px_rgba(0,0,0,0.6)]">
         <button
           onClick={() => onNavigate('home')}
-          className={`flex flex-col items-center py-1 px-3 rounded-xl text-[10px] font-semibold transition-all ${
-            currentView === 'home' ? 'text-teal-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+          className={`flex flex-col items-center py-1.5 px-3 rounded-xl text-[10px] font-semibold transition-all ${
+            currentView === 'home'
+              ? 'bg-teal-500/15 text-teal-300 font-bold border border-teal-500/30'
+              : 'text-slate-400 hover:text-slate-200 border border-transparent'
           }`}
         >
-          <Activity className="w-5 h-5 mb-0.5" />
+          <Activity className="w-4 h-4 mb-0.5" />
           <span>Home</span>
-          {currentView === 'home' && <span className="w-1 h-1 rounded-full bg-teal-400 mt-0.5"></span>}
         </button>
         <button
           onClick={() => onNavigate('notes')}
-          className={`flex flex-col items-center py-1 px-3 rounded-xl text-[10px] font-semibold transition-all ${
-            currentView === 'notes' ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+          className={`flex flex-col items-center py-1.5 px-3 rounded-xl text-[10px] font-semibold transition-all ${
+            currentView === 'notes'
+              ? 'bg-teal-500/15 text-teal-300 font-bold border border-teal-500/30'
+              : 'text-slate-400 hover:text-slate-200 border border-transparent'
           }`}
         >
-          <BookOpen className="w-5 h-5 mb-0.5" />
+          <BookOpen className="w-4 h-4 mb-0.5" />
           <span>Notes</span>
-          {currentView === 'notes' && <span className="w-1 h-1 rounded-full bg-emerald-400 mt-0.5"></span>}
         </button>
         <button
           onClick={() => onNavigate('practice')}
-          className={`flex flex-col items-center py-1 px-3 rounded-xl text-[10px] font-semibold transition-all ${
-            currentView === 'practice' ? 'text-sky-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+          className={`flex flex-col items-center py-1.5 px-3 rounded-xl text-[10px] font-semibold transition-all ${
+            currentView === 'practice'
+              ? 'bg-sky-500/15 text-sky-300 font-bold border border-sky-500/30'
+              : 'text-slate-400 hover:text-slate-200 border border-transparent'
           }`}
         >
-          <HelpCircle className="w-5 h-5 mb-0.5" />
+          <HelpCircle className="w-4 h-4 mb-0.5" />
           <span>Practice</span>
-          {currentView === 'practice' && <span className="w-1 h-1 rounded-full bg-sky-400 mt-0.5"></span>}
         </button>
         <button
           onClick={() => onNavigate('cbt')}
-          className={`flex flex-col items-center py-1 px-3 rounded-xl text-[10px] font-semibold transition-all ${
-            currentView === 'cbt' ? 'text-purple-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+          className={`flex flex-col items-center py-1.5 px-3 rounded-xl text-[10px] font-semibold transition-all ${
+            currentView === 'cbt'
+              ? 'bg-purple-500/15 text-purple-300 font-bold border border-purple-500/30'
+              : 'text-slate-400 hover:text-slate-200 border border-transparent'
           }`}
         >
-          <Clock className="w-5 h-5 mb-0.5" />
+          <Clock className="w-4 h-4 mb-0.5" />
           <span>CBT Hall</span>
-          {currentView === 'cbt' && <span className="w-1 h-1 rounded-full bg-purple-400 mt-0.5"></span>}
         </button>
         <button
           onClick={() => onNavigate('results')}
-          className={`flex flex-col items-center py-1 px-3 rounded-xl text-[10px] font-semibold transition-all ${
-            currentView === 'results' ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+          className={`flex flex-col items-center py-1.5 px-3 rounded-xl text-[10px] font-semibold transition-all ${
+            currentView === 'results'
+              ? 'bg-amber-500/15 text-amber-300 font-bold border border-amber-500/30'
+              : 'text-slate-400 hover:text-slate-200 border border-transparent'
           }`}
         >
-          <Award className="w-5 h-5 mb-0.5" />
+          <Award className="w-4 h-4 mb-0.5" />
           <span>Results</span>
-          {currentView === 'results' && <span className="w-1 h-1 rounded-full bg-amber-400 mt-0.5"></span>}
         </button>
       </div>
     </>

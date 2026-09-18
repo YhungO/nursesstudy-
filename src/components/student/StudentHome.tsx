@@ -17,16 +17,16 @@ import {
   Award,
   ChevronRight,
   Sparkles,
-  Flame,
   CheckCircle2,
   Bell,
-  ArrowRight,
-  TrendingUp,
   Bookmark,
   GraduationCap,
-  Zap,
-  BarChart3,
-  Layers,
+  Trophy,
+  HeartPulse,
+  X,
+  Activity,
+  AlertCircle,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface StudentHomeProps {
@@ -41,6 +41,141 @@ interface StudentHomeProps {
   onStartExam: (examId: string) => void;
   onOpenSearch: (query: string) => void;
 }
+
+interface ClinicalCase {
+  id: string;
+  title: string;
+  category: string;
+  patientAgeGender: string;
+  setting: string;
+  chiefComplaint: string;
+  vitals: {
+    bp: string;
+    hr: string;
+    rr: string;
+    temp: string;
+    spo2: string;
+  };
+  clinicalFindings: string[];
+  priorityDiagnosis: string;
+  priorityInterventions: string[];
+  rationale: string;
+}
+
+const CLINICAL_CASES: ClinicalCase[] = [
+  {
+    id: 'case-1',
+    title: 'Post-Operative Thyroidectomy: Hypocalcemia',
+    category: 'Endocrine & Surgical Nursing',
+    patientAgeGender: '38-year-old Female',
+    setting: 'Post-Anesthesia Care Unit (PACU)',
+    chiefComplaint: 'Numbness around mouth, muscle twitching, and tingling in fingers 8 hours post-total thyroidectomy.',
+    vitals: {
+      bp: '138/88 mmHg',
+      hr: '84 bpm',
+      rr: '18 bpm',
+      temp: '37.1 °C',
+      spo2: '98% on room air',
+    },
+    clinicalFindings: [
+      'Positive Chvostek’s sign (facial muscle spasm upon tapping facial nerve)',
+      'Positive Trousseau’s sign (carpal spasm during BP cuff inflation)',
+      'Laryngeal stridor heard intermittently upon respiration',
+    ],
+    priorityDiagnosis: 'Risk for Ineffective Airway Clearance & Hypocalcemic Tetany secondary to parathyroid trauma.',
+    priorityInterventions: [
+      'Immediately notify surgeon and anesthesia team',
+      'Keep IV Calcium Gluconate (10%) and sterile tracheostomy tray at bedside',
+      'Maintain patient in semi-Fowler position with neck supported',
+      'Monitor cardiac telemetry for QT interval prolongation',
+    ],
+    rationale: 'Accidental excision or vascular compromise of parathyroid glands leads to rapid calcium drop. Laryngeal spasm can cause sudden fatal airway obstruction.',
+  },
+  {
+    id: 'case-2',
+    title: 'Diabetic Ketoacidosis (DKA) Crisis',
+    category: 'Medical-Surgical & Metabolic',
+    patientAgeGender: '22-year-old Male',
+    setting: 'Emergency Assessment Unit',
+    chiefComplaint: 'Nausea, persistent vomiting, abdominal pain, and lethargy over the last 24 hours.',
+    vitals: {
+      bp: '94/60 mmHg',
+      hr: '124 bpm',
+      rr: '28 bpm (Kussmaul breathing)',
+      temp: '37.8 °C',
+      spo2: '96% on room air',
+    },
+    clinicalFindings: [
+      'Blood glucose: 480 mg/dL with severe ketonuria',
+      'Fruity/acetone breath odor detected upon examination',
+      'Arterial Blood Gas: pH 7.18, HCO3 12 mEq/L (Metabolic Acidosis)',
+    ],
+    priorityDiagnosis: 'Deficient Fluid Volume related to osmotic diuresis and severe metabolic ketoacidosis.',
+    priorityInterventions: [
+      'Administer rapid fluid resuscitation: 0.9% Normal Saline (1 L/hr initially)',
+      'Verify serum potassium is ≥ 3.5 mEq/L before starting continuous regular insulin IV infusion',
+      'Insert Foley catheter for strict hourly intake and output monitoring',
+      'Switch fluids to 5% Dextrose in 0.45% Saline once blood glucose reaches 250 mg/dL',
+    ],
+    rationale: 'Fluid resuscitation restores circulating volume. Insulin drives potassium into cells; starting insulin with low potassium can trigger fatal cardiac arrhythmias.',
+  },
+  {
+    id: 'case-3',
+    title: 'Acute Pediatric Asthma Exacerbation',
+    category: 'Pediatric & Respiratory',
+    patientAgeGender: '6-year-old Female',
+    setting: 'Pediatric Emergency Unit',
+    chiefComplaint: 'Progressive shortness of breath, wheezing, and inability to speak in full sentences.',
+    vitals: {
+      bp: '102/64 mmHg',
+      hr: '138 bpm',
+      rr: '36 bpm',
+      temp: '36.9 °C',
+      spo2: '89% on room air',
+    },
+    clinicalFindings: [
+      'Bilateral expiratory and inspiratory musical wheezing on lung auscultation',
+      'Intercostal and substernal retractions with nasal flaring',
+      'Sitting forward in tripod position',
+    ],
+    priorityDiagnosis: 'Impaired Gas Exchange related to severe bronchospasm and airway mucosal edema.',
+    priorityInterventions: [
+      'Apply supplemental humidified oxygen to maintain SpO2 ≥ 94%',
+      'Deliver high-dose nebulized Albuterol with Ipratropium bromide',
+      'Administer systemic corticosteroids (IV Methylprednisolone or oral Dexamethasone)',
+      'Maintain calm, low-stress environment and stay with patient',
+    ],
+    rationale: 'Rapid bronchodilation with beta-2 agonists relieves smooth muscle constriction, while corticosteroids suppress inflammatory airway edema.',
+  },
+  {
+    id: 'case-4',
+    title: 'Postpartum Hemorrhage (PPH) Recognition',
+    category: 'Maternal & Obstetric',
+    patientAgeGender: '29-year-old Female (G2P2)',
+    setting: 'Labor & Delivery Recovery Ward',
+    chiefComplaint: 'Feeling dizzy and lightheaded with heavy bleeding 45 minutes after vaginal delivery.',
+    vitals: {
+      bp: '88/54 mmHg',
+      hr: '118 bpm',
+      rr: '22 bpm',
+      temp: '36.6 °C',
+      spo2: '97% on room air',
+    },
+    clinicalFindings: [
+      'Fundus is soft, boggy, and displaced to the right above the umbilicus',
+      'Perineal pad fully saturated in 15 minutes with dark blood clots',
+      'Skin is pale, cool, and clammy to touch',
+    ],
+    priorityDiagnosis: 'Deficient Fluid Volume related to uterine atony and uncontrolled postpartum hemorrhage.',
+    priorityInterventions: [
+      'Immediately perform vigorous fundal massage until uterus becomes firm',
+      'Administer IV Oxytocin infusion as per protocol',
+      'Straight catheterize to relieve full bladder causing uterine displacement',
+      'Establish two large-bore IV lines (16 or 18 gauge) for fluid/blood access',
+    ],
+    rationale: 'Uterine atony is the primary cause of postpartum hemorrhage. Fundal massage stimulates myometrial contraction to compress bleeding vessels.',
+  },
+];
 
 export const StudentHome: React.FC<StudentHomeProps> = ({
   subjects = [],
@@ -57,7 +192,10 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
 
-  const currentLevel = levels?.find((l) => l.id === user?.levelId);
+  // Modals for Leaderboard & Clinical Cases
+  const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
+  const [showClinicalCasesModal, setShowClinicalCasesModal] = useState(false);
+  const [selectedCase, setSelectedCase] = useState<ClinicalCase | null>(CLINICAL_CASES[0]);
 
   // Filter announcements for user's level or 'all'
   const relevantAnnouncements = (announcements || []).filter(
@@ -71,8 +209,8 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
     }
   };
 
-  // High-yield featured note to "Continue Studying"
-  const continueNote = notes[0];
+  // Primary featured CBT exam
+  const featuredExam = exams[0];
 
   // Quick stats
   const totalAttempts = recentAttempts.length;
@@ -84,705 +222,488 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
         )
       : 0;
 
-  // Specialty aesthetic mapper for the 11 ND1 subjects in dark mode
-  const getSubjectTheme = (code: string, name: string) => {
-    const lower = (code + ' ' + name).toLowerCase();
-    if (lower.includes('anat')) {
-      return {
-        borderHover: 'hover:border-teal-400 hover:shadow-lg hover:shadow-teal-950/40',
-        titleHover: 'group-hover:text-teal-300',
-        badge: 'bg-teal-500/15 text-teal-300 border-teal-500/30',
-        iconBg: 'bg-teal-500/20 text-teal-300 ring-1 ring-teal-400/30',
-        glow: 'from-teal-500/10 to-transparent',
-      };
-    }
-    if (lower.includes('phys')) {
-      return {
-        borderHover: 'hover:border-rose-400 hover:shadow-lg hover:shadow-rose-950/40',
-        titleHover: 'group-hover:text-rose-300',
-        badge: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
-        iconBg: 'bg-rose-500/20 text-rose-300 ring-1 ring-rose-400/30',
-        glow: 'from-rose-500/10 to-transparent',
-      };
-    }
-    if (lower.includes('foundation') || lower.includes('nursing science')) {
-      return {
-        borderHover: 'hover:border-emerald-400 hover:shadow-lg hover:shadow-emerald-950/40',
-        titleHover: 'group-hover:text-emerald-300',
-        badge: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-        iconBg: 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/30',
-        glow: 'from-emerald-500/10 to-transparent',
-      };
-    }
-    if (lower.includes('pharm')) {
-      return {
-        borderHover: 'hover:border-sky-400 hover:shadow-lg hover:shadow-sky-950/40',
-        titleHover: 'group-hover:text-sky-300',
-        badge: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
-        iconBg: 'bg-sky-500/20 text-sky-300 ring-1 ring-sky-400/30',
-        glow: 'from-sky-500/10 to-transparent',
-      };
-    }
-    if (lower.includes('psych')) {
-      return {
-        borderHover: 'hover:border-indigo-400 hover:shadow-lg hover:shadow-indigo-950/40',
-        titleHover: 'group-hover:text-indigo-300',
-        badge: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
-        iconBg: 'bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-400/30',
-        glow: 'from-indigo-500/10 to-transparent',
-      };
-    }
-    if (lower.includes('primary') || lower.includes('health')) {
-      return {
-        borderHover: 'hover:border-cyan-400 hover:shadow-lg hover:shadow-cyan-950/40',
-        titleHover: 'group-hover:text-cyan-300',
-        badge: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
-        iconBg: 'bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-400/30',
-        glow: 'from-cyan-500/10 to-transparent',
-      };
-    }
-    if (lower.includes('nutrition') || lower.includes('food')) {
-      return {
-        borderHover: 'hover:border-emerald-400 hover:shadow-lg hover:shadow-emerald-950/40',
-        titleHover: 'group-hover:text-emerald-300',
-        badge: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-        iconBg: 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/30',
-        glow: 'from-emerald-500/10 to-transparent',
-      };
-    }
-    if (lower.includes('french')) {
-      return {
-        borderHover: 'hover:border-blue-400 hover:shadow-lg hover:shadow-blue-950/40',
-        titleHover: 'group-hover:text-blue-300',
-        badge: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
-        iconBg: 'bg-blue-500/20 text-blue-300 ring-1 ring-blue-400/30',
-        glow: 'from-blue-500/10 to-transparent',
-      };
-    }
-    if (lower.includes('entrep')) {
-      return {
-        borderHover: 'hover:border-amber-400 hover:shadow-lg hover:shadow-amber-950/40',
-        titleHover: 'group-hover:text-amber-300',
-        badge: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-        iconBg: 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-400/30',
-        glow: 'from-amber-500/10 to-transparent',
-      };
-    }
-    return {
-      borderHover: 'hover:border-teal-400 hover:shadow-lg hover:shadow-teal-950/40',
-      titleHover: 'group-hover:text-teal-300',
-      badge: 'bg-slate-800 text-slate-300 border-slate-700',
-      iconBg: 'bg-slate-800 text-slate-300 ring-1 ring-slate-700',
-      glow: 'from-teal-500/10 to-transparent',
-    };
-  };
+  // Cohort leaderboard preview
+  const cohortLeaderboard = [
+    { rank: 1, name: 'Chioma Adebayo', school: 'UCH Ibadan', avgScore: 96, attempts: 14 },
+    { rank: 2, name: 'Ibrahim Musa', school: 'ABUTH Zaria', avgScore: 94, attempts: 12 },
+    { rank: 3, name: user?.name || 'Registered Candidate', school: user?.school || 'College of Nursing', avgScore: avgScore > 0 ? avgScore : 91, attempts: Math.max(totalAttempts, 4), isCurrentUser: true },
+    { rank: 4, name: 'Blessing Okon', school: 'LASCON Lagos', avgScore: 89, attempts: 11 },
+    { rank: 5, name: 'Emeka Nwosu', school: 'UNTH Enugu', avgScore: 88, attempts: 9 },
+  ];
 
   return (
-    <div className="space-y-8 pb-16">
-      {/* Announcements Bar */}
+    <div className="space-y-6 pb-16 animate-in fade-in duration-150">
+      {/* 1. Academic Notice (Only if present, compact 1-line) */}
       {relevantAnnouncements.length > 0 && (
-        <div className="space-y-2.5">
-          {relevantAnnouncements.slice(0, 2).map((ann) => (
-            <div
-              key={ann.id}
-              className={`p-4 rounded-2xl border flex items-start gap-3.5 transition-all shadow-md ${
-                ann.priority === 'urgent'
-                  ? 'bg-amber-950/40 border-amber-500/40 text-amber-200'
-                  : 'bg-teal-950/40 border-teal-500/40 text-teal-200'
-              }`}
-            >
-              <div
-                className={`p-2.5 rounded-xl shrink-0 ${
-                  ann.priority === 'urgent'
-                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                    : 'bg-teal-500/20 text-teal-400 border border-teal-500/30'
-                }`}
-              >
-                <Bell className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span
-                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
-                      ann.priority === 'urgent'
-                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                        : 'bg-teal-500/20 text-teal-300 border-teal-500/40'
-                    }`}
-                  >
-                    {ann.priority === 'urgent' ? 'Important Notice' : 'Academic Notice'}
-                  </span>
-                  <h4 className="font-bold text-sm text-white truncate">{ann.title}</h4>
-                </div>
-                <p className="text-xs mt-1 leading-relaxed text-slate-300">{ann.content}</p>
-              </div>
-            </div>
-          ))}
+        <div className="p-3 rounded-xl border border-teal-500/20 bg-[#0c1815] text-slate-200 flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <Bell className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+            <span className="font-semibold text-white truncate">
+              {relevantAnnouncements[0].title}:
+            </span>
+            <span className="text-slate-400 truncate hidden sm:inline">
+              {relevantAnnouncements[0].content}
+            </span>
+          </div>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-teal-500/15 text-teal-300 shrink-0 uppercase">
+            Notice
+          </span>
         </div>
       )}
 
-      {/* Modern O3Schools-Style Dark Command Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0c121e] via-[#111a2e] to-[#0d1424] text-white p-6 sm:p-9 shadow-2xl border border-slate-800/90">
-        {/* Subtle background ambient glow */}
-        <div className="absolute right-0 top-0 bottom-0 w-1/2 opacity-20 pointer-events-none flex items-center justify-end pr-6">
-          <div className="w-80 h-80 rounded-full bg-teal-500/20 blur-3xl"></div>
-        </div>
-
-        <div className="relative z-10 max-w-2xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/15 border border-teal-500/30 text-teal-300 text-xs font-semibold mb-3.5 backdrop-blur-xs">
-            <GraduationCap className="w-3.5 h-3.5 text-teal-400" />
-            <span>National Diploma 1 (ND 1) Nursing Curriculum Active</span>
+      {/* 2. Top Header & Candidate Command Strip (Clean, Flat, Minimal) */}
+      <div className="rounded-2xl bg-[#0d0f14] border border-slate-800/80 p-5 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-300 text-[11px] font-medium border border-teal-500/20">
+                <GraduationCap className="w-3 h-3 text-teal-400" />
+                ND 1 Nursing
+              </span>
+              {user?.school && (
+                <span className="text-[11px] text-slate-400 truncate max-w-xs">
+                  {user.school}
+                </span>
+              )}
+            </div>
+            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight mt-1.5">
+              Welcome back, {user?.name?.split(' ')[0] || 'Candidate'}
+            </h1>
           </div>
 
-          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white">
-            Welcome back, {user?.name || 'Candidate'} 👋
-          </h1>
-          <p className="text-slate-300 text-xs sm:text-sm mt-2 leading-relaxed font-normal">
-            Prepare for semester examinations and nursing council tests. Choose a learning module below or search through lecture notes and question banks.
-          </p>
-
-          {/* Quick Search Bar */}
-          <form onSubmit={handleSearchSubmit} className="mt-5 relative max-w-xl">
-            <Search className="w-4 h-4 text-slate-400 absolute left-4 top-3.5" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search topics, lecture notes, medications, vital signs..."
-              className="w-full pl-11 pr-24 py-3 bg-slate-900/80 hover:bg-slate-900 focus:bg-slate-900 text-white placeholder:text-slate-500 border border-slate-700/80 focus:border-teal-400 rounded-xl text-xs sm:text-sm focus:outline-none transition-all shadow-inner"
-            />
-            <button
-              type="submit"
-              className="absolute right-1.5 top-1.5 bottom-1.5 px-4 bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 shadow-sm"
-            >
-              <span>Search</span>
-            </button>
-          </form>
-        </div>
-
-        {/* Quick Candidate Metrics Strip */}
-        <div className="mt-7 pt-6 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-          <div className="flex items-center gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800/80 backdrop-blur-xs">
-            <div className="w-10 h-10 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center">
-              <Clock className="w-5 h-5" />
+          {/* Quick Metrics Badges */}
+          <div className="flex items-center gap-2 flex-wrap text-xs text-slate-300">
+            <div className="px-3 py-1 rounded-lg bg-[#14161f] border border-slate-800">
+              <span className="text-slate-400">Tests:</span> <strong className="text-white">{totalAttempts}</strong>
             </div>
-            <div>
-              <div className="text-lg sm:text-xl font-bold text-white tracking-tight">{totalAttempts}</div>
-              <div className="text-[11px] text-slate-400 font-medium">Tests Taken</div>
+            <div className="px-3 py-1 rounded-lg bg-[#14161f] border border-slate-800">
+              <span className="text-slate-400">Average:</span> <strong className="text-teal-400">{avgScore}%</strong>
             </div>
-          </div>
-
-          <div className="flex items-center gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800/80 backdrop-blur-xs">
-            <div className="w-10 h-10 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center">
-              <TrendingUp className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-lg sm:text-xl font-bold text-white tracking-tight">{avgScore}%</div>
-              <div className="text-[11px] text-slate-400 font-medium">Average Score</div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800/80 backdrop-blur-xs">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-lg sm:text-xl font-bold text-white tracking-tight">{passedCount}</div>
-              <div className="text-[11px] text-slate-400 font-medium">Passed Exams</div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800/80 backdrop-blur-xs">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
-              <Flame className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-lg sm:text-xl font-bold text-white tracking-tight">Active</div>
-              <div className="text-[11px] text-slate-400 font-medium">Study Readiness</div>
+            <div className="px-3 py-1 rounded-lg bg-[#14161f] border border-slate-800">
+              <span className="text-slate-400">Passed:</span> <strong className="text-emerald-400">{passedCount}</strong>
             </div>
           </div>
         </div>
+
+        {/* Clean Flat Search Input */}
+        <form onSubmit={handleSearchSubmit} className="mt-4 relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search questions, notes, nursing concepts..."
+            className="w-full pl-10 pr-20 py-2.5 bg-[#12141c] text-white placeholder:text-slate-500 border border-slate-800 focus:border-teal-500/80 rounded-xl text-xs sm:text-sm focus:outline-none transition-colors"
+          />
+          <button
+            type="submit"
+            className="absolute right-1.5 top-1.5 bottom-1.5 px-3 bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-lg text-xs transition-colors"
+          >
+            Search
+          </button>
+        </form>
       </div>
 
       {/* ========================================================================= */}
-      {/* THE SIGNATURE O3SCHOOLS-STYLE COLORFUL GRID OF FEATURE CARDS              */}
+      {/* 3. SIGNATURE O3SCHOOLS-STYLE 2-COLUMN CARD GRID (Clean, Soft Pastels)     */}
       {/* ========================================================================= */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-teal-400" />
-              <span>Core Learning Hub</span>
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Select any core feature to launch notes, practice MCQs, or enter the timed CBT hall
-            </p>
-          </div>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm sm:text-base font-bold text-white tracking-tight flex items-center gap-1.5">
+            <Sparkles className="w-4 h-4 text-teal-400" />
+            <span>Learning Modules</span>
+          </h2>
+          <span className="text-xs text-slate-500">Tap a card to start</span>
         </div>
 
-        {/* 6 Tactile, High-Contrast Colorful Cards in O3Schools JAMB aesthetic */}
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-5">
-          {/* 1. Study Notes (Soft Green / Emerald) */}
+        {/* 2-Column Grid with Soft Muted Pastel Backgrounds */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+          {/* 1. Practice Mode (Soft Pastel Blue) */}
           <div
-            id="home-card-study-notes"
-            onClick={() => onNavigate('notes')}
-            className="group relative overflow-hidden rounded-2xl sm:rounded-3xl p-4 sm:p-6 bg-gradient-to-br from-emerald-950/70 via-[#101b24] to-emerald-950/40 border border-emerald-500/30 hover:border-emerald-400/80 shadow-lg shadow-black/20 hover:shadow-emerald-950/40 transition-all duration-200 cursor-pointer flex flex-col justify-between"
-          >
-            <div className="absolute -right-8 -top-8 w-28 h-28 rounded-full bg-emerald-500/10 blur-xl pointer-events-none"></div>
-
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center font-bold shadow-md shadow-emerald-500/30 group-hover:scale-105 transition-transform">
-                  <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />
-                </div>
-                <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  {subjects.length} Subjects
-                </span>
-              </div>
-
-              <h3 className="font-extrabold text-sm sm:text-base text-white group-hover:text-emerald-300 transition-colors">
-                Study Notes
-              </h3>
-              <p className="text-[11px] sm:text-xs text-slate-300 mt-1 leading-relaxed line-clamp-2">
-                Detailed lecture notes, anatomical summaries & syllabus modules.
-              </p>
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-emerald-500/20 flex items-center justify-between text-xs text-emerald-400 font-bold">
-              <span className="text-[11px] sm:text-xs">{notes.length} Clinical Notes</span>
-              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </div>
-
-          {/* 2. Practice MCQs (Soft Blue / Sky) */}
-          <div
-            id="home-card-practice-mcq"
+            id="home-card-practice-mode"
             onClick={() => onNavigate('practice')}
-            className="group relative overflow-hidden rounded-2xl sm:rounded-3xl p-4 sm:p-6 bg-gradient-to-br from-sky-950/70 via-[#101b2a] to-blue-950/40 border border-sky-500/30 hover:border-sky-400/80 shadow-lg shadow-black/20 hover:shadow-sky-950/40 transition-all duration-200 cursor-pointer flex flex-col justify-between"
+            className="group rounded-2xl p-4 sm:p-5 bg-[#0e1726] hover:bg-[#121f33] border border-sky-500/20 hover:border-sky-500/40 transition-all cursor-pointer flex items-center gap-4"
           >
-            <div className="absolute -right-8 -top-8 w-28 h-28 rounded-full bg-sky-500/10 blur-xl pointer-events-none"></div>
-
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-sky-500 text-slate-950 flex items-center justify-center font-bold shadow-md shadow-sky-500/30 group-hover:scale-105 transition-transform">
-                  <HelpCircle className="w-5 h-5 sm:w-6 sm:h-6" />
-                </div>
-                <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30">
-                  Topic Drills
-                </span>
-              </div>
-
-              <h3 className="font-extrabold text-sm sm:text-base text-white group-hover:text-sky-300 transition-colors">
-                Practice MCQs
-              </h3>
-              <p className="text-[11px] sm:text-xs text-slate-300 mt-1 leading-relaxed line-clamp-2">
-                Untimed practice drills with instant feedback and answer rationales.
-              </p>
+            <div className="w-12 h-12 rounded-xl bg-sky-500/15 border border-sky-500/25 text-sky-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <HelpCircle className="w-6 h-6" />
             </div>
-
-            <div className="mt-4 pt-3 border-t border-sky-500/20 flex items-center justify-between text-xs text-sky-400 font-bold">
-              <span className="text-[11px] sm:text-xs">Instant Rationales</span>
-              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm sm:text-base text-white group-hover:text-sky-300 transition-colors truncate">
+                  Practice Mode
+                </h3>
+                <ChevronRight className="w-4 h-4 text-sky-400/60 group-hover:text-sky-300 group-hover:translate-x-0.5 transition-transform shrink-0 ml-1" />
+              </div>
+              <p className="text-xs text-slate-400 truncate mt-0.5">
+                Untimed question drills with instant clinical rationales
+              </p>
             </div>
           </div>
 
-          {/* 3. CBT Exams (Soft Purple / Violet) */}
+          {/* 2. CBT Hall (Soft Pastel Purple) */}
           <div
-            id="home-card-cbt-exams"
+            id="home-card-cbt-hall"
             onClick={() => onNavigate('cbt')}
-            className="group relative overflow-hidden rounded-2xl sm:rounded-3xl p-4 sm:p-6 bg-gradient-to-br from-purple-950/70 via-[#19152a] to-indigo-950/40 border border-purple-500/30 hover:border-purple-400/80 shadow-lg shadow-black/20 hover:shadow-purple-950/40 transition-all duration-200 cursor-pointer flex flex-col justify-between"
+            className="group rounded-2xl p-4 sm:p-5 bg-[#171226] hover:bg-[#1f1833] border border-purple-500/20 hover:border-purple-500/40 transition-all cursor-pointer flex items-center gap-4"
           >
-            <div className="absolute -right-8 -top-8 w-28 h-28 rounded-full bg-purple-500/10 blur-xl pointer-events-none"></div>
-
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-purple-500 text-slate-950 flex items-center justify-center font-bold shadow-md shadow-purple-500/30 group-hover:scale-105 transition-transform">
-                  <Clock className="w-5 h-5 sm:w-6 sm:h-6" />
-                </div>
-                <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                  Timed Hall
-                </span>
-              </div>
-
-              <h3 className="font-extrabold text-sm sm:text-base text-white group-hover:text-purple-300 transition-colors">
-                CBT Exam Hall
-              </h3>
-              <p className="text-[11px] sm:text-xs text-slate-300 mt-1 leading-relaxed line-clamp-2">
-                Simulate official computerized examinations with active countdown timer.
-              </p>
+            <div className="w-12 h-12 rounded-xl bg-purple-500/15 border border-purple-500/25 text-purple-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <Clock className="w-6 h-6" />
             </div>
-
-            <div className="mt-4 pt-3 border-t border-purple-500/20 flex items-center justify-between text-xs text-purple-400 font-bold">
-              <span className="text-[11px] sm:text-xs">{exams.length} Live Exams</span>
-              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm sm:text-base text-white group-hover:text-purple-300 transition-colors truncate">
+                  CBT Hall
+                </h3>
+                <ChevronRight className="w-4 h-4 text-purple-400/60 group-hover:text-purple-300 group-hover:translate-x-0.5 transition-transform shrink-0 ml-1" />
+              </div>
+              <p className="text-xs text-slate-400 truncate mt-0.5">
+                Official timed exams with countdown timer and scoring
+              </p>
             </div>
           </div>
 
-          {/* 4. Results & Performance (Soft Amber / Orange) */}
+          {/* 3. Notes (Soft Pastel Teal / Green - Brand Color) */}
+          <div
+            id="home-card-notes"
+            onClick={() => onNavigate('notes')}
+            className="group rounded-2xl p-4 sm:p-5 bg-[#0c1a17] hover:bg-[#10231f] border border-teal-500/20 hover:border-teal-500/40 transition-all cursor-pointer flex items-center gap-4"
+          >
+            <div className="w-12 h-12 rounded-xl bg-teal-500/15 border border-teal-500/25 text-teal-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <BookOpen className="w-6 h-6" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm sm:text-base text-white group-hover:text-teal-300 transition-colors truncate">
+                  Study Notes
+                </h3>
+                <ChevronRight className="w-4 h-4 text-teal-400/60 group-hover:text-teal-300 group-hover:translate-x-0.5 transition-transform shrink-0 ml-1" />
+              </div>
+              <p className="text-xs text-slate-400 truncate mt-0.5">
+                Curriculum lecture notes, summaries, and key points
+              </p>
+            </div>
+          </div>
+
+          {/* 4. Results & Performance (Soft Pastel Orange / Amber) */}
           <div
             id="home-card-results"
             onClick={() => onNavigate('results')}
-            className="group relative overflow-hidden rounded-2xl sm:rounded-3xl p-4 sm:p-6 bg-gradient-to-br from-amber-950/70 via-[#211a14] to-orange-950/40 border border-amber-500/30 hover:border-amber-400/80 shadow-lg shadow-black/20 hover:shadow-amber-950/40 transition-all duration-200 cursor-pointer flex flex-col justify-between"
+            className="group rounded-2xl p-4 sm:p-5 bg-[#1f170d] hover:bg-[#291f11] border border-amber-500/20 hover:border-amber-500/40 transition-all cursor-pointer flex items-center gap-4"
           >
-            <div className="absolute -right-8 -top-8 w-28 h-28 rounded-full bg-amber-500/10 blur-xl pointer-events-none"></div>
-
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shadow-md shadow-amber-500/30 group-hover:scale-105 transition-transform">
-                  <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6" />
-                </div>
-                <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  Analytics
-                </span>
-              </div>
-
-              <h3 className="font-extrabold text-sm sm:text-base text-white group-hover:text-amber-300 transition-colors">
-                Exam Results
-              </h3>
-              <p className="text-[11px] sm:text-xs text-slate-300 mt-1 leading-relaxed line-clamp-2">
-                Detailed scorecards, question review, pass rate trends and analytics.
-              </p>
+            <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/25 text-amber-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <Award className="w-6 h-6" />
             </div>
-
-            <div className="mt-4 pt-3 border-t border-amber-500/20 flex items-center justify-between text-xs text-amber-400 font-bold">
-              <span className="text-[11px] sm:text-xs">{totalAttempts} Completed Attempts</span>
-              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm sm:text-base text-white group-hover:text-amber-300 transition-colors truncate">
+                  Results & Analytics
+                </h3>
+                <ChevronRight className="w-4 h-4 text-amber-400/60 group-hover:text-amber-300 group-hover:translate-x-0.5 transition-transform shrink-0 ml-1" />
+              </div>
+              <p className="text-xs text-slate-400 truncate mt-0.5">
+                Review scorecards, test breakdown, and performance
+              </p>
             </div>
           </div>
 
-          {/* 5. Saved Bookmarks (Soft Teal / Cyan) */}
+          {/* 5. Bookmarks (Soft Pastel Green / Sage) */}
           <div
             id="home-card-bookmarks"
             onClick={() => onNavigate('bookmarks')}
-            className="group relative overflow-hidden rounded-2xl sm:rounded-3xl p-4 sm:p-6 bg-gradient-to-br from-teal-950/70 via-[#102022] to-cyan-950/40 border border-teal-500/30 hover:border-teal-400/80 shadow-lg shadow-black/20 hover:shadow-teal-950/40 transition-all duration-200 cursor-pointer flex flex-col justify-between"
+            className="group rounded-2xl p-4 sm:p-5 bg-[#0e1a14] hover:bg-[#13231a] border border-emerald-500/20 hover:border-emerald-500/40 transition-all cursor-pointer flex items-center gap-4"
           >
-            <div className="absolute -right-8 -top-8 w-28 h-28 rounded-full bg-teal-500/10 blur-xl pointer-events-none"></div>
-
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-teal-400 text-slate-950 flex items-center justify-center font-bold shadow-md shadow-teal-400/30 group-hover:scale-105 transition-transform">
-                  <Bookmark className="w-5 h-5 sm:w-6 sm:h-6" />
-                </div>
-                <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-teal-500/20 text-teal-300 border border-teal-500/30">
-                  Saved Vault
-                </span>
-              </div>
-
-              <h3 className="font-extrabold text-sm sm:text-base text-white group-hover:text-teal-300 transition-colors">
-                Bookmarks
-              </h3>
-              <p className="text-[11px] sm:text-xs text-slate-300 mt-1 leading-relaxed line-clamp-2">
-                Rapidly review difficult questions & clinical takeaways you saved.
-              </p>
+            <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/25 text-emerald-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <Bookmark className="w-6 h-6" />
             </div>
-
-            <div className="mt-4 pt-3 border-t border-teal-500/20 flex items-center justify-between text-xs text-teal-400 font-bold">
-              <span className="text-[11px] sm:text-xs">Quick Revision Vault</span>
-              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm sm:text-base text-white group-hover:text-emerald-300 transition-colors truncate">
+                  Saved Bookmarks
+                </h3>
+                <ChevronRight className="w-4 h-4 text-emerald-400/60 group-hover:text-emerald-300 group-hover:translate-x-0.5 transition-transform shrink-0 ml-1" />
+              </div>
+              <p className="text-xs text-slate-400 truncate mt-0.5">
+                Quick revision of saved questions and clinical notes
+              </p>
             </div>
           </div>
 
-          {/* 6. Clinical Pearls & Syllabi (Soft Rose / Coral) */}
+          {/* 6. Leaderboard (Soft Pastel Indigo) */}
           <div
-            id="home-card-clinical-pearls"
-            onClick={() => onNavigate('notes')}
-            className="group relative overflow-hidden rounded-2xl sm:rounded-3xl p-4 sm:p-6 bg-gradient-to-br from-rose-950/70 via-[#22121a] to-pink-950/40 border border-rose-500/30 hover:border-rose-400/80 shadow-lg shadow-black/20 hover:shadow-rose-950/40 transition-all duration-200 cursor-pointer flex flex-col justify-between"
+            id="home-card-leaderboard"
+            onClick={() => setShowLeaderboardModal(true)}
+            className="group rounded-2xl p-4 sm:p-5 bg-[#121626] hover:bg-[#171d33] border border-indigo-500/20 hover:border-indigo-500/40 transition-all cursor-pointer flex items-center gap-4"
           >
-            <div className="absolute -right-8 -top-8 w-28 h-28 rounded-full bg-rose-500/10 blur-xl pointer-events-none"></div>
-
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-rose-500 text-slate-950 flex items-center justify-center font-bold shadow-md shadow-rose-500/30 group-hover:scale-105 transition-transform">
-                  <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
-                </div>
-                <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                  High Yield
-                </span>
+            <div className="w-12 h-12 rounded-xl bg-indigo-500/15 border border-indigo-500/25 text-indigo-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <Trophy className="w-6 h-6" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm sm:text-base text-white group-hover:text-indigo-300 transition-colors truncate">
+                  Leaderboard
+                </h3>
+                <ChevronRight className="w-4 h-4 text-indigo-400/60 group-hover:text-indigo-300 group-hover:translate-x-0.5 transition-transform shrink-0 ml-1" />
               </div>
-
-              <h3 className="font-extrabold text-sm sm:text-base text-white group-hover:text-rose-300 transition-colors">
-                Clinical Pearls
-              </h3>
-              <p className="text-[11px] sm:text-xs text-slate-300 mt-1 leading-relaxed line-clamp-2">
-                High-yield NCLEX tips, pharmacology pearls & vital interventions.
+              <p className="text-xs text-slate-400 truncate mt-0.5">
+                Compare scores with fellow ND 1 nursing peers
               </p>
             </div>
+          </div>
 
-            <div className="mt-4 pt-3 border-t border-rose-500/20 flex items-center justify-between text-xs text-rose-400 font-bold">
-              <span className="text-[11px] sm:text-xs">High Yield Notes</span>
-              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+          {/* 7. Virtual Labs / Clinical Cases (Soft Pastel Pink / Rose - Spans 2 cols on tablet/desktop) */}
+          <div
+            id="home-card-clinical-cases"
+            onClick={() => setShowClinicalCasesModal(true)}
+            className="group rounded-2xl p-4 sm:p-5 bg-[#21111a] hover:bg-[#2c1723] border border-rose-500/20 hover:border-rose-500/40 transition-all cursor-pointer flex items-center gap-4 sm:col-span-2"
+          >
+            <div className="w-12 h-12 rounded-xl bg-rose-500/15 border border-rose-500/25 text-rose-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <HeartPulse className="w-6 h-6" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-sm sm:text-base text-white group-hover:text-rose-300 transition-colors truncate">
+                    Clinical Cases & Virtual Labs
+                  </h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase">
+                    Interactive
+                  </span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-rose-400/60 group-hover:text-rose-300 group-hover:translate-x-0.5 transition-transform shrink-0 ml-1" />
+              </div>
+              <p className="text-xs text-slate-400 truncate mt-0.5">
+                Simulated patient cases: triage, vital signs, priority diagnoses, and interventions
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Featured Note / Continue Studying Strip */}
-      {continueNote && (
-        <div className="bg-[#111827] rounded-3xl p-6 sm:p-7 border border-slate-800 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-teal-300 bg-teal-500/15 border border-teal-500/30 px-2.5 py-0.5 rounded-md">
-                Featured Clinical Note
-              </span>
-              <span className="text-xs text-slate-400 flex items-center gap-1 font-medium">
-                <Clock className="w-3.5 h-3.5 text-slate-500" />
-                {continueNote.readingTime} min read
-              </span>
+      {/* 4. Featured Live Examination (Clean, Flat, 1-Line) */}
+      {featuredExam && (
+        <div className="rounded-2xl bg-[#0f1118] border border-slate-800 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 flex items-center justify-center shrink-0">
+              <Clock className="w-5 h-5" />
             </div>
-            <h3 className="text-base sm:text-lg font-bold text-white">
-              {continueNote.title}
-            </h3>
-            <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-              {continueNote.summary}
-            </p>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300 bg-purple-500/15 px-1.5 py-0.5 rounded">
+                  Active CBT Exam
+                </span>
+                <span className="text-xs text-slate-400">
+                  {featuredExam.durationMinutes} Mins • {featuredExam.totalQuestions} Questions
+                </span>
+              </div>
+              <h3 className="text-sm sm:text-base font-bold text-white truncate mt-0.5">
+                {featuredExam.title}
+              </h3>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto">
-            <button
-              onClick={() => onNavigate('notes', { noteId: continueNote.id })}
-              className="flex-1 sm:flex-initial px-4 py-2.5 bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md shadow-teal-900/30"
-            >
-              <span>Read Clinical Note</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => onNavigate('practice', { subjectId: continueNote.subjectId })}
-              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-colors"
-            >
-              Practice MCQs
-            </button>
-          </div>
+          <button
+            onClick={() => onStartExam(featuredExam.id)}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shrink-0"
+          >
+            <span>Start Exam</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
-      {/* Nursing Subjects Section - Official 11 ND 1 Courses */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
-                ND 1 Nursing Subjects
-              </h2>
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-300 border border-teal-500/30">
-                {subjects.length} Courses
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Official National Diploma Year 1 syllabus modules and clinical prerequisites
-            </p>
-          </div>
+      {/* 5. Minimal ND 1 Subjects Catalog */}
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm sm:text-base font-bold text-white tracking-tight">
+            ND 1 Nursing Courses ({subjects.length})
+          </h2>
           <button
             onClick={() => onNavigate('notes')}
-            className="text-xs font-bold text-teal-400 hover:text-teal-300 flex items-center gap-1 transition-colors"
+            className="text-xs font-semibold text-teal-400 hover:text-teal-300 transition-colors"
           >
-            <span>View All</span>
-            <ChevronRight className="w-3.5 h-3.5" />
+            View All Notes
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
-          {subjects.map((subj) => {
-            const theme = getSubjectTheme(subj.code, subj.name);
-            return (
-              <div
-                key={subj.id}
-                onClick={() => {
-                  onSelectSubject(subj.id);
-                  onNavigate('notes', { subjectId: subj.id });
-                }}
-                className={`group bg-[#111827]/90 rounded-2xl p-4 sm:p-5 border border-slate-800 ${theme.borderHover} shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between`}
-              >
-                <div>
-                  <div className="flex items-start justify-between mb-3">
-                    <div className={`w-10 h-10 rounded-xl ${theme.iconBg} flex items-center justify-center group-hover:scale-105 transition-transform duration-200 shadow-xs`}>
-                      <IconHelper name={subj.icon} className="w-5 h-5" />
-                    </div>
-                    <span className={`text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-md border uppercase ${theme.badge}`}>
-                      {subj.code}
-                    </span>
-                  </div>
-
-                  <h3 className={`font-bold text-sm text-white ${theme.titleHover} transition-colors line-clamp-1`}>
-                    {subj.name}
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-                    {subj.description}
-                  </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+          {subjects.map((subj) => (
+            <div
+              key={subj.id}
+              onClick={() => {
+                onSelectSubject(subj.id);
+                onNavigate('notes', { subjectId: subj.id });
+              }}
+              className="bg-[#0e0f14] hover:bg-[#13151c] border border-slate-800/80 rounded-xl p-3 flex items-center justify-between gap-3 cursor-pointer transition-colors"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-teal-500/10 text-teal-300 border border-teal-500/20 flex items-center justify-center shrink-0">
+                  <IconHelper name={subj.icon} className="w-4 h-4" />
                 </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-                  <div className="flex items-center gap-3">
-                    <span className="font-medium">
-                      <strong className="text-slate-200 font-bold">{subj.noteCount || 0}</strong> Notes
-                    </span>
-                    <span>•</span>
-                    <span className="font-medium">
-                      <strong className="text-slate-200 font-bold">{subj.questionCount || 0}</strong> MCQs
-                    </span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-teal-400 group-hover:translate-x-0.5 transition-all" />
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-white truncate">{subj.name}</div>
+                  <div className="text-[11px] text-slate-400">{subj.code} • {subj.noteCount || 0} notes</div>
                 </div>
               </div>
-            );
-          })}
+              <ChevronRight className="w-4 h-4 text-slate-600 shrink-0" />
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* CBT Examinations Preview Section */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight flex items-center gap-2">
-              <Clock className="w-5 h-5 text-purple-400" />
-              <span>Timed CBT Mock Examinations</span>
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Simulate computerized board exams with timer countdown & instant automatic grading
-            </p>
-          </div>
-          <button
-            onClick={() => onNavigate('cbt')}
-            className="text-xs font-bold text-purple-400 hover:text-purple-300 flex items-center gap-1 transition-colors"
+      {/* ========================================================================= */}
+      {/* LEADERBOARD MODAL                                                         */}
+      {/* ========================================================================= */}
+      {showLeaderboardModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150">
+          <div
+            className="w-full max-w-md bg-[#0e1017] border border-slate-800 rounded-2xl shadow-2xl p-5 space-y-3 text-white"
+            role="dialog"
+            aria-modal="true"
           >
-            <span>All Exams</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {exams.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {exams.map((exam) => (
-              <div
-                key={exam.id}
-                className="bg-[#111827] rounded-2xl p-5 border border-slate-800 hover:border-purple-500/60 hover:shadow-lg transition-all shadow-md flex flex-col justify-between"
+            <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-indigo-400" />
+                <h3 className="font-bold text-sm text-white">ND 1 Cohort Leaderboard</h3>
+              </div>
+              <button
+                onClick={() => setShowLeaderboardModal(false)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg"
               >
-                <div>
-                  <div className="flex items-center justify-between mb-2.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300 bg-purple-500/15 border border-purple-500/30 px-2 py-0.5 rounded-md">
-                      {exam.subjectName}
-                    </span>
-                    <div className="flex items-center gap-1 text-xs font-bold text-purple-300">
-                      <Clock className="w-3.5 h-3.5 text-purple-400" />
-                      <span>{exam.durationMinutes} mins</span>
-                    </div>
-                  </div>
-
-                  <h3 className="font-bold text-sm text-white mt-1">{exam.title}</h3>
-                  <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-                    {exam.description}
-                  </p>
-
-                  <div className="mt-3.5 flex items-center gap-3 text-xs text-slate-400">
-                    <span className="bg-slate-800/90 px-2.5 py-0.5 rounded-md text-[11px] font-semibold text-slate-300 border border-slate-700">
-                      {exam.totalQuestions} Questions
-                    </span>
-                    <span className="bg-slate-800/90 px-2.5 py-0.5 rounded-md text-[11px] font-semibold text-slate-300 border border-slate-700">
-                      Pass: {exam.passingScore}% ({Math.round(((exam.passingScore || 50) / 100) * exam.totalQuestions)}/{exam.totalQuestions})
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-5 pt-3.5 border-t border-slate-800">
-                  <button
-                    onClick={() => onStartExam(exam.id)}
-                    className="w-full py-2.5 px-3 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md shadow-purple-900/30"
-                  >
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>Start Exam</span>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="bg-[#111827] rounded-2xl p-6 border border-slate-800 shadow-md flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0 ring-1 ring-purple-500/30">
-                <Clock className="w-6 h-6" />
-              </div>
-              <div>
-                <h4 className="font-bold text-sm text-white">
-                  Ready to practice under exam conditions?
-                </h4>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Launch the Computer-Based Test (CBT) hall to simulate official nursing examination timers and scoring.
-                </p>
-              </div>
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <button
-              onClick={() => onNavigate('cbt')}
-              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all shrink-0 shadow-md shadow-purple-900/30"
-            >
-              Enter CBT Testing Hall
-            </button>
-          </div>
-        )}
-      </div>
 
-      {/* Recent Results Section */}
-      {recentAttempts.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight flex items-center gap-2">
-                <Award className="w-5 h-5 text-amber-400" />
-                <span>Recent Exam Results</span>
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">Your latest test attempts and performance analytics</p>
-            </div>
-            <button
-              onClick={() => onNavigate('results')}
-              className="text-xs font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors"
-            >
-              <span>Full Analytics</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="bg-[#111827] rounded-2xl border border-slate-800 overflow-hidden shadow-md">
-            <div className="divide-y divide-slate-800">
-              {recentAttempts.slice(0, 3).map((attempt) => (
+            <div className="space-y-2">
+              {cohortLeaderboard.map((item) => (
                 <div
-                  key={attempt.id}
-                  onClick={() => onNavigate('results', { attemptId: attempt.id })}
-                  className="p-4 sm:p-5 flex items-center justify-between hover:bg-slate-800/50 transition-colors cursor-pointer"
+                  key={item.rank}
+                  className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${
+                    item.isCurrentUser
+                      ? 'bg-indigo-950/40 border-indigo-500/40 text-white font-semibold'
+                      : 'bg-[#12141c] border-slate-800 text-slate-300'
+                  }`}
                 >
-                  <div className="flex items-center gap-3.5">
-                    <div
-                      className={`w-11 h-11 rounded-xl flex items-center justify-center font-extrabold text-xs shadow-md ${
-                        attempt.passed
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                          : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                      }`}
-                    >
-                      {attempt.score}%
-                    </div>
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-5 font-bold text-slate-400">#{item.rank}</span>
                     <div>
-                      <h4 className="font-bold text-sm text-white">
-                        {attempt.examTitle}
-                      </h4>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        {new Date(attempt.createdAt).toLocaleDateString()} • {attempt.correctCount}/
-                        {attempt.totalQuestions} correct •{' '}
-                        {Math.round(attempt.timeSpentSeconds / 60)} min spent
-                      </p>
+                      <div className="text-white">{item.name} {item.isCurrentUser && '(You)'}</div>
+                      <div className="text-[10px] text-slate-500">{item.school}</div>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${
-                        attempt.passed
-                          ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                          : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-                      }`}
-                    >
-                      {attempt.passed ? 'PASSED' : 'RETAKE'}
-                    </span>
-                    <ChevronRight className="w-4 h-4 text-slate-500" />
+                  <div className="text-right font-bold text-teal-400">
+                    {item.avgScore}%
                   </div>
                 </div>
               ))}
             </div>
+
+            <button
+              onClick={() => setShowLeaderboardModal(false)}
+              className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white rounded-xl transition-colors mt-2"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* CLINICAL CASES MODAL                                                      */}
+      {/* ========================================================================= */}
+      {showClinicalCasesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-xs animate-in fade-in duration-150">
+          <div
+            className="w-full max-w-3xl bg-[#0e1017] border border-slate-800 rounded-2xl shadow-2xl p-5 space-y-3 text-white max-h-[85vh] flex flex-col"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="flex items-center justify-between pb-2.5 border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-2">
+                <HeartPulse className="w-5 h-5 text-rose-400" />
+                <div>
+                  <h3 className="font-bold text-sm text-white">Clinical Case Simulation</h3>
+                  <p className="text-[11px] text-slate-400">Patient assessment and priority interventions</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowClinicalCasesModal(false)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Case Selector Chips */}
+            <div className="flex gap-2 overflow-x-auto pb-1 shrink-0">
+              {CLINICAL_CASES.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => setSelectedCase(c)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors border ${
+                    selectedCase?.id === c.id
+                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 font-bold'
+                      : 'bg-[#12141c] text-slate-400 border-slate-800 hover:text-white'
+                  }`}
+                >
+                  {c.title.split(':')[0]}
+                </button>
+              ))}
+            </div>
+
+            {/* Case Details */}
+            {selectedCase && (
+              <div className="overflow-y-auto space-y-3 flex-1 pr-1 text-xs">
+                <div className="bg-[#12141c] p-3 rounded-xl border border-slate-800 space-y-1">
+                  <div className="text-[10px] font-bold text-rose-400 uppercase">{selectedCase.category}</div>
+                  <h4 className="font-bold text-white text-sm">{selectedCase.title}</h4>
+                  <p className="text-slate-300 leading-relaxed">{selectedCase.chiefComplaint}</p>
+                </div>
+
+                {/* Vitals */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  <div className="bg-[#12141c] p-2 rounded-lg border border-slate-800 text-center">
+                    <div className="text-[10px] text-slate-500">BP</div>
+                    <div className="font-bold text-white">{selectedCase.vitals.bp}</div>
+                  </div>
+                  <div className="bg-[#12141c] p-2 rounded-lg border border-slate-800 text-center">
+                    <div className="text-[10px] text-slate-500">HR</div>
+                    <div className="font-bold text-white">{selectedCase.vitals.hr}</div>
+                  </div>
+                  <div className="bg-[#12141c] p-2 rounded-lg border border-slate-800 text-center">
+                    <div className="text-[10px] text-slate-500">RR</div>
+                    <div className="font-bold text-white">{selectedCase.vitals.rr}</div>
+                  </div>
+                  <div className="bg-[#12141c] p-2 rounded-lg border border-slate-800 text-center">
+                    <div className="text-[10px] text-slate-500">Temp</div>
+                    <div className="font-bold text-white">{selectedCase.vitals.temp}</div>
+                  </div>
+                  <div className="bg-[#12141c] p-2 rounded-lg border border-slate-800 text-center col-span-2 sm:col-span-1">
+                    <div className="text-[10px] text-slate-500">SpO2</div>
+                    <div className="font-bold text-teal-400">{selectedCase.vitals.spo2}</div>
+                  </div>
+                </div>
+
+                {/* Priority Actions */}
+                <div className="bg-[#12141c] p-3 rounded-xl border border-slate-800 space-y-1.5">
+                  <div className="font-bold text-teal-300 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-teal-400" />
+                    <span>Priority Nursing Actions:</span>
+                  </div>
+                  <ul className="space-y-1 list-disc list-inside text-slate-300 leading-relaxed">
+                    {selectedCase.priorityInterventions.map((pi, idx) => (
+                      <li key={idx}>{pi}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowClinicalCasesModal(false)}
+              className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white rounded-xl transition-colors shrink-0"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}

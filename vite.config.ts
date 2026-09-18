@@ -12,7 +12,7 @@ export default defineConfig(() => {
       },
     },
     server: {
-      allowedHosts: true,
+      allowedHosts: true as true,
       // HMR is disabled in AI Studio
       // Do not modify file watching
       hmr: process.env.DISABLE_HMR === 'true' ? false : undefined,
@@ -20,7 +20,7 @@ export default defineConfig(() => {
       watch: process.env.DISABLE_HMR === 'true' ? null : undefined,
     },
     preview: {
-      allowedHosts: true,
+      allowedHosts: true as true,
     },
   }
 })

@@ -179,7 +179,7 @@ const MainAppContent: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#090e17] flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-[#070709] flex flex-col items-center justify-center p-4">
         <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-teal-700 via-teal-600 to-teal-800 text-white flex items-center justify-center shadow-lg shadow-teal-500/20 mb-4 ring-1 ring-teal-400/30">
           <Sparkles className="w-7 h-7 animate-pulse text-teal-200" />
         </div>
@@ -204,10 +204,7 @@ const MainAppContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#090e17] text-slate-100 flex flex-col font-sans selection:bg-teal-500 selection:text-white relative">
-      {/* Subtle ambient clinical glow */}
-      <div className="absolute top-0 inset-x-0 h-96 bg-gradient-to-b from-teal-950/40 via-slate-900/10 to-transparent pointer-events-none -z-10" />
-
+    <div className="min-h-screen bg-[#070709] text-slate-100 flex flex-col font-sans selection:bg-teal-500 selection:text-white">
       {/* Main Top Navigation */}
       <Navbar
         currentView={currentView}
@@ -351,7 +348,7 @@ const MainAppContent: React.FC = () => {
       </main>
 
       {/* Clinical Portal Footer */}
-      <footer className="mt-auto border-t border-slate-800/80 bg-[#0c121e]/90 backdrop-blur-md">
+      <footer className="mt-auto border-t border-slate-800/60 bg-[#09090d]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-3 text-center md:text-left">
