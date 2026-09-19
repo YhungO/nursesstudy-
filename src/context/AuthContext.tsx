@@ -59,7 +59,12 @@ interface AuthContextType {
     school?: string;
     gradYear?: string;
   }) => Promise<User>;
-  forgotPassword: (email: string) => Promise<{ success: boolean; message: string; resetCode?: string }>;
+  /**
+   * NOTE FOR DEVELOPERS:
+   * In production, the verification code must be sent via real email service
+   * (e.g. Resend, SendGrid, or Firebase Auth). Never generate or display the code on the client side.
+   */
+  forgotPassword: (email: string) => Promise<{ success: boolean; message: string }>;
   resetPassword: (data: {
     email: string;
     resetCode: string;
@@ -215,6 +220,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return res.user;
   };
 
+  /**
+   * NOTE FOR DEVELOPERS:
+   * In production, the verification code must be sent via real email service
+   * (e.g. Resend, SendGrid, or Firebase Auth). Never generate or display the code on the client side.
+   */
   const forgotPassword = async (email: string) => {
     const cleanEmail = email.trim().toLowerCase();
 

@@ -53,6 +53,10 @@ export function verifyPassword(password: string, storedHash: string): { isValid:
 }
 
 /**
+ * NOTE FOR DEVELOPERS:
+ * In production, the verification code must be sent via real email service
+ * (e.g. Resend, SendGrid, or Firebase Auth). Never generate or display the code on the client side.
+ *
  * Generates a 6-digit numeric reset code for password recovery
  */
 export function generateResetCode(): string {

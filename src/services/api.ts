@@ -73,8 +73,13 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  /**
+   * NOTE FOR DEVELOPERS:
+   * In production, the verification code must be sent via real email service
+   * (e.g. Resend, SendGrid, or Firebase Auth). Never generate or display the code on the client side.
+   */
   forgotPassword: (email: string) =>
-    request<{ success: boolean; message: string; resetCode: string; email: string }>('/api/auth/forgot-password', {
+    request<{ success: boolean; message: string; email: string }>('/api/auth/forgot-password', {
       method: 'POST',
       body: JSON.stringify({ email }),
     }),

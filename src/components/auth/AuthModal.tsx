@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth, getFirebaseAuthErrorMessage } from '../../context/AuthContext';
 import { NursingLevel } from '../../types';
 import {
@@ -7,7 +7,6 @@ import {
   Mail,
   User as UserIcon,
   GraduationCap,
-  Building,
   KeyRound,
   Eye,
   EyeOff,
@@ -18,7 +17,7 @@ import {
   AlertCircle,
   Check,
   RotateCcw,
-  Sparkles,
+  Send,
 } from 'lucide-react';
 
 interface AuthModalProps {
@@ -36,7 +35,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   initialMode = 'login',
   levels,
 }) => {
-  const { login, register, forgotPassword, resetPassword, switchDemoRole } = useAuth();
+  const { login, register, forgotPassword, resetPassword } = useAuth();
   const [mode, setMode] = useState<'login' | 'register' | 'admin_login' | 'forgot_password' | 'reset_password'>(initialMode);
 
   // Form states
@@ -58,7 +57,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
-  const [recoveryCodeHint, setRecoveryCodeHint] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // 60-Second Cooldown Timer for Resend Code
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   // Status
   const [error, setError] = useState<string | null>(null);
@@ -126,12 +134,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           throw new Error('Please enter a valid email address.');
         }
 
-        const res = await forgotPassword(cleanEmail);
-        setSuccessMsg(res.message || 'Recovery code generated! Check your email or use the code below.');
-        if (res.resetCode) {
-          setRecoveryCodeHint(res.resetCode);
-          setResetCode(res.resetCode);
-        }
+        await forgotPassword(cleanEmail);
+        setSuccessMsg('A 6-digit verification code has been sent to your email address. Please check your inbox (and spam folder).');
+        setResetCode('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setResendCooldown(60);
         setMode('reset_password');
       } else if (mode === 'reset_password') {
         if (!cleanEmail) {
@@ -154,9 +162,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           confirmPassword: confirmNewPassword,
         });
 
-        setSuccessMsg('Password has been successfully updated! You can now log in.');
+        setSuccessMsg('Password has been successfully updated! You can now log in with your new password.');
         setPassword('');
         setConfirmPassword('');
+        setResetCode('');
+        setNewPassword('');
+        setConfirmNewPassword('');
         setMode('login');
       }
     } catch (err: any) {
@@ -166,15 +177,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleQuickDemo = async (role: 'student' | 'admin') => {
+  const handleResendCode = async () => {
+    if (resendCooldown > 0 || isSubmitting) return;
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setError('Please enter your email address to receive a recovery code.');
+      return;
+    }
+    if (!isEmailValid(cleanEmail)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
     setError(null);
-    setSuccessMsg(null);
     setIsSubmitting(true);
     try {
-      await switchDemoRole(role);
-      onClose();
+      await forgotPassword(cleanEmail);
+      setResendCooldown(60);
+      setSuccessMsg('A 6-digit verification code has been sent to your email address. Please check your inbox (and spam folder).');
     } catch (err: any) {
-      setError(err.message || 'Quick login failed');
+      setError(getFirebaseAuthErrorMessage(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -253,22 +275,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             >
               Create Account
             </button>
-            <button
-              type="button"
-              id="modal-tab-admin"
-              onClick={() => {
-                setMode('admin_login');
-                setError(null);
-                setSuccessMsg(null);
-              }}
-              className={`px-4 py-3 text-center transition-colors cursor-pointer border-b-2 ${
-                mode === 'admin_login'
-                  ? 'border-indigo-500 text-indigo-400 bg-slate-800/60 font-bold'
-                  : 'border-transparent text-slate-400 hover:text-white'
-              }`}
-            >
-              Admin
-            </button>
           </div>
         )}
 
@@ -308,93 +314,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           )}
 
-          {recoveryCodeHint && mode === 'reset_password' && (
-            <div className="p-2.5 rounded-xl bg-teal-950/60 border border-teal-500/40 text-teal-200 text-xs flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-teal-300 shrink-0" />
-                <span>Code: <strong className="text-white font-mono tracking-wider">{recoveryCodeHint}</strong></span>
+          {/* 1. FULL NAME (REGISTER ONLY) */}
+          {mode === 'register' && (
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
+                Full Name <span className="text-teal-400">*</span>
+              </label>
+              <div className="relative">
+                <UserIcon className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                <input
+                  type="text"
+                  required
+                  id="modal-signup-name-input"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Augustine Chigaemezu"
+                  className="w-full pl-10 pr-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                />
               </div>
-              <button
-                type="button"
-                onClick={() => setResetCode(recoveryCodeHint)}
-                className="text-[10px] font-bold text-teal-300 underline cursor-pointer"
-              >
-                Auto-fill
-              </button>
             </div>
           )}
 
-          {/* REGISTER FIELDS */}
-          {mode === 'register' && (
-            <>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
-                  Full Name <span className="text-teal-400">*</span>
-                </label>
-                <div className="relative">
-                  <UserIcon className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Augustine Chigaemezu"
-                    className="w-full pl-10 pr-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
-                    Level <span className="text-slate-500 text-[10px] font-normal">(Optional)</span>
-                  </label>
-                  <select
-                    value={levelId}
-                    onChange={(e) => setLevelId(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                  >
-                    {levels.map((lvl) => (
-                      <option key={lvl.id} value={lvl.id}>
-                        {lvl.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
-                    Graduation <span className="text-slate-500 text-[10px] font-normal">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={gradYear}
-                    onChange={(e) => setGradYear(e.target.value)}
-                    placeholder="2027"
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
-                  School / College Name <span className="text-slate-500 text-[10px] font-normal">(Optional)</span>
-                </label>
-                <div className="relative">
-                  <Building className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                  <input
-                    type="text"
-                    value={school}
-                    onChange={(e) => setSchool(e.target.value)}
-                    placeholder="e.g. Imo State College of Nursing Science"
-                    className="w-full pl-10 pr-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                  />
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* EMAIL (NOT FOR RESET PASSWORD) */}
+          {/* 2. EMAIL (NOT FOR RESET PASSWORD) */}
           {mode !== 'reset_password' && (
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
@@ -405,11 +346,36 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <input
                   type="email"
                   required
+                  id="modal-email-input"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="student@nursesstudy.com"
                   className="w-full pl-10 pr-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
                 />
+              </div>
+            </div>
+          )}
+
+          {/* 3. NURSING LEVEL (REGISTER ONLY) */}
+          {mode === 'register' && (
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
+                Nursing Level <span className="text-teal-400">*</span>
+              </label>
+              <div className="relative">
+                <GraduationCap className="w-4 h-4 text-slate-500 absolute left-3.5 top-3 pointer-events-none" />
+                <select
+                  id="modal-signup-level-select"
+                  value={levelId}
+                  onChange={(e) => setLevelId(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm font-medium text-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 cursor-pointer"
+                >
+                  {levels.map((lvl) => (
+                    <option key={lvl.id} value={lvl.id}>
+                      {lvl.name} ({lvl.code})
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           )}
@@ -503,42 +469,70 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           )}
 
           {/* RESET PASSWORD FIELDS */}
+          {/*
+            NOTE FOR DEVELOPERS:
+            In production, the verification code must be sent via real email service
+            (e.g. Resend, SendGrid, or Firebase Auth). Never generate or display the code on the client side.
+          */}
           {mode === 'reset_password' && (
-            <div className="space-y-3">
+            <div className="space-y-3.5">
+              {/* 1. Email (Pre-filled) */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
-                  Registered Email <span className="text-teal-400">*</span>
+                  Email Address <span className="text-teal-400">*</span>
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
                   <input
                     type="email"
                     required
+                    id="modal-reset-email-input"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-teal-500"
+                    placeholder="student@nursesstudy.com"
+                    className="w-full pl-10 pr-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-500 transition-colors"
                   />
                 </div>
               </div>
 
+              {/* 2. 6-Digit Verification Code with Resend Code Button & 60s cooldown */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
-                  6-Digit Recovery Code <span className="text-teal-400">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
+                    6-Digit Verification Code <span className="text-teal-400">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleResendCode}
+                    disabled={resendCooldown > 0 || isSubmitting}
+                    className={`text-[11px] font-semibold inline-flex items-center gap-1 transition-colors ${
+                      resendCooldown > 0
+                        ? 'text-slate-500 cursor-not-allowed'
+                        : 'text-teal-400 hover:text-teal-300 cursor-pointer'
+                    }`}
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>{resendCooldown > 0 ? `Resend (${resendCooldown}s)` : 'Resend Code'}</span>
+                  </button>
+                </div>
                 <div className="relative">
                   <KeyRound className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
                   <input
                     type="text"
                     required
+                    id="modal-reset-code-input"
                     value={resetCode}
-                    onChange={(e) => setResetCode(e.target.value)}
-                    placeholder="123456"
-                    maxLength={8}
-                    className="w-full pl-10 pr-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white font-mono tracking-widest focus:outline-none focus:border-teal-500"
+                    onChange={(e) => setResetCode(e.target.value.replace(/\s+/g, ''))}
+                    placeholder="Enter 6-digit code"
+                    maxLength={6}
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    className="w-full pl-10 pr-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white font-mono tracking-widest placeholder:tracking-normal placeholder:font-sans placeholder:text-slate-500 focus:outline-none focus:border-teal-500 transition-colors"
                   />
                 </div>
               </div>
 
+              {/* 3. New Password */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
@@ -551,41 +545,53 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <input
                     type={showNewPassword ? 'text' : 'password'}
                     required
+                    id="modal-reset-new-password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="••••••••••••"
-                    className="w-full pl-10 pr-10 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-teal-500"
+                    className="w-full pl-10 pr-10 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-500 transition-colors"
                   />
                   <button
                     type="button"
                     onClick={() => setShowNewPassword(!showNewPassword)}
                     className="absolute right-3.5 top-3 text-slate-500 hover:text-slate-300 cursor-pointer"
                     tabIndex={-1}
+                    aria-label={showNewPassword ? 'Hide password' : 'Show password'}
                   >
                     {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
 
+              {/* 4. Confirm New Password */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
-                  Confirm New Password <span className="text-teal-400">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
+                    Confirm New Password <span className="text-teal-400">*</span>
+                  </label>
+                  {confirmNewPassword && newPassword && (
+                    <span className={`text-[10px] font-semibold ${newPassword === confirmNewPassword ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {newPassword === confirmNewPassword ? 'Match' : 'Mismatch'}
+                    </span>
+                  )}
+                </div>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
                   <input
                     type={showConfirmNewPassword ? 'text' : 'password'}
                     required
+                    id="modal-reset-confirm-password"
                     value={confirmNewPassword}
                     onChange={(e) => setConfirmNewPassword(e.target.value)}
                     placeholder="••••••••••••"
-                    className="w-full pl-10 pr-10 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-teal-500"
+                    className="w-full pl-10 pr-10 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-500 transition-colors"
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
                     className="absolute right-3.5 top-3 text-slate-500 hover:text-slate-300 cursor-pointer"
                     tabIndex={-1}
+                    aria-label={showConfirmNewPassword ? 'Hide password' : 'Show password'}
                   >
                     {showConfirmNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -611,19 +617,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             ) : mode === 'register' ? (
               <>
                 <UserIcon className="w-4 h-4" />
-                <span>Create Account</span>
+                <span>Create Student Account</span>
                 <ArrowRight className="w-4 h-4 ml-1" />
               </>
             ) : mode === 'forgot_password' ? (
               <>
-                <RotateCcw className="w-4 h-4" />
-                <span>Send Recovery Code</span>
+                <Send className="w-4 h-4" />
+                <span>Send Reset Code</span>
                 <ArrowRight className="w-4 h-4 ml-1" />
               </>
             ) : mode === 'reset_password' ? (
               <>
                 <Check className="w-4 h-4" />
-                <span>Reset Password & Log In</span>
+                <span>Reset Password</span>
                 <ArrowRight className="w-4 h-4 ml-1" />
               </>
             ) : (
@@ -635,30 +641,42 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             )}
           </button>
 
-          {/* Instant Quick Demo */}
-          <div className="pt-3 border-t border-slate-800 text-center">
-            <span className="text-[11px] text-slate-400 block mb-2">
-              Instant 1-Click Evaluation:
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickDemo('student')}
-                disabled={isSubmitting}
-                className="flex-1 py-1.5 px-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg text-xs text-slate-300 hover:text-white transition-colors cursor-pointer"
-              >
-                Demo Student
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemo('admin')}
-                disabled={isSubmitting}
-                className="flex-1 py-1.5 px-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg text-xs text-slate-300 hover:text-white transition-colors cursor-pointer"
-              >
-                Demo Admin
-              </button>
+          {/* Bottom Switch Link */}
+          {(mode === 'login' || mode === 'register') && (
+            <div className="text-center pt-2 border-t border-slate-800/80">
+              {mode === 'login' ? (
+                <p className="text-xs text-slate-400">
+                  Don't have an account yet?{' '}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('register');
+                      setError(null);
+                      setSuccessMsg(null);
+                    }}
+                    className="text-teal-400 hover:text-teal-300 font-bold transition-colors underline underline-offset-2 ml-1 cursor-pointer"
+                  >
+                    Create an Account (Sign Up)
+                  </button>
+                </p>
+              ) : (
+                <p className="text-xs text-slate-400">
+                  Already registered?{' '}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('login');
+                      setError(null);
+                      setSuccessMsg(null);
+                    }}
+                    className="text-teal-400 hover:text-teal-300 font-bold transition-colors underline underline-offset-2 ml-1 cursor-pointer"
+                  >
+                    Log In to Your Account
+                  </button>
+                </p>
+              )}
             </div>
-          </div>
+          )}
         </form>
       </div>
     </div>

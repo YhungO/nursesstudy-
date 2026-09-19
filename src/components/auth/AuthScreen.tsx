@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth, getFirebaseAuthErrorMessage } from '../../context/AuthContext';
 import { NursingLevel } from '../../types';
 import {
@@ -7,7 +7,6 @@ import {
   Mail,
   User as UserIcon,
   GraduationCap,
-  Building,
   Shield,
   Eye,
   EyeOff,
@@ -15,13 +14,10 @@ import {
   CheckCircle2,
   ArrowRight,
   ArrowLeft,
-  BookOpen,
-  Award,
-  Clock,
   KeyRound,
   Check,
   RotateCcw,
-  Sparkles,
+  Send,
 } from 'lucide-react';
 
 interface AuthScreenProps {
@@ -37,7 +33,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   onSuccess,
   initialMode = 'login',
 }) => {
-  const { login, register, forgotPassword, resetPassword, switchDemoRole } = useAuth();
+  const { login, register, forgotPassword, resetPassword } = useAuth();
   const [mode, setMode] = useState<'register' | 'login' | 'admin' | 'forgot_password' | 'reset_password'>(initialMode);
 
   // Form Fields
@@ -59,7 +55,16 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
-  const [recoveryCodeHint, setRecoveryCodeHint] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // 60-Second Cooldown Timer for Resend Code
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   // Status
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -139,12 +144,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           throw new Error('Please enter a valid email address.');
         }
 
-        const res = await forgotPassword(cleanEmail);
-        setSuccessMsg(res.message || 'Recovery code generated! Check your email or use the verification code below.');
-        if (res.resetCode) {
-          setRecoveryCodeHint(res.resetCode);
-          setResetCode(res.resetCode);
-        }
+        await forgotPassword(cleanEmail);
+        setSuccessMsg('A 6-digit verification code has been sent to your email address. Please check your inbox (and spam folder).');
+        setResetCode('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setResendCooldown(60);
         // Advance to step 2: Reset Password
         setMode('reset_password');
       } else if (mode === 'reset_password') {
@@ -171,6 +176,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         setSuccessMsg('Password has been successfully updated! You can now log in with your new password.');
         setPassword('');
         setConfirmPassword('');
+        setResetCode('');
+        setNewPassword('');
+        setConfirmNewPassword('');
         setMode('login');
       }
     } catch (err: any) {
@@ -180,15 +188,27 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     }
   };
 
-  const handleQuickDemo = async (role: 'student' | 'admin') => {
+  // Handle Resending 6-digit Verification Code with 60-Second Cooldown
+  const handleResendCode = async () => {
+    if (resendCooldown > 0 || isSubmitting) return;
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setError('Please enter your email address to receive a recovery code.');
+      return;
+    }
+    if (!isEmailValid(cleanEmail)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
     setError(null);
-    setSuccessMsg(null);
     setIsSubmitting(true);
     try {
-      await switchDemoRole(role);
-      if (onSuccess) onSuccess();
+      await forgotPassword(cleanEmail);
+      setResendCooldown(60);
+      setSuccessMsg('A 6-digit verification code has been sent to your email address. Please check your inbox (and spam folder).');
     } catch (err: any) {
-      setError(err.message || 'Demo initialization failed.');
+      setError(getFirebaseAuthErrorMessage(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -197,9 +217,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   return (
     <div className="min-h-screen bg-[#090e17] text-slate-100 flex flex-col justify-center items-center py-10 px-4 sm:px-6 relative overflow-hidden selection:bg-teal-500 selection:text-white">
       {/* Background ambient lighting */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[650px] h-[350px] bg-gradient-to-tr from-teal-500/10 via-cyan-500/10 to-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[350px] bg-gradient-to-tr from-teal-500/10 via-cyan-500/10 to-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="w-full max-w-xl space-y-6 relative z-10">
+      <div className="w-full max-w-md space-y-6 relative z-10">
         {/* Brand Header */}
         <div className="text-center space-y-2.5">
           <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-[#111827] border border-slate-800 shadow-md">
@@ -211,25 +231,25 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 Nurses<span className="text-teal-400">Study</span>
               </span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-500/20 text-teal-300 border border-teal-500/30 uppercase tracking-wider">
-                Portal Security
+                Student Portal
               </span>
             </div>
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-            {mode === 'register' && 'Create Your Student Account'}
+            {mode === 'register' && 'Create Your Account'}
             {mode === 'login' && 'Log In to NursesStudy'}
             {mode === 'forgot_password' && 'Recover Your Password'}
             {mode === 'reset_password' && 'Create a New Password'}
-            {mode === 'admin' && 'Administrator Portal Gateway'}
+            {mode === 'admin' && 'Administrator Portal'}
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
+          <p className="text-xs sm:text-sm text-slate-400 max-w-sm mx-auto leading-relaxed">
             {mode === 'register' &&
-              'Register your permanent nursing student profile to access lecture materials, question banks, and timed CBT mock examinations.'}
+              'Register your student profile to access lecture materials, question banks, and timed CBT mock examinations.'}
             {mode === 'login' &&
               'Enter your registered email and password to access your lecture notes, CBT mock exams, and saved bookmarks.'}
             {mode === 'forgot_password' &&
-              'Enter your registered email address to receive a secure recovery code and reset link.'}
+              'Enter your registered email address to receive a secure 6-digit recovery code.'}
             {mode === 'reset_password' &&
               'Enter your verification code along with your new password to restore account access.'}
             {mode === 'admin' &&
@@ -237,68 +257,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           </p>
         </div>
 
-        {/* Primary Navigation Tabs (shown during login, register, admin) */}
-        {mode !== 'forgot_password' && mode !== 'reset_password' && (
-          <div className="bg-[#111827] p-1.5 rounded-2xl border border-slate-800 flex shadow-inner">
-            <button
-              type="button"
-              id="auth-tab-login"
-              onClick={() => {
-                setMode('login');
-                setError(null);
-                setSuccessMsg(null);
-              }}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                mode === 'login'
-                  ? 'bg-teal-600 text-white shadow-md shadow-teal-900/40 ring-1 ring-teal-400/40'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-              }`}
-            >
-              <KeyRound className="w-3.5 h-3.5" />
-              <span>Log In</span>
-            </button>
-
-            <button
-              type="button"
-              id="auth-tab-register"
-              onClick={() => {
-                setMode('register');
-                setError(null);
-                setSuccessMsg(null);
-              }}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                mode === 'register'
-                  ? 'bg-teal-600 text-white shadow-md shadow-teal-900/40 ring-1 ring-teal-400/40'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-              }`}
-            >
-              <UserIcon className="w-3.5 h-3.5" />
-              <span>Create Account (Sign Up)</span>
-            </button>
-
-            <button
-              type="button"
-              id="auth-tab-admin"
-              onClick={() => {
-                setMode('admin');
-                setError(null);
-                setSuccessMsg(null);
-              }}
-              className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                mode === 'admin'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/40 ring-1 ring-indigo-400/40'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-              }`}
-              title="Administrator Gateway"
-            >
-              <Shield className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Admin</span>
-            </button>
-          </div>
-        )}
-
-        {/* Back Link for Forgot / Reset Password modes */}
-        {(mode === 'forgot_password' || mode === 'reset_password') && (
+        {/* Back Link for Non-Login modes */}
+        {mode !== 'login' && (
           <div className="flex items-center justify-between">
             <button
               type="button"
@@ -313,7 +273,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               <span>Back to Log In</span>
             </button>
             <span className="text-[11px] text-teal-400 font-semibold bg-teal-500/10 px-2.5 py-1 rounded-full border border-teal-500/20">
-              Account Recovery
+              {mode === 'register' ? 'New Student' : mode === 'admin' ? 'Staff Portal' : 'Account Recovery'}
             </span>
           </div>
         )}
@@ -324,13 +284,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           <div className="flex items-center justify-between pb-3 border-b border-slate-800/80 text-xs">
             <div className="flex items-center gap-2 text-slate-300">
               <span className="w-2 h-2 rounded-full bg-teal-400 shadow-xs shadow-teal-400 animate-pulse" />
-              <span className="font-semibold text-xs text-slate-300">Secure Hashed Authentication</span>
+              <span className="font-semibold text-xs text-slate-300">Secure Authentication</span>
             </div>
             <span className="text-[11px] font-medium text-slate-400">
               {mode === 'register'
-                ? 'Permanent Enrollment'
+                ? 'Student Registration'
                 : mode === 'login'
-                ? 'Persistent Session'
+                ? 'Student Access'
                 : mode === 'forgot_password' || mode === 'reset_password'
                 ? 'Password Recovery'
                 : 'Administrator Area'}
@@ -361,25 +321,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 <p className="font-bold text-emerald-300">Success</p>
                 <p className="text-[11px] mt-0.5 text-emerald-200 leading-relaxed">{successMsg}</p>
               </div>
-            </div>
-          )}
-
-          {/* Recovery Code Hint Banner (For Seamless Demonstration / Testing) */}
-          {recoveryCodeHint && mode === 'reset_password' && (
-            <div className="p-3 rounded-2xl bg-teal-950/60 border border-teal-500/40 text-teal-200 text-xs flex items-center justify-between animate-in fade-in">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-teal-300 shrink-0" />
-                <span>
-                  Your verification recovery code is <strong className="text-white tracking-widest font-mono text-sm">{recoveryCodeHint}</strong>
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setResetCode(recoveryCodeHint)}
-                className="text-[11px] font-bold text-teal-300 underline hover:text-white cursor-pointer"
-              >
-                Auto-fill Code
-              </button>
             </div>
           )}
 
@@ -439,7 +380,31 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               </div>
             )}
 
-            {/* 3. PASSWORD (SIGN UP, LOG IN, ADMIN) */}
+            {/* 3. NURSING LEVEL (SIGN UP ONLY) */}
+            {mode === 'register' && (
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                  Nursing Level <span className="text-teal-400">*</span>
+                </label>
+                <div className="relative">
+                  <GraduationCap className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5 pointer-events-none" />
+                  <select
+                    id="signup-level-select"
+                    value={levelId}
+                    onChange={(e) => setLevelId(e.target.value)}
+                    className="w-full pl-10 pr-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm font-medium text-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-colors cursor-pointer"
+                  >
+                    {levels.map((lvl) => (
+                      <option key={lvl.id} value={lvl.id}>
+                        {lvl.name} ({lvl.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* 4. PASSWORD (SIGN UP, LOG IN, ADMIN) */}
             {(mode === 'login' || mode === 'register' || mode === 'admin') && (
               <div>
                 <div className="flex items-center justify-between mb-1.5">
@@ -488,7 +453,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               </div>
             )}
 
-            {/* 4. CONFIRM PASSWORD (SIGN UP ONLY) */}
+            {/* 5. CONFIRM PASSWORD (SIGN UP ONLY) */}
             {mode === 'register' && (
               <div>
                 <div className="flex items-center justify-between mb-1.5">
@@ -538,94 +503,54 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               </div>
             )}
 
-            {/* 5. OPTIONAL ACADEMIC DETAILS (SIGN UP ONLY) */}
-            {mode === 'register' && (
-              <div className="space-y-3 pt-1 border-t border-slate-800/80">
-                <div className="flex items-center justify-between text-xs text-slate-400">
-                  <span className="font-semibold text-slate-300">Academic Profile</span>
-                  <span className="text-[10px] text-teal-400 font-medium">Optional Fields</span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                      Level (e.g. ND1) <span className="text-slate-500 text-[10px] font-normal">(Optional)</span>
-                    </label>
-                    <div className="relative">
-                      <GraduationCap className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-                      <select
-                        id="signup-level-select"
-                        value={levelId}
-                        onChange={(e) => setLevelId(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                      >
-                        {levels.map((lvl) => (
-                          <option key={lvl.id} value={lvl.id}>
-                            {lvl.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                      Graduation Year <span className="text-slate-500 text-[10px] font-normal">(Optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      id="signup-gradyear-input"
-                      value={gradYear}
-                      onChange={(e) => setGradYear(e.target.value)}
-                      placeholder="2027"
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs font-semibold text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                    School / College Name <span className="text-slate-500 text-[10px] font-normal">(Optional)</span>
-                  </label>
-                  <div className="relative">
-                    <Building className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                    <input
-                      type="text"
-                      id="signup-school-input"
-                      value={school}
-                      onChange={(e) => setSchool(e.target.value)}
-                      placeholder="e.g. Imo State College of Nursing Science, Orlu"
-                      className="w-full pl-10 pr-3.5 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* 6. RESET PASSWORD FIELDS (RESET PASSWORD MODE ONLY) */}
+            {/*
+              NOTE FOR DEVELOPERS:
+              In production, the verification code must be sent via real email service
+              (e.g. Resend, SendGrid, or Firebase Auth). Never generate or display the code on the client side.
+            */}
             {mode === 'reset_password' && (
-              <div className="space-y-3.5">
+              <div className="space-y-4">
+                {/* 1. Email Address (Pre-filled) */}
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                    Registered Email <span className="text-teal-400">*</span>
+                    Email Address <span className="text-teal-400">*</span>
                   </label>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
                     <input
                       type="email"
                       required
+                      id="reset-email-input"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="student@nursesstudy.com"
-                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-colors"
                     />
                   </div>
                 </div>
 
+                {/* 2. 6-Digit Verification Code with Resend Code & 60s cooldown */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                    6-Digit Verification Code <span className="text-teal-400">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
+                      6-Digit Verification Code <span className="text-teal-400">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      id="resend-code-btn"
+                      onClick={handleResendCode}
+                      disabled={resendCooldown > 0 || isSubmitting}
+                      className={`text-xs font-semibold inline-flex items-center gap-1.5 transition-colors ${
+                        resendCooldown > 0
+                          ? 'text-slate-500 cursor-not-allowed'
+                          : 'text-teal-400 hover:text-teal-300 cursor-pointer'
+                      }`}
+                    >
+                      <RotateCcw className={`w-3.5 h-3.5 ${resendCooldown > 0 ? '' : 'group-hover:rotate-180 transition-transform'}`} />
+                      <span>{resendCooldown > 0 ? `Resend Code (${resendCooldown}s)` : 'Resend Code'}</span>
+                    </button>
+                  </div>
                   <div className="relative">
                     <KeyRound className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
                     <input
@@ -633,14 +558,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       required
                       id="reset-code-input"
                       value={resetCode}
-                      onChange={(e) => setResetCode(e.target.value)}
-                      placeholder="e.g. 123456"
-                      maxLength={8}
-                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white font-mono tracking-widest placeholder:tracking-normal placeholder:text-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                      onChange={(e) => setResetCode(e.target.value.replace(/\s+/g, ''))}
+                      placeholder="Enter 6-digit code"
+                      maxLength={6}
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-sm sm:text-base text-white font-mono tracking-widest placeholder:tracking-normal placeholder:font-sans placeholder:text-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-colors"
                     />
                   </div>
                 </div>
 
+                {/* 3. New Password */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
@@ -657,7 +585,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="••••••••••••"
-                      className="w-full pl-10 pr-10 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                      className="w-full pl-10 pr-10 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-colors"
                     />
                     <button
                       type="button"
@@ -671,6 +599,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   </div>
                 </div>
 
+                {/* 4. Confirm New Password */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
@@ -699,7 +628,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       value={confirmNewPassword}
                       onChange={(e) => setConfirmNewPassword(e.target.value)}
                       placeholder="••••••••••••"
-                      className="w-full pl-10 pr-10 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                      className="w-full pl-10 pr-10 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-colors"
                     />
                     <button
                       type="button"
@@ -734,7 +663,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               ) : mode === 'register' ? (
                 <>
                   <UserIcon className="w-4 h-4" />
-                  <span>Create Account & Sign In</span>
+                  <span>Create Student Account</span>
                   <ArrowRight className="w-4 h-4 ml-1" />
                 </>
               ) : mode === 'login' ? (
@@ -745,14 +674,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 </>
               ) : mode === 'forgot_password' ? (
                 <>
-                  <RotateCcw className="w-4 h-4" />
-                  <span>Send Recovery Code & Reset Link</span>
+                  <Send className="w-4 h-4" />
+                  <span>Send Reset Code</span>
                   <ArrowRight className="w-4 h-4 ml-1" />
                 </>
               ) : mode === 'reset_password' ? (
                 <>
                   <Check className="w-4 h-4" />
-                  <span>Reset Password & Log In</span>
+                  <span>Reset Password</span>
                   <ArrowRight className="w-4 h-4 ml-1" />
                 </>
               ) : (
@@ -830,59 +759,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 </button>
               </p>
             )}
-          </div>
-
-          {/* Quick Demo Previews */}
-          <div className="pt-3 border-t border-slate-800/80">
-            <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-              <span className="text-[11px] font-medium text-slate-400">
-                Evaluation Shortcuts:
-              </span>
-              <span className="text-[10px] text-teal-400 font-bold uppercase tracking-wider">
-                1-Click Sign-In
-              </span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button
-                type="button"
-                id="demo-student-login-btn"
-                onClick={() => handleQuickDemo('student')}
-                disabled={isSubmitting}
-                className="px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-teal-500/40 text-slate-300 hover:text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-              >
-                <UserIcon className="w-3.5 h-3.5 text-teal-400" />
-                <span>Demo Student (Amara)</span>
-              </button>
-              <button
-                type="button"
-                id="demo-admin-login-btn"
-                onClick={() => handleQuickDemo('admin')}
-                disabled={isSubmitting}
-                className="px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-indigo-500/40 text-slate-300 hover:text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-              >
-                <Shield className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Demo Admin (YHUNGO)</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Feature Highlights Grid */}
-        <div className="grid grid-cols-3 gap-3 text-center text-slate-400 text-xs">
-          <div className="p-3 bg-[#111827] rounded-2xl border border-slate-800/80 space-y-1">
-            <BookOpen className="w-4 h-4 text-teal-400 mx-auto" />
-            <div className="font-bold text-white text-[11px]">11 Subjects</div>
-            <p className="text-[10px] text-slate-400 leading-tight">Curriculum notes & clinical guides</p>
-          </div>
-          <div className="p-3 bg-[#111827] rounded-2xl border border-slate-800/80 space-y-1">
-            <Clock className="w-4 h-4 text-cyan-400 mx-auto" />
-            <div className="font-bold text-white text-[11px]">CBT Hall</div>
-            <p className="text-[10px] text-slate-400 leading-tight">Timed NCLEX & NMCN mocks</p>
-          </div>
-          <div className="p-3 bg-[#111827] rounded-2xl border border-slate-800/80 space-y-1">
-            <Award className="w-4 h-4 text-indigo-400 mx-auto" />
-            <div className="font-bold text-white text-[11px]">Admin Roster</div>
-            <p className="text-[10px] text-slate-400 leading-tight">Permanent registered students</p>
           </div>
         </div>
       </div>
