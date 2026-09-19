@@ -251,53 +251,56 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
         </div>
       )}
 
-      {/* 2. Top Header & Candidate Command Strip (Clean, Flat, Minimal) */}
-      <div className="rounded-2xl bg-[#0d0f14] border border-slate-800/80 p-5 sm:p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+      {/* 2. Top Header & Candidate Command Strip */}
+      <div className="rounded-3xl bg-[#111827] border border-slate-800/90 p-5 sm:p-6 shadow-md">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-300 text-[11px] font-medium border border-teal-500/20">
-                <GraduationCap className="w-3 h-3 text-teal-400" />
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-300 text-[11px] font-semibold border border-teal-500/20">
+                <GraduationCap className="w-3.5 h-3.5 text-teal-400" />
                 ND 1 Nursing
               </span>
               {user?.school && (
-                <span className="text-[11px] text-slate-400 truncate max-w-xs">
+                <span className="text-[11px] text-slate-400 truncate max-w-xs font-medium">
                   {user.school}
                 </span>
               )}
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight mt-1.5">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight mt-1.5">
               Welcome back, {user?.name?.split(' ')[0] || 'Candidate'}
             </h1>
           </div>
 
           {/* Quick Metrics Badges */}
           <div className="flex items-center gap-2 flex-wrap text-xs text-slate-300">
-            <div className="px-3 py-1 rounded-lg bg-[#14161f] border border-slate-800">
-              <span className="text-slate-400">Tests:</span> <strong className="text-white">{totalAttempts}</strong>
+            <div className="px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center gap-1.5 shadow-inner">
+              <span className="text-slate-400 text-[11px]">Tests:</span>{' '}
+              <strong className="text-white font-bold">{totalAttempts}</strong>
             </div>
-            <div className="px-3 py-1 rounded-lg bg-[#14161f] border border-slate-800">
-              <span className="text-slate-400">Average:</span> <strong className="text-teal-400">{avgScore}%</strong>
+            <div className="px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center gap-1.5 shadow-inner">
+              <span className="text-slate-400 text-[11px]">Average:</span>{' '}
+              <strong className="text-teal-400 font-bold">{avgScore}%</strong>
             </div>
-            <div className="px-3 py-1 rounded-lg bg-[#14161f] border border-slate-800">
-              <span className="text-slate-400">Passed:</span> <strong className="text-emerald-400">{passedCount}</strong>
+            <div className="px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center gap-1.5 shadow-inner">
+              <span className="text-slate-400 text-[11px]">Passed:</span>{' '}
+              <strong className="text-emerald-400 font-bold">{passedCount}</strong>
             </div>
           </div>
         </div>
 
         {/* Clean Flat Search Input */}
         <form onSubmit={handleSearchSubmit} className="mt-4 relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search questions, notes, nursing concepts..."
-            className="w-full pl-10 pr-20 py-2.5 bg-[#12141c] text-white placeholder:text-slate-500 border border-slate-800 focus:border-teal-500/80 rounded-xl text-xs sm:text-sm focus:outline-none transition-colors"
+            placeholder="Search questions, notes, medical diagnoses, drugs..."
+            className="w-full pl-10 pr-24 py-2.5 bg-slate-900/90 text-white placeholder:text-slate-500 border border-slate-800 focus:border-teal-500/80 rounded-xl text-xs sm:text-sm focus:outline-none transition-colors shadow-inner"
           />
           <button
             type="submit"
-            className="absolute right-1.5 top-1.5 bottom-1.5 px-3 bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-lg text-xs transition-colors"
+            className="absolute right-1.5 top-1.5 bottom-1.5 px-3.5 bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-lg text-xs transition-colors shadow-sm"
           >
             Search
           </button>
@@ -305,26 +308,70 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* 3. SIGNATURE O3SCHOOLS-STYLE 2-COLUMN CARD GRID (Clean, Soft Pastels)     */}
+      {/* 3. STREAMLINED HERO CARD: ACTIVE CBT EXAM (Modern Floating Glassmorphism) */}
+      {/* ========================================================================= */}
+      {featuredExam && (
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#121c2e] via-[#14233c] to-[#0f1d2d] border border-teal-500/30 p-5 sm:p-6 shadow-[0_12px_36px_rgba(0,0,0,0.35)] backdrop-blur-md">
+          {/* Subtle background glow effect */}
+          <div className="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-teal-500/10 blur-3xl pointer-events-none" />
+          <div className="absolute -left-12 -bottom-12 w-48 h-48 rounded-full bg-purple-500/10 blur-3xl pointer-events-none" />
+
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+              <div className="w-12 h-12 rounded-2xl bg-teal-500/15 border border-teal-500/30 text-teal-300 flex items-center justify-center shrink-0 shadow-md">
+                <Clock className="w-6 h-6 animate-pulse text-teal-300" />
+              </div>
+
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                    Active CBT Mock Exam
+                  </span>
+                  <span className="text-xs text-slate-300 font-medium">
+                    {featuredExam.durationMinutes} Minutes • {featuredExam.totalQuestions} Questions • Passmark {featuredExam.passingScore || 50}%
+                  </span>
+                </div>
+                <h3 className="text-base sm:text-lg font-extrabold text-white mt-1 truncate">
+                  {featuredExam.title}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
+                  Timed simulation with official score report, negative marking options, and instant rationales.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => onStartExam(featuredExam.id)}
+              className="px-6 py-3 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 active:from-teal-600 active:to-emerald-600 text-slate-950 font-extrabold rounded-2xl text-xs transition-all shadow-lg shadow-teal-500/25 flex items-center justify-center gap-2 shrink-0 self-start md:self-auto cursor-pointer"
+            >
+              <span>Launch CBT Exam</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 4. PRIMARY ACTIONS: BALANCED 2x2 GRID                                     */}
       {/* ========================================================================= */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm sm:text-base font-bold text-white tracking-tight flex items-center gap-1.5">
+          <h2 className="text-sm sm:text-base font-bold text-white tracking-tight flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-teal-400" />
-            <span>Learning Modules</span>
+            <span>Primary Learning Modules</span>
           </h2>
-          <span className="text-xs text-slate-500">Tap a card to start</span>
+          <span className="text-xs text-slate-400">Essential student actions</span>
         </div>
 
-        {/* 2-Column Grid with Soft Muted Pastel Backgrounds */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-          {/* 1. Practice Mode (Soft Pastel Blue) */}
+        {/* Clean 2x2 Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+          {/* 1. Practice Mode (Sky Pastel Accent) */}
           <div
             id="home-card-practice-mode"
             onClick={() => onNavigate('practice')}
-            className="group rounded-2xl p-4 sm:p-5 bg-[#0e1726] hover:bg-[#121f33] border border-sky-500/20 hover:border-sky-500/40 transition-all cursor-pointer flex items-center gap-4"
+            className="group rounded-3xl p-5 bg-[#101b2b] hover:bg-[#142338] border border-sky-500/20 hover:border-sky-500/40 transition-all cursor-pointer flex items-center gap-4 shadow-md"
           >
-            <div className="w-12 h-12 rounded-xl bg-sky-500/15 border border-sky-500/25 text-sky-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+            <div className="w-12 h-12 rounded-2xl bg-sky-500/15 border border-sky-500/25 text-sky-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
               <HelpCircle className="w-6 h-6" />
             </div>
             <div className="flex-1 min-w-0">
@@ -340,35 +387,35 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
             </div>
           </div>
 
-          {/* 2. CBT Hall (Soft Pastel Purple) */}
+          {/* 2. CBT Hall (Purple Pastel Accent) */}
           <div
             id="home-card-cbt-hall"
             onClick={() => onNavigate('cbt')}
-            className="group rounded-2xl p-4 sm:p-5 bg-[#171226] hover:bg-[#1f1833] border border-purple-500/20 hover:border-purple-500/40 transition-all cursor-pointer flex items-center gap-4"
+            className="group rounded-3xl p-5 bg-[#19152b] hover:bg-[#201b38] border border-purple-500/20 hover:border-purple-500/40 transition-all cursor-pointer flex items-center gap-4 shadow-md"
           >
-            <div className="w-12 h-12 rounded-xl bg-purple-500/15 border border-purple-500/25 text-purple-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+            <div className="w-12 h-12 rounded-2xl bg-purple-500/15 border border-purple-500/25 text-purple-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
               <Clock className="w-6 h-6" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-sm sm:text-base text-white group-hover:text-purple-300 transition-colors truncate">
-                  CBT Hall
+                  CBT Exam Hall
                 </h3>
                 <ChevronRight className="w-4 h-4 text-purple-400/60 group-hover:text-purple-300 group-hover:translate-x-0.5 transition-transform shrink-0 ml-1" />
               </div>
               <p className="text-xs text-slate-400 truncate mt-0.5">
-                Official timed exams with countdown timer and scoring
+                Official timed mock exams with countdown & scorecard
               </p>
             </div>
           </div>
 
-          {/* 3. Notes (Soft Pastel Teal / Green - Brand Color) */}
+          {/* 3. Study Notes (Clinical Teal Accent) */}
           <div
             id="home-card-notes"
             onClick={() => onNavigate('notes')}
-            className="group rounded-2xl p-4 sm:p-5 bg-[#0c1a17] hover:bg-[#10231f] border border-teal-500/20 hover:border-teal-500/40 transition-all cursor-pointer flex items-center gap-4"
+            className="group rounded-3xl p-5 bg-[#0f1f1d] hover:bg-[#132724] border border-teal-500/20 hover:border-teal-500/40 transition-all cursor-pointer flex items-center gap-4 shadow-md"
           >
-            <div className="w-12 h-12 rounded-xl bg-teal-500/15 border border-teal-500/25 text-teal-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+            <div className="w-12 h-12 rounded-2xl bg-teal-500/15 border border-teal-500/25 text-teal-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
               <BookOpen className="w-6 h-6" />
             </div>
             <div className="flex-1 min-w-0">
@@ -384,13 +431,13 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
             </div>
           </div>
 
-          {/* 4. Results & Performance (Soft Pastel Orange / Amber) */}
+          {/* 4. Results & Analytics (Amber Accent) */}
           <div
             id="home-card-results"
             onClick={() => onNavigate('results')}
-            className="group rounded-2xl p-4 sm:p-5 bg-[#1f170d] hover:bg-[#291f11] border border-amber-500/20 hover:border-amber-500/40 transition-all cursor-pointer flex items-center gap-4"
+            className="group rounded-3xl p-5 bg-[#211a12] hover:bg-[#2b2217] border border-amber-500/20 hover:border-amber-500/40 transition-all cursor-pointer flex items-center gap-4 shadow-md"
           >
-            <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/25 text-amber-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/25 text-amber-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
               <Award className="w-6 h-6" />
             </div>
             <div className="flex-1 min-w-0">
@@ -405,126 +452,62 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
               </p>
             </div>
           </div>
+        </div>
 
-          {/* 5. Bookmarks (Soft Pastel Green / Sage) */}
-          <div
-            id="home-card-bookmarks"
+        {/* Secondary Options Tucked into a Clean Toolbar */}
+        <div className="pt-2 flex items-center gap-2 sm:gap-3 flex-wrap">
+          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider pl-1">
+            Quick Tools:
+          </span>
+
+          <button
             onClick={() => onNavigate('bookmarks')}
-            className="group rounded-2xl p-4 sm:p-5 bg-[#0e1a14] hover:bg-[#13231a] border border-emerald-500/20 hover:border-emerald-500/40 transition-all cursor-pointer flex items-center gap-4"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-850 text-slate-300 hover:text-emerald-300 border border-slate-800 hover:border-emerald-500/40 text-xs font-semibold transition-all shadow-xs"
           >
-            <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/25 text-emerald-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-              <Bookmark className="w-6 h-6" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-sm sm:text-base text-white group-hover:text-emerald-300 transition-colors truncate">
-                  Saved Bookmarks
-                </h3>
-                <ChevronRight className="w-4 h-4 text-emerald-400/60 group-hover:text-emerald-300 group-hover:translate-x-0.5 transition-transform shrink-0 ml-1" />
-              </div>
-              <p className="text-xs text-slate-400 truncate mt-0.5">
-                Quick revision of saved questions and clinical notes
-              </p>
-            </div>
-          </div>
+            <Bookmark className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Saved Bookmarks</span>
+          </button>
 
-          {/* 6. Leaderboard (Soft Pastel Indigo) */}
-          <div
-            id="home-card-leaderboard"
-            onClick={() => setShowLeaderboardModal(true)}
-            className="group rounded-2xl p-4 sm:p-5 bg-[#121626] hover:bg-[#171d33] border border-indigo-500/20 hover:border-indigo-500/40 transition-all cursor-pointer flex items-center gap-4"
-          >
-            <div className="w-12 h-12 rounded-xl bg-indigo-500/15 border border-indigo-500/25 text-indigo-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-              <Trophy className="w-6 h-6" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-sm sm:text-base text-white group-hover:text-indigo-300 transition-colors truncate">
-                  Leaderboard
-                </h3>
-                <ChevronRight className="w-4 h-4 text-indigo-400/60 group-hover:text-indigo-300 group-hover:translate-x-0.5 transition-transform shrink-0 ml-1" />
-              </div>
-              <p className="text-xs text-slate-400 truncate mt-0.5">
-                Compare scores with fellow ND 1 nursing peers
-              </p>
-            </div>
-          </div>
-
-          {/* 7. Virtual Labs / Clinical Cases (Soft Pastel Pink / Rose - Spans 2 cols on tablet/desktop) */}
-          <div
-            id="home-card-clinical-cases"
+          <button
             onClick={() => setShowClinicalCasesModal(true)}
-            className="group rounded-2xl p-4 sm:p-5 bg-[#21111a] hover:bg-[#2c1723] border border-rose-500/20 hover:border-rose-500/40 transition-all cursor-pointer flex items-center gap-4 sm:col-span-2"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-850 text-slate-300 hover:text-rose-300 border border-slate-800 hover:border-rose-500/40 text-xs font-semibold transition-all shadow-xs"
           >
-            <div className="w-12 h-12 rounded-xl bg-rose-500/15 border border-rose-500/25 text-rose-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-              <HeartPulse className="w-6 h-6" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-sm sm:text-base text-white group-hover:text-rose-300 transition-colors truncate">
-                    Clinical Cases & Virtual Labs
-                  </h3>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase">
-                    Interactive
-                  </span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-rose-400/60 group-hover:text-rose-300 group-hover:translate-x-0.5 transition-transform shrink-0 ml-1" />
-              </div>
-              <p className="text-xs text-slate-400 truncate mt-0.5">
-                Simulated patient cases: triage, vital signs, priority diagnoses, and interventions
-              </p>
-            </div>
-          </div>
+            <HeartPulse className="w-3.5 h-3.5 text-rose-400" />
+            <span>Clinical Cases & Virtual Labs</span>
+          </button>
+
+          <button
+            onClick={() => setShowLeaderboardModal(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-850 text-slate-300 hover:text-indigo-300 border border-slate-800 hover:border-indigo-500/40 text-xs font-semibold transition-all shadow-xs"
+          >
+            <Trophy className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Cohort Leaderboard</span>
+          </button>
         </div>
       </div>
 
-      {/* 4. Featured Live Examination (Clean, Flat, 1-Line) */}
-      {featuredExam && (
-        <div className="rounded-2xl bg-[#0f1118] border border-slate-800 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 flex items-center justify-center shrink-0">
-              <Clock className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300 bg-purple-500/15 px-1.5 py-0.5 rounded">
-                  Active CBT Exam
-                </span>
-                <span className="text-xs text-slate-400">
-                  {featuredExam.durationMinutes} Mins • {featuredExam.totalQuestions} Questions
-                </span>
-              </div>
-              <h3 className="text-sm sm:text-base font-bold text-white truncate mt-0.5">
-                {featuredExam.title}
-              </h3>
-            </div>
-          </div>
-
-          <button
-            onClick={() => onStartExam(featuredExam.id)}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shrink-0"
-          >
-            <span>Start Exam</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
-
-      {/* 5. Minimal ND 1 Subjects Catalog */}
-      <div className="space-y-2.5">
+      {/* ========================================================================= */}
+      {/* 5. ND 1 NURSING COURSES (Compact Grid / Minimalist Badges)                */}
+      {/* ========================================================================= */}
+      <div className="space-y-3 pt-2">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm sm:text-base font-bold text-white tracking-tight">
-            ND 1 Nursing Courses ({subjects.length})
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm sm:text-base font-bold text-white tracking-tight">
+              ND 1 Nursing Courses
+            </h2>
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700">
+              {subjects.length} Subjects
+            </span>
+          </div>
           <button
             onClick={() => onNavigate('notes')}
             className="text-xs font-semibold text-teal-400 hover:text-teal-300 transition-colors"
           >
-            View All Notes
+            Explore All Notes →
           </button>
         </div>
 
+        {/* Compact 3-Column Grid with subtle icon containers instead of giant full-width buttons */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
           {subjects.map((subj) => (
             <div
@@ -533,18 +516,22 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
                 onSelectSubject(subj.id);
                 onNavigate('notes', { subjectId: subj.id });
               }}
-              className="bg-[#0e0f14] hover:bg-[#13151c] border border-slate-800/80 rounded-xl p-3 flex items-center justify-between gap-3 cursor-pointer transition-colors"
+              className="group bg-[#111827] hover:bg-[#152033] border border-slate-800/90 hover:border-teal-500/40 rounded-2xl p-3 flex items-center justify-between gap-3 cursor-pointer transition-all shadow-xs"
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-teal-500/10 text-teal-300 border border-teal-500/20 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-xl bg-teal-500/10 group-hover:bg-teal-500/20 text-teal-300 border border-teal-500/20 flex items-center justify-center shrink-0 transition-colors">
                   <IconHelper name={subj.icon} className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-bold text-white truncate">{subj.name}</div>
-                  <div className="text-[11px] text-slate-400">{subj.code} • {subj.noteCount || 0} notes</div>
+                  <div className="text-xs font-bold text-white group-hover:text-teal-300 transition-colors truncate">
+                    {subj.name}
+                  </div>
+                  <div className="text-[11px] text-slate-400 font-medium truncate">
+                    {subj.code} • {subj.noteCount || 0} notes
+                  </div>
                 </div>
               </div>
-              <ChevronRight className="w-4 h-4 text-slate-600 shrink-0" />
+              <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-teal-400 group-hover:translate-x-0.5 transition-all shrink-0" />
             </div>
           ))}
         </div>

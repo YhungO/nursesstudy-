@@ -298,7 +298,7 @@ export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
             </h2>
 
             {/* Options List */}
-            <div className="space-y-3">
+            <div className="space-y-3.5">
               {(currentQuestion.options || []).map((option: any, optIdx: number) => {
                 const optObj =
                   typeof option === 'string'
@@ -316,16 +316,16 @@ export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
                 const isWrongSelection =
                   isAnswerSubmitted && isSelected && optObj.id !== correctOpt;
 
-                let optionStyles = 'bg-slate-900/80 border-slate-800 hover:border-sky-500/60 text-slate-200';
+                let optionStyles = 'bg-[#0d1424] border-slate-800/90 hover:border-sky-500/50 hover:bg-slate-900/90 text-slate-200';
 
                 if (isSelected && !isAnswerSubmitted) {
-                  optionStyles = 'bg-sky-950/60 border-sky-500 text-white ring-1 ring-sky-500/40';
+                  optionStyles = 'bg-sky-950/70 border-sky-500 text-white ring-2 ring-sky-500/30 shadow-md shadow-sky-950/50';
                 } else if (isCorrect) {
                   optionStyles =
-                    'bg-emerald-950/60 border-emerald-500 text-white ring-1 ring-emerald-500/40 font-medium';
+                    'bg-emerald-950/70 border-emerald-500 text-white ring-2 ring-emerald-500/30 font-medium shadow-md shadow-emerald-950/50';
                 } else if (isWrongSelection) {
                   optionStyles =
-                    'bg-rose-950/60 border-rose-500 text-white ring-1 ring-rose-500/40';
+                    'bg-rose-950/70 border-rose-500 text-white ring-2 ring-rose-500/30 shadow-md shadow-rose-950/50';
                 }
 
                 return (
@@ -333,27 +333,27 @@ export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
                     key={optObj.id}
                     disabled={isAnswerSubmitted}
                     onClick={() => handleSelectOption(optObj.id)}
-                    className={`w-full p-4 rounded-2xl border text-left flex items-start gap-3.5 transition-all text-xs sm:text-sm ${optionStyles} disabled:cursor-default`}
+                    className={`w-full min-h-[56px] p-4 sm:p-4.5 rounded-2xl border text-left flex items-center gap-4 transition-all text-xs sm:text-sm ${optionStyles} disabled:cursor-default cursor-pointer group`}
                   >
                     <div
-                      className={`w-6 h-6 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 ${
+                      className={`w-8 h-8 rounded-xl font-bold text-xs flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${
                         isCorrect
-                          ? 'bg-emerald-500 text-slate-950'
+                          ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30'
                           : isWrongSelection
-                          ? 'bg-rose-500 text-white'
+                          ? 'bg-rose-500 text-white shadow-md shadow-rose-500/30'
                           : isSelected
-                          ? 'bg-sky-500 text-slate-950'
-                          : 'bg-slate-800 text-slate-300'
+                          ? 'bg-sky-500 text-slate-950 shadow-md shadow-sky-500/30'
+                          : 'bg-slate-800/90 text-slate-300 border border-slate-700/60'
                       }`}
                     >
                       {optObj.id}
                     </div>
-                    <span className="flex-1 leading-relaxed">{optObj.text}</span>
+                    <span className="flex-1 leading-relaxed font-normal sm:font-medium">{optObj.text}</span>
                     {isCorrect && (
-                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                     )}
                     {isWrongSelection && (
-                      <XCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                      <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
                     )}
                   </button>
                 );

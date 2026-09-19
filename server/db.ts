@@ -5,12 +5,14 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  password: string; // stored for local verification
+  password: string; // stored hashed for local verification
   role: 'student' | 'admin';
   levelId: string;
   status: 'active' | 'suspended';
   school?: string;
   gradYear?: string;
+  passwordResetToken?: string;
+  passwordResetExpires?: string;
   createdAt: string;
 }
 

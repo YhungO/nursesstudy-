@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { db, User, NursingLevel, Subject, StudyNote, Question, CBTExam, ExamAttempt, Announcement } from './server/db.ts';
+import { validateEmail, hashPassword, verifyPassword, generateResetCode } from './server/authUtils.ts';
 
 const app = express();
 const PORT = 3000;
@@ -63,21 +64,35 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(400).json({ error: 'Email and password are required' });
   }
 
+  const normalizedEmail = email.toLowerCase().trim();
+  if (!validateEmail(normalizedEmail)) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' });
+  }
+
   const database = db.get();
-  const user = database.users.find(
-    u => u.email.toLowerCase() === email.toLowerCase() && u.password === password
-  );
+  const user = database.users.find(u => u.email.toLowerCase() === normalizedEmail);
 
   if (!user) {
-    return res.status(401).json({ error: 'Invalid email or password' });
+    return res.status(404).json({ error: 'Account not found. No registered account with this email exists.' });
   }
 
   if (user.status === 'suspended') {
-    return res.status(403).json({ error: 'Account has been suspended by administration' });
+    return res.status(403).json({ error: 'Your account is suspended. Please contact administrator.' });
   }
 
-  // Safe user without password
-  const { password: _, ...safeUser } = user;
+  const { isValid, needsRehash } = verifyPassword(password, user.password);
+  if (!isValid) {
+    return res.status(401).json({ error: 'Wrong password. Please verify your password and try again.' });
+  }
+
+  // Automatically upgrade legacy plaintext password to PBKDF2 salt:hash
+  if (needsRehash) {
+    user.password = hashPassword(password);
+    db.save();
+  }
+
+  // Safe user without password or reset tokens
+  const { password: _, passwordResetToken: __, passwordResetExpires: ___, ...safeUser } = user;
   res.json({
     token: user.id,
     user: safeUser,
@@ -86,52 +101,143 @@ app.post('/api/auth/login', (req, res) => {
 
 // Auth: Register Student
 app.post('/api/auth/register', (req, res) => {
-  const { id, name, email, password, levelId, school, gradYear } = req.body;
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: 'Name, email, and password are required' });
+  const { id, name, email, password, confirmPassword, levelId, school, gradYear } = req.body;
+
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Full Name is required.' });
+  }
+
+  if (!email || !email.trim()) {
+    return res.status(400).json({ error: 'Email Address is required.' });
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+  if (!validateEmail(normalizedEmail)) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' });
+  }
+
+  if (!password || password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+  }
+
+  if (confirmPassword !== undefined && password !== confirmPassword) {
+    return res.status(400).json({ error: 'Passwords do not match.' });
   }
 
   const database = db.get();
-  const existing = database.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  const existing = database.users.find(u => u.email.toLowerCase() === normalizedEmail);
   if (existing) {
-    if (existing.password === password.trim()) {
-      existing.name = name.trim();
-      if (levelId) existing.levelId = levelId;
-      if (school) existing.school = school;
-      if (gradYear) existing.gradYear = gradYear;
-      db.save();
-      const { password: _, ...safeExisting } = existing;
-      return res.status(200).json({
-        token: existing.id,
-        user: safeExisting,
-      });
-    } else {
-      return res.status(409).json({
-        error: 'An account with this email address already exists. Please sign in with your password.',
-      });
-    }
+    return res.status(409).json({
+      error: 'This email is already registered. Please login instead.',
+    });
   }
+
+  // Hash password securely with PBKDF2
+  const hashedPassword = hashPassword(password.trim());
 
   const newUser: User = {
     id: id || `usr-student-${Date.now()}`,
     name: name.trim(),
-    email: email.toLowerCase().trim(),
-    password: password.trim(),
+    email: normalizedEmail,
+    password: hashedPassword,
     role: 'student',
     levelId: levelId || 'lvl-nd1',
     status: 'active',
-    school: school || 'General Nursing Institution',
-    gradYear: gradYear || '2027',
+    school: (school && school.trim()) || 'College of Nursing Sciences',
+    gradYear: (gradYear && gradYear.trim()) || '2027',
     createdAt: new Date().toISOString(),
   };
 
   database.users.push(newUser);
   db.save();
 
-  const { password: _, ...safeUser } = newUser;
+  const { password: _, passwordResetToken: __, passwordResetExpires: ___, ...safeUser } = newUser;
   res.status(201).json({
     token: newUser.id,
     user: safeUser,
+  });
+});
+
+// Auth: Forgot Password (Request Password Reset)
+app.post('/api/auth/forgot-password', (req, res) => {
+  const { email } = req.body;
+  if (!email || !email.trim()) {
+    return res.status(400).json({ error: 'Please enter your registered email address.' });
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+  if (!validateEmail(normalizedEmail)) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' });
+  }
+
+  const database = db.get();
+  const user = database.users.find(u => u.email.toLowerCase() === normalizedEmail);
+
+  if (!user) {
+    return res.status(404).json({ error: 'Account not found. No account is registered with this email address.' });
+  }
+
+  // Generate 6-digit recovery code valid for 15 minutes
+  const resetCode = generateResetCode();
+  user.passwordResetToken = resetCode;
+  user.passwordResetExpires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  db.save();
+
+  console.log(`[Auth] Generated password recovery code for ${normalizedEmail}: ${resetCode}`);
+
+  res.json({
+    success: true,
+    message: 'A password reset code has been dispatched. Please enter the verification code to reset your password.',
+    resetCode: resetCode, // Provided for instant seamless recovery in application environment
+    email: user.email,
+  });
+});
+
+// Auth: Reset Password
+app.post('/api/auth/reset-password', (req, res) => {
+  const { email, resetCode, newPassword, confirmPassword } = req.body;
+
+  if (!email || !resetCode || !newPassword) {
+    return res.status(400).json({ error: 'Email, verification code, and new password are required.' });
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+  if (!validateEmail(normalizedEmail)) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
+  }
+
+  if (confirmPassword !== undefined && newPassword !== confirmPassword) {
+    return res.status(400).json({ error: 'Passwords do not match.' });
+  }
+
+  const database = db.get();
+  const user = database.users.find(u => u.email.toLowerCase() === normalizedEmail);
+
+  if (!user) {
+    return res.status(404).json({ error: 'Account not found with this email address.' });
+  }
+
+  if (!user.passwordResetToken || user.passwordResetToken !== resetCode.trim()) {
+    return res.status(400).json({ error: 'Invalid verification code. Please check the code and try again.' });
+  }
+
+  if (user.passwordResetExpires && new Date(user.passwordResetExpires).getTime() < Date.now()) {
+    return res.status(400).json({ error: 'Verification code has expired. Please request a new code.' });
+  }
+
+  // Update password with secure PBKDF2 hash
+  user.password = hashPassword(newPassword.trim());
+  delete user.passwordResetToken;
+  delete user.passwordResetExpires;
+  db.save();
+
+  res.json({
+    success: true,
+    message: 'Password reset successful! You can now log in with your new password.',
   });
 });
 

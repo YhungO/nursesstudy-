@@ -63,11 +63,24 @@ export const api = {
     name: string;
     email: string;
     password: string;
+    confirmPassword?: string;
     levelId?: string;
     school?: string;
     gradYear?: string;
   }) =>
     request<{ token: string; user: User }>('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  forgotPassword: (email: string) =>
+    request<{ success: boolean; message: string; resetCode: string; email: string }>('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  resetPassword: (data: { email: string; resetCode: string; newPassword: string; confirmPassword?: string }) =>
+    request<{ success: boolean; message: string }>('/api/auth/reset-password', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

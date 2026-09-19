@@ -7,34 +7,42 @@ import {
   signOut,
   updateProfile,
   onAuthStateChanged,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { auth } from '../firebase';
 import { saveUserToFirestore } from '../services/firestoreService';
 
 export function getFirebaseAuthErrorMessage(err: any): string {
   if (!err) return 'Authentication failed. Please try again.';
+  const message = err.message || '';
   const code = err.code || '';
+
+  // If error has a direct human message without auth code prefix
+  if (message && !message.includes('auth/') && !message.includes('Firebase:')) {
+    return message;
+  }
+
   switch (code) {
     case 'auth/email-already-in-use':
-      return 'An account with this email address already exists. Please sign in instead.';
+      return 'This email is already registered. Please login instead.';
     case 'auth/invalid-email':
       return 'Please enter a valid email address.';
     case 'auth/weak-password':
       return 'Password is too weak. Please use at least 6 characters.';
     case 'auth/user-not-found':
-      return 'No registered account found with this email. Please check your spelling or sign up.';
+      return 'Account not found. No registered account with this email exists.';
     case 'auth/wrong-password':
-      return 'Incorrect password. Please verify your password and try again.';
+      return 'Wrong password. Please verify your password and try again.';
     case 'auth/invalid-credential':
-      return 'Invalid email or password. Please verify your credentials and try again.';
+      return 'Invalid credentials. Please verify your email and password.';
     case 'auth/too-many-requests':
       return 'Too many attempts. Access has been temporarily throttled. Please try again shortly.';
     case 'auth/network-request-failed':
-      return 'Network communication issue. Please check your internet connection and try again.';
+      return 'Network communication issue. Please check your internet connection.';
     case 'auth/operation-not-allowed':
       return 'Email/Password sign-in provider is disabled in Firebase console.';
     default:
-      return err.message || 'Authentication failed. Please check your credentials.';
+      return message.replace(/^Firebase:\s*/, '') || 'Authentication failed. Please check your credentials.';
   }
 }
 
@@ -46,10 +54,18 @@ interface AuthContextType {
     name: string;
     email: string;
     password: string;
+    confirmPassword?: string;
     levelId?: string;
     school?: string;
     gradYear?: string;
   }) => Promise<User>;
+  forgotPassword: (email: string) => Promise<{ success: boolean; message: string; resetCode?: string }>;
+  resetPassword: (data: {
+    email: string;
+    resetCode: string;
+    newPassword: string;
+    confirmPassword?: string;
+  }) => Promise<void>;
   logout: () => Promise<void>;
   switchDemoRole: (role: 'student' | 'admin') => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -108,21 +124,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string): Promise<User> => {
+    const cleanEmail = email.trim().toLowerCase();
     let fbSuccess = false;
 
     // 1. Attempt Firebase Authentication
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      await signInWithEmailAndPassword(auth, cleanEmail, password);
       fbSuccess = true;
     } catch (fbErr: any) {
       console.info('Firebase Auth sign-in notice:', fbErr?.code || fbErr?.message);
-      // If wrong password or invalid credential, store error for clear feedback
     }
 
-    // 2. Authenticate via application API backend
+    // 2. Authenticate via application API backend (validates PBKDF2 hashed password)
     let res;
     try {
-      res = await api.login(email.trim(), password);
+      res = await api.login(cleanEmail, password);
     } catch (apiErr: any) {
       throw new Error(apiErr?.message || 'Invalid email or password. Please verify and try again.');
     }
@@ -130,10 +146,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthToken(res.token);
     setUser(res.user);
 
-    // If Firebase Auth sign-in wasn't previously done, attempt syncing with Firebase Auth
+    // If Firebase Auth sign-in wasn't previously done, attempt syncing with Firebase Auth in background
     if (!fbSuccess && auth) {
       try {
-        const fbNew = await createUserWithEmailAndPassword(auth, email.trim(), password);
+        const fbNew = await createUserWithEmailAndPassword(auth, cleanEmail, password);
         await updateProfile(fbNew.user, { displayName: res.user.name });
       } catch {
         // Best effort sync
@@ -150,15 +166,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     name: string;
     email: string;
     password: string;
+    confirmPassword?: string;
     levelId?: string;
     school?: string;
     gradYear?: string;
   }): Promise<User> => {
+    const cleanEmail = data.email.trim().toLowerCase();
     let firebaseUid: string | undefined;
 
     // 1. Register with Firebase Authentication
     try {
-      const fbCred = await createUserWithEmailAndPassword(auth, data.email.trim(), data.password);
+      const fbCred = await createUserWithEmailAndPassword(auth, cleanEmail, data.password);
       firebaseUid = fbCred.user.uid;
       try {
         await updateProfile(fbCred.user, { displayName: data.name.trim() });
@@ -168,12 +186,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (fbErr: any) {
       console.info('Firebase Auth registration notice:', fbErr?.code || fbErr?.message);
       if (fbErr?.code === 'auth/email-already-in-use') {
-        try {
-          const signCred = await signInWithEmailAndPassword(auth, data.email.trim(), data.password);
-          firebaseUid = signCred.user.uid;
-        } catch {
-          throw new Error('An account with this email address already exists. Please log in instead.');
-        }
+        throw new Error('This email is already registered. Please login instead.');
       } else if (fbErr?.code === 'auth/weak-password') {
         throw new Error('Password must be at least 6 characters long.');
       } else if (fbErr?.code === 'auth/invalid-email') {
@@ -183,11 +196,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // 2. Register with application API backend
+    // 2. Register with application API backend (securely hashes password)
     const res = await api.register({
       ...data,
       name: data.name.trim(),
-      email: data.email.trim(),
+      email: cleanEmail,
       id: firebaseUid,
     });
 
@@ -200,6 +213,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return res.user;
+  };
+
+  const forgotPassword = async (email: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+
+    // 1. Dispatch Firebase Auth password reset email if configured
+    try {
+      if (auth) {
+        await sendPasswordResetEmail(auth, cleanEmail);
+        console.log('[Firebase Auth] Password reset email triggered for:', cleanEmail);
+      }
+    } catch (fbErr: any) {
+      console.info('[Firebase Auth] reset notice:', fbErr?.code || fbErr?.message);
+    }
+
+    // 2. Request recovery code from backend
+    return await api.forgotPassword(cleanEmail);
+  };
+
+  const resetPassword = async (data: {
+    email: string;
+    resetCode: string;
+    newPassword: string;
+    confirmPassword?: string;
+  }) => {
+    await api.resetPassword({
+      ...data,
+      email: data.email.trim().toLowerCase(),
+    });
   };
 
   const logout = async () => {
@@ -245,6 +287,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         login,
         register,
+        forgotPassword,
+        resetPassword,
         logout,
         switchDemoRole,
         refreshProfile,

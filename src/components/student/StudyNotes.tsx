@@ -318,22 +318,48 @@ export const StudyNotes: React.FC<StudyNotesProps> = ({
 
       {/* Notes Grid */}
       {filteredNotes.length === 0 ? (
-        <div className="bg-[#111827] rounded-3xl p-12 text-center border border-slate-800">
-          <BookOpen className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-white">No study notes found</h3>
-          <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-            We could not find any clinical notes matching your filter criteria. Try clearing the search
-            or selecting another subject.
-          </p>
-          <button
-            onClick={() => {
-              setSelectedSubject('all');
-              setSearchQuery('');
-            }}
-            className="mt-4 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition-colors border border-slate-700"
-          >
-            Clear Filters
-          </button>
+        <div className="bg-[#111827] rounded-3xl p-10 sm:p-14 text-center border border-slate-800 shadow-xl max-w-xl mx-auto space-y-5 my-4">
+          <div className="w-16 h-16 rounded-2xl bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center mx-auto shadow-inner">
+            <BookOpen className="w-8 h-8" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-white">No study notes found</h3>
+            <p className="text-xs sm:text-sm text-slate-400 mt-1.5 leading-relaxed">
+              We couldn't find any clinical notes matching your current search or subject filter.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-2">
+              Suggested High-Yield Topics:
+            </span>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {['Endocrine', 'Asepsis & Vital Signs', 'Renal Physiology', 'Pharmacokinetics', 'Immunization', 'Therapeutic Diets'].map((topic) => (
+                <button
+                  key={topic}
+                  onClick={() => {
+                    setSelectedSubject('all');
+                    setSearchQuery(topic.split(' ')[0]);
+                  }}
+                  className="px-3 py-1 rounded-full bg-slate-900 border border-slate-700/80 hover:border-teal-500/60 text-slate-300 hover:text-teal-300 text-xs font-medium transition-all"
+                >
+                  {topic}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <button
+              onClick={() => {
+                setSelectedSubject('all');
+                setSearchQuery('');
+              }}
+              className="px-6 py-2.5 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 active:from-teal-600 active:to-emerald-600 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-lg shadow-teal-500/20 cursor-pointer"
+            >
+              Reset All Filters
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

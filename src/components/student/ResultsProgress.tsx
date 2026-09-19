@@ -82,24 +82,62 @@ export const ResultsProgress: React.FC<ResultsProgressProps> = ({
           </span>
         </div>
 
-        {/* Overview Header */}
-        <div className="bg-[#111827] rounded-3xl border border-slate-800 p-6 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
+        {/* Overview Header with Circular Progress Gauge */}
+        <div className="bg-[#111827] rounded-3xl border border-slate-800 p-6 sm:p-7 shadow-md flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div className="flex-1 text-center sm:text-left">
             <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 rounded-md">
               {selectedAttempt.subjectName}
             </span>
-            <h1 className="text-xl font-bold text-white mt-2">{selectedAttempt.examTitle}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-white mt-2.5">{selectedAttempt.examTitle}</h1>
             <p className="text-xs text-slate-400 mt-1">
               Attempted on {new Date(selectedAttempt.createdAt).toLocaleString()} • Completed in{' '}
               {Math.round(selectedAttempt.timeSpentSeconds / 60)} minutes
             </p>
+            <div className="mt-3 flex items-center justify-center sm:justify-start gap-2">
+              <span
+                className={`text-[11px] font-bold uppercase tracking-wider px-3 py-0.5 rounded-full border ${
+                  selectedAttempt.passed
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                    : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                }`}
+              >
+                {selectedAttempt.passed ? 'Status: Passed' : 'Status: Retake Needed'}
+              </span>
+              <span className="text-xs text-slate-400">
+                {selectedAttempt.correctCount} of {selectedAttempt.totalQuestions} Questions Correct
+              </span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <div className="text-3xl sm:text-4xl font-extrabold text-white">{selectedAttempt.score}%</div>
-              <div className="text-xs text-slate-400 font-medium mt-0.5">
-                {selectedAttempt.correctCount} / {selectedAttempt.totalQuestions} Correct
+          {/* Visual Gauge */}
+          <div className="shrink-0 flex flex-col items-center">
+            <div className="relative w-28 h-28 flex items-center justify-center">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="40"
+                  fill="transparent"
+                  stroke="currentColor"
+                  strokeWidth="8"
+                  className="text-slate-800"
+                />
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="40"
+                  fill="transparent"
+                  stroke="currentColor"
+                  strokeWidth="8"
+                  strokeDasharray={2 * Math.PI * 40}
+                  strokeDashoffset={2 * Math.PI * 40 - (selectedAttempt.score / 100) * (2 * Math.PI * 40)}
+                  strokeLinecap="round"
+                  className={selectedAttempt.passed ? 'text-emerald-400' : 'text-rose-400'}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-xl font-extrabold text-white">{selectedAttempt.score}%</span>
+                <span className="text-[9px] text-slate-400 font-semibold uppercase">Score</span>
               </div>
             </div>
           </div>
@@ -202,39 +240,99 @@ export const ResultsProgress: React.FC<ResultsProgressProps> = ({
         </p>
       </div>
 
-      {/* Summary Stat Cards */}
+      {/* Summary Stat Cards with Circular Visual Gauges */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-[#111827] p-5 rounded-3xl border border-slate-800 shadow-md flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center">
-            <Award className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-2xl font-extrabold text-white">{total}</div>
-            <div className="text-xs text-slate-400 font-medium">Examinations Taken</div>
-          </div>
-        </div>
-
-        <div className="bg-[#111827] p-5 rounded-3xl border border-slate-800 shadow-md flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-sky-500/20 border border-sky-500/30 text-sky-400 flex items-center justify-center">
-            <TrendingUp className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-2xl font-extrabold text-white">{avg}%</div>
-            <div className="text-xs text-slate-400 font-medium">Cumulative Average</div>
-          </div>
-        </div>
-
-        <div className="bg-[#111827] p-5 rounded-3xl border border-slate-800 shadow-md flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center">
-            <CheckCircle2 className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-2xl font-extrabold text-white">{passed}</div>
-            <div className="text-xs text-slate-400 font-medium">
-              Passed Tests ({total > 0 ? Math.round((passed / total) * 100) : 0}%)
+        <div className="bg-[#111827] p-5 rounded-3xl border border-slate-800 shadow-md flex items-center justify-between">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0">
+              <Award className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="text-2xl font-extrabold text-white">{total}</div>
+              <div className="text-xs text-slate-400 font-medium">Examinations Taken</div>
             </div>
           </div>
+          <div className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-semibold text-slate-400">
+            {total === 1 ? '1 Test' : `${total} Tests`}
+          </div>
         </div>
+
+        {/* Gauge Card: Cumulative Average */}
+        <div className="bg-[#111827] p-5 rounded-3xl border border-slate-800 shadow-md flex items-center justify-between">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-sky-500/20 border border-sky-500/30 text-sky-400 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="text-2xl font-extrabold text-white">{avg}%</div>
+              <div className="text-xs text-slate-400 font-medium">Cumulative Average</div>
+            </div>
+          </div>
+
+          <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
+            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+              <path
+                className="text-slate-800"
+                strokeWidth="3.5"
+                stroke="currentColor"
+                fill="none"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+              <path
+                className="text-sky-400"
+                strokeDasharray={`${avg}, 100`}
+                strokeWidth="3.5"
+                strokeLinecap="round"
+                stroke="currentColor"
+                fill="none"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+            </svg>
+            <span className="absolute text-[10px] font-bold text-sky-300">{avg}%</span>
+          </div>
+        </div>
+
+        {/* Gauge Card: Pass Rate */}
+        {(() => {
+          const passRate = total > 0 ? Math.round((passed / total) * 100) : 0;
+          return (
+            <div className="bg-[#111827] p-5 rounded-3xl border border-slate-800 shadow-md flex items-center justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="text-2xl font-extrabold text-white">{passed}</div>
+                  <div className="text-xs text-slate-400 font-medium">
+                    Passed Exams ({passRate}%)
+                  </div>
+                </div>
+              </div>
+
+              <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
+                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                  <path
+                    className="text-slate-800"
+                    strokeWidth="3.5"
+                    stroke="currentColor"
+                    fill="none"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  />
+                  <path
+                    className={passRate >= 50 ? 'text-emerald-400' : 'text-rose-400'}
+                    strokeDasharray={`${passRate}, 100`}
+                    strokeWidth="3.5"
+                    strokeLinecap="round"
+                    stroke="currentColor"
+                    fill="none"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  />
+                </svg>
+                <span className="absolute text-[10px] font-bold text-emerald-300">{passRate}%</span>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Attempts Table */}

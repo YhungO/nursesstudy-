@@ -43,7 +43,7 @@ const MainAppContent: React.FC = () => {
 
   // Auth Modal State
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authMode, setAuthMode] = useState<'login' | 'register' | 'admin_login' | 'forgot_password'>('login');
 
   // Loading & Global Search
   const [isLoading, setIsLoading] = useState(true);
@@ -179,7 +179,7 @@ const MainAppContent: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#070709] flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-[#0b0f19] flex flex-col items-center justify-center p-4">
         <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-teal-700 via-teal-600 to-teal-800 text-white flex items-center justify-center shadow-lg shadow-teal-500/20 mb-4 ring-1 ring-teal-400/30">
           <Sparkles className="w-7 h-7 animate-pulse text-teal-200" />
         </div>
@@ -204,7 +204,7 @@ const MainAppContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#070709] text-slate-100 flex flex-col font-sans selection:bg-teal-500 selection:text-white">
+    <div className="min-h-screen bg-[#0b0f19] text-slate-100 flex flex-col font-sans selection:bg-teal-500 selection:text-white">
       {/* Main Top Navigation */}
       <Navbar
         currentView={currentView}
