@@ -16,6 +16,15 @@ import {
   Award,
   BookOpen,
 } from 'lucide-react';
+import { ExamTopBar } from './cbt/ExamTopBar';
+import { ExamContextBar } from './cbt/ExamContextBar';
+import { QuestionProgress } from './cbt/QuestionProgress';
+import { QuestionContent } from './cbt/QuestionContent';
+import { AnswerOptions } from './cbt/AnswerOptions';
+import { BottomActionBar } from './cbt/BottomActionBar';
+import { QuestionPaletteDrawer } from './cbt/QuestionPaletteDrawer';
+import { ExamSubmitDialog } from './cbt/ExamSubmitDialog';
+import { ExamExitDialog } from './cbt/ExamExitDialog';
 
 interface CbtExamProps {
   exams: CBTExam[];
@@ -28,6 +37,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
   exams = [],
   activeExamId = null,
   onFinishExam,
+  onNavigateHome,
 }) => {
   const [selectedExam, setSelectedExam] = useState<CBTExam | null>(null);
   const [examData, setExamData] = useState<(CBTExam & { questions: Question[] }) | null>(null);
@@ -41,6 +51,8 @@ export const CbtExam: React.FC<CbtExamProps> = ({
   const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [showPaletteDrawer, setShowPaletteDrawer] = useState(false);
 
   // Result state
   const [examResult, setExamResult] = useState<{
@@ -408,260 +420,110 @@ export const CbtExam: React.FC<CbtExamProps> = ({
     const totalQ = examData.questions.length;
     const isFlagged = currentQ ? !!flaggedQuestions[currentQ.id] : false;
     const currentAnswer = currentQ ? selectedAnswers[currentQ.id] : null;
-
-    const isTimeLow = secondsRemaining <= 300; // under 5 min
-    const isTimeCritical = secondsRemaining <= 60; // under 1 min
-
-    const answeredCount = Object.keys(selectedAnswers).length;
+    const answeredCount = Object.values(selectedAnswers).filter(Boolean).length;
+    const flaggedCount = Object.values(flaggedQuestions).filter(Boolean).length;
 
     return (
-      <div className="max-w-4xl mx-auto space-y-6 pb-16">
-        {/* Top CBT Navigation / Timer Bar */}
-        <div className="bg-[#0c121e]/95 backdrop-blur-xl text-white p-4 rounded-2xl shadow-xl border border-slate-800 flex items-center justify-between flex-wrap gap-4 sticky top-20 z-30">
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400">
-              {examData.title}
-            </span>
-            <div className="text-xs text-slate-300 font-medium mt-0.5">
-              Question <span className="font-bold text-white">{currentIndex + 1}</span> of {totalQ} •{' '}
-              <span className="text-purple-300 font-bold">{answeredCount}</span> answered •{' '}
-              <span className="text-slate-400 font-bold">{totalQ - answeredCount}</span> unanswered
-            </div>
-          </div>
+      <div className="min-h-[calc(100vh-6rem)] flex flex-col justify-between -mx-4 sm:mx-auto max-w-3xl pb-2 animate-in fade-in duration-150">
+        {/* 1. TOP ACTION BAR */}
+        <ExamTopBar
+          onExitClick={() => setShowExitConfirm(true)}
+          isFlagged={isFlagged}
+          onToggleFlag={() => currentQ && toggleFlag(currentQ.id)}
+          secondsRemaining={secondsRemaining}
+          formatTime={formatTime}
+          onOpenPalette={() => setShowPaletteDrawer(true)}
+          onSubmitClick={() => setShowSubmitConfirm(true)}
+          answeredCount={answeredCount}
+          totalQuestions={totalQ}
+        />
 
-          <div className="flex items-center gap-3">
-            {/* Live Timer Gauge */}
-            <div
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border font-mono font-bold text-sm tracking-wider shadow-sm ${
-                isTimeCritical
-                  ? 'bg-rose-600 border-rose-500 text-white animate-pulse'
-                  : isTimeLow
-                  ? 'bg-amber-600 border-amber-500 text-white'
-                  : 'bg-slate-800/90 border-slate-700 text-purple-300'
-              }`}
-            >
-              <Clock className="w-4 h-4" />
-              <span>{formatTime(secondsRemaining)}</span>
-            </div>
+        {/* 2. EXAM/SECTION CONTEXT & 3. QUESTION PROGRESS */}
+        <div className="w-full">
+          <ExamContextBar
+            levelName={examData.levelId ? 'ND1 NURSING' : undefined}
+            subjectName={examData.subjectName}
+            examTitle={examData.title}
+          />
 
-            <button
-              onClick={() => setShowSubmitConfirm(true)}
-              className="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white font-bold rounded-xl text-xs transition-colors shadow-md shadow-purple-900/30"
-            >
-              Finish & Submit
-            </button>
-          </div>
+          <QuestionProgress
+            currentIndex={currentIndex}
+            totalQuestions={totalQ}
+            answeredCount={answeredCount}
+          />
         </div>
 
-        {/* Question Palette Drawer / Matrix */}
-        <div className="bg-[#111827] p-4 sm:p-5 rounded-3xl border border-slate-800 shadow-md">
-          <div className="flex items-center justify-between mb-3 text-xs font-semibold text-slate-300 flex-wrap gap-2">
-            <span className="font-bold text-white">Question Palette ({totalQ} Items):</span>
-            <div className="flex items-center gap-3 text-[11px] flex-wrap">
-              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-teal-500/15 border border-teal-500/30 text-teal-300">
-                <span className="w-2 h-2 rounded-full bg-teal-400"></span> Answered ({answeredCount})
-              </span>
-              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300">
-                <span className="w-2 h-2 rounded-full bg-amber-400"></span> Flagged ({Object.values(flaggedQuestions).filter(Boolean).length})
-              </span>
-              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-800/80 border border-slate-700 text-slate-400">
-                <span className="w-2 h-2 rounded-full bg-slate-600"></span> Unanswered ({totalQ - answeredCount})
-              </span>
+        {/* 4. QUESTION CONTENT & 5. ANSWER OPTIONS (MAIN FOCUS) */}
+        <main className="flex-1 flex flex-col justify-start py-2 sm:py-3 space-y-4">
+          {currentQ ? (
+            <>
+              <QuestionContent
+                question={currentQ}
+                currentIndex={currentIndex}
+                totalQuestions={totalQ}
+              />
+
+              <AnswerOptions
+                questionId={currentQ.id}
+                options={currentQ.options || []}
+                selectedAnswer={currentAnswer}
+                onSelectOption={(optionId) => handleSelectOption(currentQ.id, optionId)}
+              />
+            </>
+          ) : (
+            <div className="text-center py-12 text-slate-400 text-sm">
+              No question found at this index.
             </div>
-          </div>
+          )}
+        </main>
 
-          <div className="flex flex-wrap gap-2 max-h-52 overflow-y-auto pr-1">
-            {examData.questions.map((q, idx) => {
-              const isAnswered = !!selectedAnswers[q.id];
-              const qFlagged = !!flaggedQuestions[q.id];
-              const isCurrent = idx === currentIndex;
+        {/* 6. BOTTOM ACTION BAR */}
+        <BottomActionBar
+          currentIndex={currentIndex}
+          totalQuestions={totalQ}
+          onPrevious={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
+          onNext={() => setCurrentIndex((prev) => Math.min(totalQ - 1, prev + 1))}
+          onOpenPalette={() => setShowPaletteDrawer(true)}
+          onSubmit={() => setShowSubmitConfirm(true)}
+        />
 
-              let style = 'bg-[#0d1424] text-slate-400 border-slate-800 hover:border-slate-700 hover:text-white';
-              if (qFlagged) {
-                style = 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow-sm shadow-amber-500/30';
-              } else if (isAnswered) {
-                style = 'bg-teal-500 text-slate-950 border-teal-400 font-bold shadow-sm shadow-teal-500/30';
-              }
-              if (isCurrent) {
-                style += ' ring-2 ring-purple-400 ring-offset-2 ring-offset-slate-950 scale-105 z-10';
-              }
+        {/* 7. QUESTION PALETTE DRAWER (ACCESSIBLE ON DEMAND) */}
+        <QuestionPaletteDrawer
+          isOpen={showPaletteDrawer}
+          onClose={() => setShowPaletteDrawer(false)}
+          questions={examData.questions}
+          currentIndex={currentIndex}
+          selectedAnswers={selectedAnswers}
+          flaggedQuestions={flaggedQuestions}
+          onSelectQuestion={(idx) => setCurrentIndex(idx)}
+          onSubmitClick={() => setShowSubmitConfirm(true)}
+        />
 
-              return (
-                <button
-                  key={q.id}
-                  onClick={() => setCurrentIndex(idx)}
-                  className={`w-9 h-9 rounded-xl text-xs font-semibold border flex items-center justify-center transition-all cursor-pointer ${style}`}
-                >
-                  {idx + 1}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        {/* 9. SUBMIT / FINISH EXAM CONFIRMATION DIALOG */}
+        <ExamSubmitDialog
+          isOpen={showSubmitConfirm}
+          onCancel={() => setShowSubmitConfirm(false)}
+          onConfirm={handleSubmitExam}
+          answeredCount={answeredCount}
+          totalQuestions={totalQ}
+          flaggedCount={flaggedCount}
+          secondsRemaining={secondsRemaining}
+          formatTime={formatTime}
+          isSubmitting={isSubmitting}
+        />
 
-        {/* Active Question Stem and Choices */}
-        {currentQ && (
-          <div className="bg-[#111827] rounded-3xl border border-slate-800 p-6 sm:p-8 shadow-xl space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-purple-400">
-                Question {currentIndex + 1} of {totalQ}
-              </span>
-
-              <button
-                onClick={() => toggleFlag(currentQ.id)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
-                  isFlagged
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                    : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:bg-slate-800'
-                }`}
-              >
-                <Flag className={`w-3.5 h-3.5 ${isFlagged ? 'fill-amber-400 text-amber-400' : ''}`} />
-                <span>{isFlagged ? 'Flagged for Review' : 'Flag Question'}</span>
-              </button>
-            </div>
-
-            {currentQ.scenario && (
-              <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 text-slate-200 text-xs sm:text-sm leading-relaxed">
-                <span className="font-bold text-[10px] uppercase tracking-wider text-purple-400 block mb-1">
-                  Clinical Vignette
-                </span>
-                {currentQ.scenario}
-              </div>
-            )}
-
-            <h2 className="text-base sm:text-lg font-bold text-white leading-relaxed">
-              {currentQ.questionText || currentQ.question}
-            </h2>
-
-            {/* Choices */}
-            <div className="space-y-3.5">
-              {(currentQ.options || []).map((option: any, optIdx: number) => {
-                const optObj = typeof option === 'string'
-                  ? { id: (['A', 'B', 'C', 'D'][optIdx] || 'A') as 'A'|'B'|'C'|'D', text: option }
-                  : option;
-
-                const isSelected = currentAnswer === optObj.id;
-                return (
-                  <button
-                    key={optObj.id}
-                    onClick={() => handleSelectOption(currentQ.id, optObj.id)}
-                    className={`w-full min-h-[56px] p-4 sm:p-4.5 rounded-2xl border text-left flex items-center gap-4 transition-all text-xs sm:text-sm cursor-pointer group ${
-                      isSelected
-                        ? 'bg-purple-950/70 border-purple-500 text-white ring-2 ring-purple-500/30 font-medium shadow-lg shadow-purple-950/40'
-                        : 'bg-[#0d1424] border-slate-800/90 hover:border-purple-500/50 hover:bg-slate-900/90 text-slate-200'
-                    }`}
-                  >
-                    <div
-                      className={`w-8 h-8 rounded-xl font-bold text-xs flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${
-                        isSelected
-                          ? 'bg-purple-500 text-slate-950 shadow-md shadow-purple-500/30'
-                          : 'bg-slate-800/90 text-slate-300 border border-slate-700/60'
-                      }`}
-                    >
-                      {optObj.id}
-                    </div>
-                    <span className="flex-1 leading-relaxed font-normal sm:font-medium">{optObj.text}</span>
-                    {isSelected && (
-                      <CheckCircle2 className="w-5 h-5 text-purple-400 shrink-0" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Navigation Bottom Controls */}
-            <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
-              <button
-                disabled={currentIndex === 0}
-                onClick={() => setCurrentIndex((prev) => prev - 1)}
-                className="px-4 py-2.5 bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-40 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>Previous</span>
-              </button>
-
-              {currentIndex < totalQ - 1 ? (
-                <button
-                  onClick={() => setCurrentIndex((prev) => prev + 1)}
-                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md shadow-purple-900/30"
-                >
-                  <span>Next</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              ) : (
-                <button
-                  onClick={() => setShowSubmitConfirm(true)}
-                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md shadow-emerald-900/30"
-                >
-                  <span>Finish & Submit</span>
-                  <Check className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Confirmation Modal */}
-        {showSubmitConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-            <div className="w-full max-w-md bg-[#111827] rounded-3xl p-6 shadow-2xl border border-slate-800 space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-purple-500/20 text-purple-400 rounded-xl border border-purple-500/30">
-                  <Clock className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">Submit CBT Examination?</h3>
-                  <p className="text-xs text-slate-400">
-                    Are you ready to submit your exam and receive your score?
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-4 bg-slate-900/80 rounded-2xl border border-slate-800 text-xs text-slate-300 space-y-2">
-                <div className="flex justify-between">
-                  <span>Answered Questions:</span>
-                  <strong className="text-white">
-                    {answeredCount} of {totalQ}
-                  </strong>
-                </div>
-                <div className="flex justify-between">
-                  <span>Flagged for Review:</span>
-                  <strong className="text-amber-400">
-                    {Object.values(flaggedQuestions).filter(Boolean).length}
-                  </strong>
-                </div>
-                <div className="flex justify-between">
-                  <span>Remaining Time:</span>
-                  <strong className="text-white">{formatTime(secondsRemaining)}</strong>
-                </div>
-              </div>
-
-              {answeredCount < totalQ && (
-                <p className="text-xs text-amber-300 bg-amber-950/40 p-3 rounded-xl border border-amber-500/30 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
-                  <span>You still have {totalQ - answeredCount} unanswered questions!</span>
-                </p>
-              )}
-
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowSubmitConfirm(false)}
-                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors border border-slate-700"
-                >
-                  Return to Test
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSubmitExam}
-                  className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-colors shadow-md shadow-purple-900/30"
-                >
-                  Confirm & Grade
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* EXIT CONFIRMATION DIALOG */}
+        <ExamExitDialog
+          isOpen={showExitConfirm}
+          onCancel={() => setShowExitConfirm(false)}
+          onConfirm={() => {
+            setShowExitConfirm(false);
+            if (timerRef.current) clearInterval(timerRef.current);
+            setExamData(null);
+            setSelectedExam(null);
+            if (onNavigateHome) onNavigateHome();
+          }}
+        />
       </div>
     );
   }

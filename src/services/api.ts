@@ -190,6 +190,7 @@ export const api = {
   // Attempts
   getAttempts: () => request<ExamAttempt[]>('/api/attempts'),
   getAttemptDetails: (id: string) => request<ExamAttempt>(`/api/attempts/${id}`),
+  deleteAttempt: (id: string) => request<{ success: boolean }>(`/api/attempts/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   // Bookmarks
   getBookmarks: () =>

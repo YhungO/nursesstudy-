@@ -723,19 +723,27 @@ app.delete('/api/questions/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   const database = db.get();
   const beforeCount = database.questions.length;
-  database.questions = database.questions.filter(q => q.id !== id);
+  database.questions = database.questions.filter(q => String(q.id) !== String(id));
   if (database.questions.length === beforeCount) {
     return res.status(404).json({ error: 'Question not found' });
   }
   // Remove this question from any CBT exams
   database.exams = database.exams.map(ex => ({
     ...ex,
-    questionIds: (ex.questionIds || []).filter(qid => qid !== id),
+    questionIds: (ex.questionIds || []).filter(qid => String(qid) !== String(id)),
   }));
   // Remove any bookmarks for this question
-  database.bookmarks = database.bookmarks.filter(b => !(b.type === 'question' && b.itemId === id));
+  database.bookmarks = database.bookmarks.filter(b => !(b.type === 'question' && String(b.itemId) === String(id)));
   db.save();
   res.json({ success: true, message: 'Question permanently deleted' });
+});
+
+app.delete('/api/attempts/:id', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const database = db.get();
+  database.attempts = database.attempts.filter(a => String(a.id) !== String(id));
+  db.save();
+  res.json({ success: true, message: 'Attempt deleted' });
 });
 
 // ==================== CBT EXAMINATIONS ==================== //

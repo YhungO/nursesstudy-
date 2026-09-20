@@ -57,6 +57,13 @@ import { MCQQuestionFormModal } from './forms/MCQQuestionFormModal';
 import { CBTExamFormModal } from './forms/CBTExamFormModal';
 import { getLevelBadge } from './forms/constants';
 
+interface DeleteTarget {
+  type: 'student' | 'question' | 'exam' | 'subject' | 'note' | 'level' | 'announcement' | 'result';
+  id: string | number;
+  title?: string;
+  email?: string;
+}
+
 interface AdminDashboardProps {
   levels: NursingLevel[];
   subjects: Subject[];
@@ -100,10 +107,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [, setLoading] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
 
-  // Student Delete Modal State
-  const [studentToDelete, setStudentToDelete] = useState<{ id: string; name: string; email: string } | null>(null);
-  const [isDeletingStudent, setIsDeletingStudent] = useState(false);
+  // Unified Delete Confirmation State (for students, questions, exams, subjects, notes, levels, announcements, results)
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const deletedStudentIdsRef = useRef<Set<string>>(new Set());
+  const deletedItemIdsRef = useRef<Set<string>>(new Set());
+
+  // Local state for all admin lists to allow instantaneous UI updates without requiring page reload
+  const [localLevels, setLocalLevels] = useState<NursingLevel[]>(levels);
+  const [localSubjects, setLocalSubjects] = useState<Subject[]>(subjects);
+  const [localNotes, setLocalNotes] = useState<StudyNote[]>(notes);
+  const [localQuestions, setLocalQuestions] = useState<Question[]>(questions);
+  const [localExams, setLocalExams] = useState<CBTExam[]>(exams);
+  const [localAnnouncements, setLocalAnnouncements] = useState<Announcement[]>(announcements);
+
+  // Keep local states synchronized with props from parent App, while preserving locally deleted items
+  useEffect(() => {
+    setLocalLevels(levels.filter((l) => !deletedItemIdsRef.current.has(String(l.id))));
+  }, [levels]);
+
+  useEffect(() => {
+    setLocalSubjects(subjects.filter((s) => !deletedItemIdsRef.current.has(String(s.id))));
+  }, [subjects]);
+
+  useEffect(() => {
+    setLocalNotes(notes.filter((n) => !deletedItemIdsRef.current.has(String(n.id))));
+  }, [notes]);
+
+  useEffect(() => {
+    setLocalQuestions(questions.filter((q) => !deletedItemIdsRef.current.has(String(q.id))));
+  }, [questions]);
+
+  useEffect(() => {
+    setLocalExams(exams.filter((e) => !deletedItemIdsRef.current.has(String(e.id))));
+  }, [exams]);
+
+  useEffect(() => {
+    setLocalAnnouncements(announcements.filter((a) => !deletedItemIdsRef.current.has(String(a.id))));
+  }, [announcements]);
 
   // Load Admin Data
   const loadAdminData = async () => {
@@ -198,12 +239,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setCloudSyncing(true);
     setCloudStatus('Uploading curriculum records to Cloud Firestore...');
     try {
-      for (const lvl of levels) await saveLevelToFirestore(lvl);
-      for (const subj of subjects) await saveSubjectToFirestore(subj);
-      for (const n of notes) await saveNoteToFirestore(n);
-      for (const q of questions) await saveQuestionToFirestore(q);
-      for (const ex of exams) await saveExamToFirestore(ex);
-      for (const ann of announcements) await saveAnnouncementToFirestore(ann);
+      for (const lvl of localLevels) await saveLevelToFirestore(lvl);
+      for (const subj of localSubjects) await saveSubjectToFirestore(subj);
+      for (const n of localNotes) await saveNoteToFirestore(n);
+      for (const q of localQuestions) await saveQuestionToFirestore(q);
+      for (const ex of localExams) await saveExamToFirestore(ex);
+      for (const ann of localAnnouncements) await saveAnnouncementToFirestore(ann);
       setCloudStatus('All records synchronized to Google Cloud Firestore!');
       showNotify('Full Cloud Firestore sync complete');
     } catch (err: any) {
@@ -222,26 +263,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (editingLevel.id) {
         const res = await api.updateLevel(editingLevel.id, editingLevel);
         saveLevelToFirestore(res).catch(() => {});
+        setLocalLevels((prev) => prev.map((l) => (l.id === res.id ? res : l)));
         showNotify('Nursing level updated & synced to Cloud Firestore');
       } else {
         const res = await api.createLevel(editingLevel);
         saveLevelToFirestore(res).catch(() => {});
+        setLocalLevels((prev) => [...prev, res]);
         showNotify('Nursing level created & synced to Cloud Firestore');
       }
       setEditingLevel(null);
-      onDataChanged();
-      loadAdminData();
-    } catch (err: any) {
-      alert(err.message);
-    }
-  };
-
-  const handleDeleteLevel = async (id: string) => {
-    if (!confirm('Are you sure you want to remove this nursing level?')) return;
-    try {
-      await api.deleteLevel(id);
-      deleteLevelFromFirestore(id).catch(() => {});
-      showNotify('Nursing level deleted');
       onDataChanged();
       loadAdminData();
     } catch (err: any) {
@@ -256,10 +286,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (data.id) {
         const res = await api.updateSubject(data.id, data);
         saveSubjectToFirestore(res).catch(() => {});
+        setLocalSubjects((prev) => prev.map((s) => (s.id === res.id ? res : s)));
         showNotify('Subject updated & synced to Cloud Firestore');
       } else {
         const res = await api.createSubject(data);
         saveSubjectToFirestore(res).catch(() => {});
+        setLocalSubjects((prev) => [...prev, res]);
         showNotify('Subject created & synced to Cloud Firestore');
       }
       setEditingSubject(null);
@@ -267,26 +299,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       loadAdminData();
     } catch (err: any) {
       alert(err.message);
-    }
-  };
-
-  const handleDeleteSubject = async (id: string) => {
-    if (
-      !confirm(
-        'Are you sure you want to permanently delete this subject? This will also remove its associated study notes, questions, and curriculum records from the system and Firestore.'
-      )
-    )
-      return;
-    try {
-      await api.deleteSubject(id);
-      await deleteSubjectFromFirestore(id).catch((err) => {
-        console.warn('Firestore subject deletion notice:', err);
-      });
-      showNotify('Subject and all associated curriculum data permanently deleted');
-      onDataChanged();
-      loadAdminData();
-    } catch (err: any) {
-      alert('Delete failed: ' + (err.message || 'Unknown error'));
     }
   };
 
@@ -300,7 +312,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setEditingNote({
         title: '',
         topic: '',
-        subjectId: subjects[0]?.id || '',
+        subjectId: localSubjects[0]?.id || '',
         levelId: 'ND1',
         summary: '',
         content: '',
@@ -315,10 +327,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (data.id) {
         const res = await api.updateNote(data.id, data);
         saveNoteToFirestore(res).catch(() => {});
+        setLocalNotes((prev) => prev.map((n) => (n.id === res.id ? res : n)));
         showNotify('Study note updated & synced to Cloud Firestore');
       } else {
         const res = await api.createNote(data);
         saveNoteToFirestore(res).catch(() => {});
+        setLocalNotes((prev) => [res, ...prev]);
         showNotify('Study note published & synced to Cloud Firestore');
       }
       setEditingNote(null);
@@ -326,26 +340,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       loadAdminData();
     } catch (err: any) {
       alert(err.message);
-    }
-  };
-
-  const handleDeleteNote = async (id: string) => {
-    if (
-      !confirm(
-        'Are you sure you want to permanently delete this study note? It will no longer appear for students.'
-      )
-    )
-      return;
-    try {
-      await api.deleteNote(id);
-      await deleteNoteFromFirestore(id).catch((err) => {
-        console.warn('Firestore note deletion notice:', err);
-      });
-      showNotify('Study note permanently deleted from database');
-      onDataChanged();
-      loadAdminData();
-    } catch (err: any) {
-      alert('Delete failed: ' + (err.message || 'Unknown error'));
     }
   };
 
@@ -357,7 +351,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setEditingQuestion(q);
     } else {
       setEditingQuestion({
-        subjectId: subjects[0]?.id || '',
+        subjectId: localSubjects[0]?.id || '',
         topic: 'General Clinical Nursing',
         levelId: 'ND1',
         difficulty: 'Medium',
@@ -374,10 +368,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (data.id) {
         const res = await api.updateQuestion(data.id, data);
         saveQuestionToFirestore(res).catch(() => {});
+        setLocalQuestions((prev) => prev.map((q) => (String(q.id) === String(res.id) ? res : q)));
         showNotify('Question updated & synced to Cloud Firestore');
       } else {
         const res = await api.createQuestion(data);
         saveQuestionToFirestore(res).catch(() => {});
+        setLocalQuestions((prev) => [res, ...prev]);
         showNotify('Question created & synced to Cloud Firestore');
       }
       setEditingQuestion(null);
@@ -385,26 +381,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       loadAdminData();
     } catch (err: any) {
       alert(err.message);
-    }
-  };
-
-  const handleDeleteQuestion = async (id: string | number) => {
-    if (
-      !confirm(
-        'Are you sure you want to permanently delete this MCQ question from the question bank and all CBT exams?'
-      )
-    )
-      return;
-    try {
-      await api.deleteQuestion(id);
-      await deleteQuestionFromFirestore(id).catch((err) => {
-        console.warn('Firestore question deletion notice:', err);
-      });
-      showNotify('MCQ question permanently deleted from database');
-      onDataChanged();
-      loadAdminData();
-    } catch (err: any) {
-      alert('Delete failed: ' + (err.message || 'Unknown error'));
     }
   };
 
@@ -416,10 +392,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (data.id) {
         const res = await api.updateExam(data.id, data);
         saveExamToFirestore(res).catch(() => {});
+        setLocalExams((prev) => prev.map((e) => (e.id === res.id ? res : e)));
         showNotify('CBT Examination updated & synced to Cloud Firestore');
       } else {
         const res = await api.createExam(data);
         saveExamToFirestore(res).catch(() => {});
+        setLocalExams((prev) => [res, ...prev]);
         showNotify('CBT Examination created & synced to Cloud Firestore');
       }
       setEditingExam(null);
@@ -427,26 +405,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       loadAdminData();
     } catch (err: any) {
       alert(err.message);
-    }
-  };
-
-  const handleDeleteExam = async (id: string) => {
-    if (
-      !confirm(
-        'Are you sure you want to permanently delete this CBT Exam? It will no longer be accessible for testing.'
-      )
-    )
-      return;
-    try {
-      await api.deleteExam(id);
-      await deleteExamFromFirestore(id).catch((err) => {
-        console.warn('Firestore exam deletion notice:', err);
-      });
-      showNotify('CBT Exam permanently deleted from database');
-      onDataChanged();
-      loadAdminData();
-    } catch (err: any) {
-      alert('Delete failed: ' + (err.message || 'Unknown error'));
     }
   };
 
@@ -467,6 +425,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         targetLevel: annTargetLevel,
       });
       saveAnnouncementToFirestore(res).catch(() => {});
+      setLocalAnnouncements((prev) => [res, ...prev]);
       setAnnTitle('');
       setAnnContent('');
       showNotify('Announcement broadcast sent & synced to Cloud Firestore');
@@ -474,21 +433,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       loadAdminData();
     } catch (err: any) {
       alert(err.message);
-    }
-  };
-
-  const handleDeleteAnnouncement = async (id: string) => {
-    if (!confirm('Are you sure you want to permanently delete this announcement?')) return;
-    try {
-      await api.deleteAnnouncement(id);
-      await deleteAnnouncementFromFirestore(id).catch((err) => {
-        console.warn('Firestore announcement deletion notice:', err);
-      });
-      showNotify('Announcement permanently deleted');
-      onDataChanged();
-      loadAdminData();
-    } catch (err: any) {
-      alert('Delete failed: ' + (err.message || 'Unknown error'));
     }
   };
 
@@ -526,50 +470,128 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const handleConfirmDeleteStudent = async () => {
-    if (!studentToDelete) return;
-    const targetId = studentToDelete.id;
-    const targetEmail = studentToDelete.email?.toLowerCase().trim();
+  // 8. UNIFIED EXECUTE DELETE FUNCTION (Students, Questions, Exams, Subjects, Notes, Levels, Announcements, Results)
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    const { type, id, email } = deleteTarget;
+    const idStr = String(id);
 
-    setIsDeletingStudent(true);
+    setIsDeleting(true);
+    deletedItemIdsRef.current.add(idStr);
 
-    // Record in deleted set to block any re-injection from real-time listeners
-    deletedStudentIdsRef.current.add(targetId);
-    if (targetEmail) {
-      deletedStudentIdsRef.current.add(targetEmail);
+    // Step 1: Immediately remove the item from the list/UI (no page refresh needed)
+    switch (type) {
+      case 'student': {
+        const targetId = String(id);
+        const targetEmail = email?.toLowerCase().trim();
+        deletedStudentIdsRef.current.add(targetId);
+        if (targetEmail) {
+          deletedStudentIdsRef.current.add(targetEmail);
+        }
+        setStudentsList((prev) =>
+          prev.filter(
+            (s) => s.id !== targetId && (!targetEmail || s.email?.toLowerCase().trim() !== targetEmail)
+          )
+        );
+        setStats((prev) => (prev ? { ...prev, totalStudents: Math.max(0, prev.totalStudents - 1) } : null));
+        break;
+      }
+      case 'question': {
+        setLocalQuestions((prev) => prev.filter((q) => String(q.id) !== idStr));
+        setStats((prev) => (prev ? { ...prev, totalQuestions: Math.max(0, prev.totalQuestions - 1) } : null));
+        break;
+      }
+      case 'exam': {
+        setLocalExams((prev) => prev.filter((e) => String(e.id) !== idStr));
+        setStats((prev) => (prev ? { ...prev, totalExams: Math.max(0, prev.totalExams - 1) } : null));
+        break;
+      }
+      case 'subject': {
+        setLocalSubjects((prev) => prev.filter((s) => String(s.id) !== idStr));
+        // Also remove cascade-affected notes and questions locally
+        setLocalNotes((prev) => prev.filter((n) => n.subjectId !== idStr));
+        setLocalQuestions((prev) => prev.filter((q) => q.subjectId !== idStr));
+        setStats((prev) => (prev ? { ...prev, totalSubjects: Math.max(0, prev.totalSubjects - 1) } : null));
+        break;
+      }
+      case 'note': {
+        setLocalNotes((prev) => prev.filter((n) => String(n.id) !== idStr));
+        setStats((prev) => (prev ? { ...prev, totalNotes: Math.max(0, prev.totalNotes - 1) } : null));
+        break;
+      }
+      case 'level': {
+        setLocalLevels((prev) => prev.filter((l) => String(l.id) !== idStr));
+        break;
+      }
+      case 'announcement': {
+        setLocalAnnouncements((prev) => prev.filter((a) => String(a.id) !== idStr));
+        break;
+      }
+      case 'result': {
+        setAttemptsList((prev) => prev.filter((att) => String(att.id) !== idStr));
+        setStats((prev) => (prev ? { ...prev, totalAttempts: Math.max(0, prev.totalAttempts - 1) } : null));
+        break;
+      }
     }
 
-    // Immediately remove from UI list (without needing to refresh)
-    setStudentsList((prev) =>
-      prev.filter(
-        (s) => s.id !== targetId && (!targetEmail || s.email?.toLowerCase().trim() !== targetEmail)
-      )
-    );
+    // Step 2: Close confirmation dialog
+    setDeleteTarget(null);
+    setIsDeleting(false);
 
-    // Decrement stats counter immediately
-    setStats((prev) => (prev ? { ...prev, totalStudents: Math.max(0, prev.totalStudents - 1) } : null));
+    // Step 3: Show required success toast/message: "Item deleted successfully"
+    showNotify('Item deleted successfully');
 
-    // Close confirmation dialog
-    setStudentToDelete(null);
-    setIsDeletingStudent(false);
-
-    // Required success notification
-    showNotify('Student deleted successfully');
-
-    // Permanently delete from backend database and Firestore
+    // Step 4: Perform persistent deletion asynchronously in backend and Firestore
     try {
-      await api.deleteStudent(targetId, targetEmail);
+      switch (type) {
+        case 'student': {
+          const targetId = String(id);
+          const targetEmail = email?.toLowerCase().trim();
+          await api.deleteStudent(targetId, targetEmail);
+          deleteUserFromFirestore(targetId, targetEmail).catch(() => {});
+          break;
+        }
+        case 'question': {
+          await api.deleteQuestion(id);
+          deleteQuestionFromFirestore(id).catch(() => {});
+          break;
+        }
+        case 'exam': {
+          await api.deleteExam(idStr);
+          deleteExamFromFirestore(idStr).catch(() => {});
+          break;
+        }
+        case 'subject': {
+          await api.deleteSubject(idStr);
+          deleteSubjectFromFirestore(idStr).catch(() => {});
+          break;
+        }
+        case 'note': {
+          await api.deleteNote(idStr);
+          deleteNoteFromFirestore(idStr).catch(() => {});
+          break;
+        }
+        case 'level': {
+          await api.deleteLevel(idStr);
+          deleteLevelFromFirestore(idStr).catch(() => {});
+          break;
+        }
+        case 'announcement': {
+          await api.deleteAnnouncement(idStr);
+          deleteAnnouncementFromFirestore(idStr).catch(() => {});
+          break;
+        }
+        case 'result': {
+          await api.deleteAttempt(idStr);
+          break;
+        }
+      }
     } catch (err: any) {
-      console.warn('Backend student deletion notice:', err);
-    }
-
-    try {
-      await deleteUserFromFirestore(targetId, targetEmail);
-    } catch (err: any) {
-      console.warn('Firestore student deletion notice:', err);
+      console.warn(`Persistent deletion notice for ${type} (${id}):`, err);
     }
 
     onDataChanged();
+    loadAdminData();
   };
 
   // 8. Database Seed Reset
@@ -900,7 +922,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 setEditingLevel({
                   name: '',
                   description: '',
-                  order: levels.length + 1,
+                  order: localLevels.length + 1,
                   badge: 'Year',
                 })
               }
@@ -912,7 +934,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
 
           <div className="bg-[#111827] rounded-2xl border border-slate-800 overflow-hidden shadow-md divide-y divide-slate-800">
-            {levels.map((lvl) => (
+            {localLevels.map((lvl) => (
               <div key={lvl.id} className="p-4 flex items-center justify-between hover:bg-slate-800/40 transition-colors">
                 <div>
                   <div className="flex items-center gap-2">
@@ -932,8 +954,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <Edit3 className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => handleDeleteLevel(lvl.id)}
+                    onClick={() => setDeleteTarget({ type: 'level', id: lvl.id, title: lvl.name })}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors cursor-pointer"
+                    title="Delete Level"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -1035,7 +1058,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   icon: 'BookOpen',
                   color: 'teal',
                   levelId: 'ND1',
-                  order: subjects.length + 1,
+                  order: localSubjects.length + 1,
                   isPublished: true,
                 })
               }
@@ -1047,7 +1070,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {subjects.map((subj) => {
+            {localSubjects.map((subj) => {
               const lvl = getLevelBadge(subj.levelId);
               return (
                 <div
@@ -1094,7 +1117,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <Edit3 className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleDeleteSubject(subj.id)}
+                        onClick={() => setDeleteTarget({ type: 'subject', id: subj.id, title: subj.name })}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors cursor-pointer"
                         title="Delete Subject"
                       >
@@ -1111,7 +1134,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {editingSubject && (
             <SubjectFormModal
               subject={editingSubject}
-              existingSubjectsCount={subjects.length}
+              existingSubjectsCount={localSubjects.length}
               onClose={() => setEditingSubject(null)}
               onSave={handleSaveSubject}
             />
@@ -1140,14 +1163,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
 
           <div className="bg-[#111827] rounded-2xl border border-slate-800 divide-y divide-slate-800 overflow-hidden shadow-md">
-            {notes.length === 0 ? (
+            {localNotes.length === 0 ? (
               <div className="p-8 text-center text-xs text-slate-500">
                 No clinical study notes authored yet. Click "Compose New Note" above to write one.
               </div>
             ) : (
-              notes.map((note) => {
+              localNotes.map((note) => {
                 const lvl = getLevelBadge(note.levelId);
-                const subj = subjects.find((s) => s.id === note.subjectId);
+                const subj = localSubjects.find((s) => s.id === note.subjectId);
                 return (
                   <div
                     key={note.id}
@@ -1196,7 +1219,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <span>Edit</span>
                       </button>
                       <button
-                        onClick={() => handleDeleteNote(note.id)}
+                        onClick={() => setDeleteTarget({ type: 'note', id: note.id, title: note.title })}
                         className="p-1.5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors cursor-pointer"
                         title="Delete Note"
                       >
@@ -1213,7 +1236,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {editingNote && (
             <StudyNoteFormModal
               note={editingNote}
-              subjects={subjects}
+              subjects={localSubjects}
               onClose={() => setEditingNote(null)}
               onSave={handleSaveNote}
             />
@@ -1242,14 +1265,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
 
           <div className="bg-[#111827] rounded-2xl border border-slate-800 divide-y divide-slate-800 overflow-hidden shadow-md">
-            {questions.length === 0 ? (
+            {localQuestions.length === 0 ? (
               <div className="p-8 text-center text-xs text-slate-500">
                 No MCQ questions created yet. Click "Add Question" above to build the question pool.
               </div>
             ) : (
-              questions.map((q) => {
+              localQuestions.map((q) => {
                 const lvl = getLevelBadge(q.levelId);
-                const subj = subjects.find((s) => s.id === q.subjectId);
+                const subj = localSubjects.find((s) => s.id === q.subjectId);
                 return (
                   <div
                     key={q.id}
@@ -1305,7 +1328,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <Edit3 className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleDeleteQuestion(q.id)}
+                        onClick={() =>
+                          setDeleteTarget({
+                            type: 'question',
+                            id: q.id,
+                            title: q.questionText || q.question || 'MCQ Question',
+                          })
+                        }
                         className="p-1.5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors cursor-pointer"
                         title="Delete Question"
                       >
@@ -1322,7 +1351,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {editingQuestion && (
             <MCQQuestionFormModal
               question={editingQuestion}
-              subjects={subjects}
+              subjects={localSubjects}
               onClose={() => setEditingQuestion(null)}
               onSave={handleSaveQuestion}
             />
@@ -1362,12 +1391,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
 
           <div className="bg-[#111827] rounded-2xl border border-slate-800 divide-y divide-slate-800 overflow-hidden shadow-md">
-            {exams.length === 0 ? (
+            {localExams.length === 0 ? (
               <div className="p-8 text-center text-xs text-slate-500">
                 No CBT exams created yet. Click "Create CBT Exam" to set up a timed test for students.
               </div>
             ) : (
-              exams.map((exam) => {
+              localExams.map((exam) => {
                 const lvl = getLevelBadge(exam.levelId);
                 return (
                   <div
@@ -1415,7 +1444,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <span>Edit</span>
                       </button>
                       <button
-                        onClick={() => handleDeleteExam(exam.id)}
+                        onClick={() =>
+                          setDeleteTarget({
+                            type: 'exam',
+                            id: exam.id,
+                            title: exam.title,
+                          })
+                        }
                         className="p-1.5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors cursor-pointer"
                         title="Delete CBT Exam"
                       >
@@ -1432,7 +1467,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {editingExam && (
             <CBTExamFormModal
               exam={editingExam}
-              subjects={subjects}
+              subjects={localSubjects}
               onClose={() => setEditingExam(null)}
               onSave={handleSaveExam}
             />
@@ -1602,9 +1637,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                         <button
                           onClick={() =>
-                            setStudentToDelete({
+                            setDeleteTarget({
+                              type: 'student',
                               id: stud.id,
-                              name: stud.name || 'Registered Student',
+                              title: stud.name || 'Registered Student',
                               email: stud.email || '',
                             })
                           }
@@ -1641,73 +1677,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             )}
           </div>
-
-          {/* Delete Student Permanent Confirmation Dialog Modal */}
-          {studentToDelete && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
-              <div
-                className="w-full max-w-md bg-[#111827] border border-slate-800 rounded-3xl shadow-2xl p-6 space-y-5 text-white animate-in zoom-in-95 duration-150"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="delete-student-modal-title"
-              >
-                <div className="flex items-start gap-3.5">
-                  <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 shrink-0">
-                    <Trash2 className="w-6 h-6" />
-                  </div>
-                  <div className="space-y-1">
-                    <h3 id="delete-student-modal-title" className="text-base font-bold text-white">
-                      Delete Student Account
-                    </h3>
-                    <p className="text-xs text-slate-300 leading-relaxed font-normal">
-                      Are you sure you want to permanently delete this student? This action cannot be undone.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Target Student Preview Card */}
-                <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-300 font-bold text-sm flex items-center justify-center shrink-0">
-                    {studentToDelete.name?.charAt(0)?.toUpperCase() || 'S'}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-white truncate">{studentToDelete.name}</p>
-                    <p className="text-[11px] text-slate-400 font-mono truncate">{studentToDelete.email}</p>
-                  </div>
-                </div>
-
-                {/* Action Buttons: Confirm vs Cancel */}
-                <div className="flex items-center justify-end gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setStudentToDelete(null)}
-                    disabled={isDeletingStudent}
-                    className="px-4 py-2.5 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleConfirmDeleteStudent}
-                    disabled={isDeletingStudent}
-                    className="px-4 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 active:bg-rose-700 rounded-xl transition-colors shadow-lg shadow-rose-950/40 cursor-pointer flex items-center gap-2 disabled:opacity-50"
-                  >
-                    {isDeletingStudent ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Deleting...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Permanently Delete</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -1743,19 +1712,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 </div>
 
-                <div className="text-right text-xs">
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                      att.passed
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                        : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                    }`}
-                  >
-                    {att.passed ? 'PASSED' : 'FAILED'}
-                  </span>
-                  <div className="text-[11px] text-slate-400 mt-1">
-                    {att.correctCount}/{att.totalQuestions} Correct
+                <div className="flex items-center gap-3">
+                  <div className="text-right text-xs">
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        att.passed
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                      }`}
+                    >
+                      {att.passed ? 'PASSED' : 'FAILED'}
+                    </span>
+                    <div className="text-[11px] text-slate-400 mt-1">
+                      {att.correctCount}/{att.totalQuestions} Correct
+                    </div>
                   </div>
+                  <button
+                    onClick={() =>
+                      setDeleteTarget({
+                        type: 'result',
+                        id: att.id,
+                        title: `${att.examTitle} (${att.userName})`,
+                      })
+                    }
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors cursor-pointer"
+                    title="Delete Examination Record"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             ))}
@@ -1818,7 +1802,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:ring-2 focus:ring-teal-500"
                 >
                   <option value="all">Broadcast to All Students</option>
-                  {levels.map((lvl) => (
+                  {localLevels.map((lvl) => (
                     <option key={lvl.id} value={lvl.id}>
                       {lvl.name} Only
                     </option>
@@ -1850,9 +1834,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {/* Active Announcements List */}
           <div className="space-y-3">
             <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400">
-              Active Broadcasts ({announcements.length})
+              Active Broadcasts ({localAnnouncements.length})
             </h4>
-            {announcements.map((ann) => (
+            {localAnnouncements.map((ann) => (
               <div
                 key={ann.id}
                 className="bg-[#111827] p-4 rounded-2xl border border-slate-800 shadow-md flex items-start justify-between gap-3"
@@ -1877,8 +1861,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
 
                 <button
-                  onClick={() => handleDeleteAnnouncement(ann.id)}
+                  onClick={() =>
+                    setDeleteTarget({
+                      type: 'announcement',
+                      id: ann.id,
+                      title: ann.title,
+                    })
+                  }
                   className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-xl shrink-0 cursor-pointer transition-colors"
+                  title="Delete Announcement"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -1997,6 +1988,100 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <span>Reset Database to Seed State</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= UNIFIED CONFIRM DELETE MODAL ================= */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
+          <div
+            className="w-full max-w-md bg-[#111827] border border-slate-800 rounded-3xl shadow-2xl p-6 space-y-5 text-white animate-in zoom-in-95 duration-150"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-delete-dialog-title"
+          >
+            <div className="flex items-start gap-3.5">
+              <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div className="space-y-1 flex-1 min-w-0">
+                <h3 id="confirm-delete-dialog-title" className="text-base font-bold text-white">
+                  Confirm Delete
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed font-normal">
+                  Are you sure you want to delete this item? This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            {/* Target Item Details Preview */}
+            {(deleteTarget.title || deleteTarget.email) && (
+              <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 font-bold text-xs flex items-center justify-center shrink-0 uppercase">
+                  {deleteTarget.type.charAt(0)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                    {deleteTarget.type === 'student'
+                      ? 'Student Account'
+                      : deleteTarget.type === 'exam'
+                      ? 'CBT Exam'
+                      : deleteTarget.type === 'question'
+                      ? 'MCQ Question'
+                      : deleteTarget.type === 'note'
+                      ? 'Study Note'
+                      : deleteTarget.type === 'subject'
+                      ? 'Curriculum Subject'
+                      : deleteTarget.type === 'level'
+                      ? 'Academic Level'
+                      : deleteTarget.type === 'announcement'
+                      ? 'Student Broadcast'
+                      : deleteTarget.type === 'result'
+                      ? 'Exam Result'
+                      : deleteTarget.type}
+                  </span>
+                  {deleteTarget.title && (
+                    <p className="text-xs font-semibold text-white truncate">{deleteTarget.title}</p>
+                  )}
+                  {deleteTarget.email && (
+                    <p className="text-[11px] text-slate-400 font-mono truncate">{deleteTarget.email}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons: Cancel and Delete */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                id="confirm-delete-cancel-btn"
+                onClick={() => setDeleteTarget(null)}
+                disabled={isDeleting}
+                className="px-4 py-2.5 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                id="confirm-delete-confirm-btn"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="px-4 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 active:bg-rose-700 rounded-xl transition-colors shadow-lg shadow-rose-950/40 cursor-pointer flex items-center gap-2 disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
