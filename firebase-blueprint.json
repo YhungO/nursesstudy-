@@ -169,6 +169,37 @@
         "createdAt": { "type": "string" }
       },
       "required": ["id", "userId", "noteId", "createdAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Administrative audit trail logging content lifecycle actions and modifications",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "adminEmail": { "type": "string" },
+        "adminName": { "type": "string" },
+        "action": { "type": "string" },
+        "targetType": { "type": "string" },
+        "targetId": { "type": "string" },
+        "targetTitle": { "type": "string" },
+        "previousStatus": { "type": "string" },
+        "newStatus": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "adminUid", "adminEmail", "action", "targetType", "targetId", "timestamp"]
     }
+  },
+  "firestore": {
+    "users": { "schema": "User", "description": "User profiles" },
+    "levels": { "schema": "NursingLevel", "description": "Academic levels" },
+    "subjects": { "schema": "Subject", "description": "Nursing subjects" },
+    "notes": { "schema": "StudyNote", "description": "Clinical revision notes" },
+    "questions": { "schema": "Question", "description": "CBT question bank" },
+    "exams": { "schema": "CBTExam", "description": "CBT examinations" },
+    "attempts": { "schema": "ExamAttempt", "description": "Student exam attempts and results" },
+    "announcements": { "schema": "Announcement", "description": "Platform broadcast notices" },
+    "bookmarks": { "schema": "Bookmark", "description": "Student bookmarked items" },
+    "audit_logs": { "schema": "AuditLog", "description": "Admin action audit logs" }
   }
 }

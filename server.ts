@@ -16,11 +16,38 @@ function getAuthUser(req: express.Request): User | null {
     return null;
   }
   const token = authHeader.substring(7).trim();
+  if (!token) return null;
+
   const database = db.get();
   // We match token against user.id, token_user.id, or email
-  const user = database.users.find(
+  let user = database.users.find(
     u => u.id === token || `token_${u.id}` === token || u.email.toLowerCase() === token.toLowerCase()
   );
+
+  // Auto-sync Firebase authenticated user if not present in memory database
+  if (!user && token.length >= 5 && !token.includes(' ')) {
+    const emailHeader = req.headers['x-user-email'] as string | undefined;
+    const nameHeader = req.headers['x-user-name'] as string | undefined;
+    const isEmail = token.includes('@');
+    const cleanEmail = isEmail ? token.toLowerCase().trim() : (emailHeader ? emailHeader.toLowerCase().trim() : `user_${token.slice(0, 8)}@nursesstudy.com`);
+    const isAdmin = cleanEmail === 'chigaemezuaugustine43@gmail.com';
+
+    user = {
+      id: token,
+      name: nameHeader || (isEmail ? cleanEmail.split('@')[0] : 'Nursing Student'),
+      email: cleanEmail,
+      password: '',
+      role: isAdmin ? 'admin' : 'student',
+      levelId: 'lvl-nd1',
+      status: 'active',
+      school: 'College of Nursing Sciences',
+      gradYear: '2027',
+      createdAt: new Date().toISOString(),
+    };
+    database.users.push(user);
+    db.save();
+  }
+
   return user || null;
 }
 
@@ -125,10 +152,22 @@ app.post('/api/auth/register', (req, res) => {
   }
 
   const database = db.get();
-  const existing = database.users.find(u => u.email.toLowerCase() === normalizedEmail);
+  const existing = database.users.find(u => (id && u.id === id) || u.email.toLowerCase() === normalizedEmail);
   if (existing) {
-    return res.status(409).json({
-      error: 'This email is already registered. Please login instead.',
+    if (id && existing.id !== id) {
+      existing.id = id;
+    }
+    if (name) existing.name = name.trim();
+    if (levelId) existing.levelId = levelId;
+    if (school) existing.school = school.trim();
+    if (gradYear) existing.gradYear = gradYear.trim();
+    if (password) existing.password = hashPassword(password.trim());
+    db.save();
+
+    const { password: _, passwordResetToken: __, passwordResetExpires: ___, ...safeUser } = existing;
+    return res.status(200).json({
+      token: existing.id,
+      user: safeUser,
     });
   }
 

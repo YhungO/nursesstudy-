@@ -1,3 +1,5 @@
+export type ContentStatus = 'draft' | 'published' | 'archived';
+
 export interface User {
   id: string;
   name: string;
@@ -27,7 +29,13 @@ export interface Subject {
   icon: string;
   color: string;
   order?: number;
+  status?: ContentStatus;
   isPublished: boolean;
+  publishedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
   noteCount?: number;
   questionCount?: number;
 }
@@ -45,9 +53,13 @@ export interface StudyNote {
   keyPoints: string[];
   clinicalPearls: string[];
   readingTime: number;
+  status?: ContentStatus;
   isPublished: boolean;
+  publishedAt?: string;
   createdAt: string;
   updatedAt: string;
+  createdBy?: string;
+  updatedBy?: string;
 }
 
 export interface QuestionOption {
@@ -73,7 +85,13 @@ export interface Question {
   scenario?: string;
   difficulty?: 'Easy' | 'Medium' | 'Hard';
   tags?: string[];
+  status?: ContentStatus;
+  isPublished?: boolean;
+  publishedAt?: string;
   createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
 }
 
 export interface CBTExam {
@@ -89,9 +107,14 @@ export interface CBTExam {
   actualQuestionCount?: number;
   passingScore: number;
   questionIds?: (string | number)[];
+  status?: ContentStatus;
   isPublished: boolean;
+  publishedAt?: string;
   instructions: string[];
   createdAt: string;
+  updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
 }
 
 export interface ExamAttempt {
@@ -129,6 +152,32 @@ export interface Announcement {
   targetLevel: string;
   author: string;
   createdAt: string;
+  updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
+}
+
+export interface Bookmark {
+  id: string;
+  userId: string;
+  type: 'note' | 'question';
+  itemId: string;
+  createdAt: string;
+}
+
+export interface AuditLog {
+  id: string;
+  adminUid: string;
+  adminEmail: string;
+  adminName?: string;
+  action: string;
+  targetType: 'question' | 'exam' | 'note' | 'subject' | 'level' | 'announcement' | 'student' | 'attempt';
+  targetId: string;
+  targetTitle?: string;
+  previousStatus?: ContentStatus | string;
+  newStatus?: ContentStatus | string;
+  timestamp: string;
+  details?: Record<string, any>;
 }
 
 export interface AdminStats {
@@ -136,8 +185,16 @@ export interface AdminStats {
   totalLevels: number;
   totalSubjects: number;
   totalNotes: number;
+  publishedNotes: number;
+  draftNotes: number;
+  archivedNotes: number;
   totalQuestions: number;
+  publishedQuestions: number;
+  draftQuestions: number;
   totalExams: number;
+  publishedExams: number;
+  draftExams: number;
+  archivedExams: number;
   totalAttempts: number;
   passedAttempts: number;
   averageScore: number;

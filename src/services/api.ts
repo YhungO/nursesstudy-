@@ -11,17 +11,61 @@ import {
 } from '../types';
 
 let authToken: string | null = localStorage.getItem('nursesstudy_token');
+let authUserEmail: string | null = localStorage.getItem('nursesstudy_user_email');
+let authUserName: string | null = localStorage.getItem('nursesstudy_user_name');
 
-export const setAuthToken = (token: string | null) => {
+export const setAuthToken = (
+  token: string | null,
+  email?: string | null,
+  name?: string | null
+) => {
   authToken = token;
   if (token) {
     localStorage.setItem('nursesstudy_token', token);
   } else {
     localStorage.removeItem('nursesstudy_token');
   }
+
+  if (email !== undefined) {
+    authUserEmail = email;
+    if (email) {
+      localStorage.setItem('nursesstudy_user_email', email);
+    } else {
+      localStorage.removeItem('nursesstudy_user_email');
+    }
+  }
+
+  if (name !== undefined) {
+    authUserName = name;
+    if (name) {
+      localStorage.setItem('nursesstudy_user_name', name);
+    } else {
+      localStorage.removeItem('nursesstudy_user_name');
+    }
+  }
+};
+
+export const setStoredUser = (user: User | null) => {
+  if (user) {
+    localStorage.setItem('nursesstudy_user_profile', JSON.stringify(user));
+  } else {
+    localStorage.removeItem('nursesstudy_user_profile');
+  }
+};
+
+export const getStoredUser = (): User | null => {
+  try {
+    const raw = localStorage.getItem('nursesstudy_user_profile');
+    if (!raw) return null;
+    return JSON.parse(raw) as User;
+  } catch {
+    return null;
+  }
 };
 
 export const getAuthToken = () => authToken;
+export const getAuthUserEmail = () => authUserEmail;
+export const getAuthUserName = () => authUserName;
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers || {});
@@ -29,6 +73,12 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
   if (authToken) {
     headers.set('Authorization', `Bearer ${authToken}`);
+  }
+  if (authUserEmail) {
+    headers.set('X-User-Email', authUserEmail);
+  }
+  if (authUserName) {
+    headers.set('X-User-Name', authUserName);
   }
 
   const response = await fetch(endpoint, {
@@ -52,6 +102,12 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
 export const api = {
   // Auth
+  syncUser: (data: Partial<User>) =>
+    request<{ token: string; user: User }>('/api/auth/sync-user', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   login: (email: string, password: string) =>
     request<{ token: string; user: User }>('/api/auth/login', {
       method: 'POST',

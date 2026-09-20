@@ -11,70 +11,90 @@ service cloud.firestore {
       return isAuthenticated() &&
         (request.auth.token.role == 'admin' ||
          request.auth.token.email == 'chigaemezuaugustine43@gmail.com' ||
-         request.auth.uid == 'usr-admin-1');
+         request.auth.uid == 'usr-admin-1' ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
     }
 
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Users collection
+    // Users & student profiles: students access own profile, admin manages all
     match /users/{userId} {
-      allow read, write: if true; // Managed by portal admin and student registration
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow update: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow delete: if isAdmin();
     }
 
-    // Academic Levels
+    // Academic Levels (curriculum structure)
     match /levels/{levelId} {
       allow read: if true;
-      allow write: if true; // Managed by portal admin
+      allow write: if isAdmin();
     }
 
     // Nursing Subjects
     match /subjects/{subjectId} {
       allow read: if true;
-      allow write: if true; // Managed by portal admin
+      allow write: if isAdmin();
     }
 
-    // Study Notes & Materials
+    // Study Notes & Materials (Students only see published content)
     match /notes/{noteId} {
-      allow read: if true;
-      allow write: if true; // Managed by portal admin
+      allow read: if isAdmin() ||
+        resource.data.status == 'published' ||
+        (resource.data.status == null && resource.data.isPublished == true);
+      allow write: if isAdmin();
     }
 
-    // CBT Questions Bank
+    // CBT Questions Bank (Authorized users take practice/exams, admin manages)
     match /questions/{questionId} {
-      allow read: if true;
-      allow write: if true; // Managed by portal admin
+      allow read: if isAuthenticated() || isAdmin();
+      allow write: if isAdmin();
     }
 
-    // CBT Exams
+    // CBT Exams (Students only see published exams)
     match /exams/{examId} {
-      allow read: if true;
-      allow write: if true; // Managed by portal admin
+      allow read: if isAdmin() ||
+        resource.data.status == 'published' ||
+        (resource.data.status == null && resource.data.isPublished == true);
+      allow write: if isAdmin();
     }
 
-    // Student Exam Attempts
+    // Student Exam Attempts & Historical Results (PROTECTED: immutable by student once saved)
     match /attempts/{attemptId} {
-      allow read: if true;
-      allow create, update: if true;
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     // Announcements
     match /announcements/{announcementId} {
       allow read: if true;
-      allow write: if true; // Managed by portal admin
+      allow write: if isAdmin();
     }
 
-    // Student Bookmarks
+    // Student Bookmarks (Private to user)
     match /bookmarks/{bookmarkId} {
-      allow read, write: if true;
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // Admin Action Audit Logs (Append-only by Admin, read-only by Admin, immutable)
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false;
     }
 
     // System Settings & Meta
     match /settings/{settingId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if isAdmin();
     }
   }
 }
+

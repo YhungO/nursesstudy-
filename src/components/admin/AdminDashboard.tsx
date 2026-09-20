@@ -9,6 +9,8 @@ import {
   CBTExam,
   ExamAttempt,
   Announcement,
+  AuditLog,
+  ContentStatus,
 } from '../../types';
 import { api } from '../../services/api';
 import {
@@ -18,15 +20,19 @@ import {
   deleteSubjectFromFirestore,
   saveNoteToFirestore,
   deleteNoteFromFirestore,
+  updateNoteStatus,
   saveQuestionToFirestore,
   deleteQuestionFromFirestore,
   saveExamToFirestore,
   deleteExamFromFirestore,
+  updateExamStatus,
   saveAnnouncementToFirestore,
   deleteAnnouncementFromFirestore,
   saveUserToFirestore,
   deleteUserFromFirestore,
+  deleteAttemptFromFirestore,
   subscribeToUsers,
+  subscribeToAuditLogs,
   FIREBASE_CONFIG,
 } from '../../services/firestoreService';
 import {
@@ -50,6 +56,10 @@ import {
   RefreshCw,
   Search,
   ArrowRight,
+  Activity,
+  Eye,
+  Archive,
+  FileCheck,
 } from 'lucide-react';
 import { SubjectFormModal } from './forms/SubjectFormModal';
 import { StudyNoteFormModal } from './forms/StudyNoteFormModal';
@@ -96,8 +106,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     | 'students'
     | 'results'
     | 'announcements'
+    | 'audit_logs'
     | 'settings'
   >('overview');
+
+  const adminActor = user
+    ? {
+        uid: user.id,
+        email: user.email,
+        name: user.name,
+      }
+    : undefined;
 
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [studentsList, setStudentsList] = useState<any[]>([]);
@@ -106,6 +125,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [attemptsList, setAttemptsList] = useState<ExamAttempt[]>([]);
   const [, setLoading] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
+
+  // Audit Logs State
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [auditFilterType, setAuditFilterType] = useState<string>('all');
+  const [auditSearchQuery, setAuditSearchQuery] = useState('');
 
   // Unified Delete Confirmation State (for students, questions, exams, subjects, notes, levels, announcements, results)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);

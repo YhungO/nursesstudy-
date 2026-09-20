@@ -12,7 +12,20 @@ import { Profile } from './components/student/Profile';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { AdminLogin } from './components/admin/AdminLogin';
 import { AuthScreen } from './components/auth/AuthScreen';
+import { AuthGate } from './components/auth/AuthGate';
 import { api } from './services/api';
+import {
+  subscribeToLevels,
+  subscribeToSubjects,
+  subscribeToNotes,
+  subscribeToQuestions,
+  subscribeToExams,
+  subscribeToAnnouncements,
+  subscribeToUserAttempts,
+  subscribeToUserBookmarks,
+  toggleBookmarkInFirestore,
+  seedFirestoreIfEmpty,
+} from './services/firestoreService';
 import {
   NursingLevel,
   Subject,
@@ -50,7 +63,7 @@ const MainAppContent: React.FC = () => {
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch all app data
+  // Fetch all app data and seed Firestore if necessary
   const fetchData = async () => {
     try {
       const [lvls, subjs, nts, qts, exms, anns] = await Promise.all([
@@ -62,12 +75,22 @@ const MainAppContent: React.FC = () => {
         api.getAnnouncements(),
       ]);
 
-      setLevels(lvls);
-      setSubjects(subjs);
-      setNotes(nts);
-      setQuestions(qts);
-      setExams(exms);
-      setAnnouncements(anns);
+      if (lvls?.length) setLevels((prev) => (prev.length === 0 ? lvls : prev));
+      if (subjs?.length) setSubjects((prev) => (prev.length === 0 ? subjs : prev));
+      if (nts?.length) setNotes((prev) => (prev.length === 0 ? nts : prev));
+      if (qts?.length) setQuestions((prev) => (prev.length === 0 ? qts : prev));
+      if (exms?.length) setExams((prev) => (prev.length === 0 ? exms : prev));
+      if (anns?.length) setAnnouncements((prev) => (prev.length === 0 ? anns : prev));
+
+      // Auto-seed Firestore in background if Firestore is currently fresh/empty
+      seedFirestoreIfEmpty({
+        levels: lvls,
+        subjects: subjs,
+        notes: nts,
+        questions: qts,
+        exams: exms,
+        announcements: anns,
+      }).catch((e) => console.warn('Firestore auto-seed notice:', e));
 
       if (user) {
         try {
@@ -75,7 +98,7 @@ const MainAppContent: React.FC = () => {
             api.getAttempts(),
             api.getBookmarks(),
           ]);
-          setRecentAttempts(Array.isArray(attempts) ? attempts : []);
+          if (Array.isArray(attempts)) setRecentAttempts(attempts);
           setBookmarks(
             Array.isArray(bmarksData)
               ? bmarksData
@@ -94,8 +117,71 @@ const MainAppContent: React.FC = () => {
     }
   };
 
+  // Real-time Firestore Subscriptions: Single Source of Truth
+  // Automatically propagates changes when admin creates, edits, publishes, archives, or deletes content
   useEffect(() => {
     fetchData();
+
+    // Attach real-time listeners to Firestore collections
+    const unsubLevels = subscribeToLevels((liveLevels) => {
+      if (liveLevels && liveLevels.length > 0) {
+        setLevels(liveLevels);
+        setIsLoading(false);
+      }
+    });
+
+    const unsubSubjects = subscribeToSubjects((liveSubjects) => {
+      if (liveSubjects && liveSubjects.length > 0) {
+        setSubjects(liveSubjects);
+      }
+    });
+
+    const unsubNotes = subscribeToNotes((liveNotes) => {
+      setNotes(liveNotes);
+    }, { publishedOnly: false });
+
+    const unsubQuestions = subscribeToQuestions((liveQuestions) => {
+      setQuestions(liveQuestions);
+    });
+
+    const unsubExams = subscribeToExams((liveExams) => {
+      setExams(liveExams);
+    }, { publishedOnly: false });
+
+    const unsubAnnouncements = subscribeToAnnouncements((liveAnnouncements) => {
+      setAnnouncements(liveAnnouncements);
+    });
+
+    return () => {
+      unsubLevels();
+      unsubSubjects();
+      unsubNotes();
+      unsubQuestions();
+      unsubExams();
+      unsubAnnouncements();
+    };
+  }, []);
+
+  // Real-time user specific data subscriptions (Attempts & Bookmarks)
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubAttempts = subscribeToUserAttempts(user.id, (liveAttempts) => {
+      if (liveAttempts) {
+        setRecentAttempts(liveAttempts);
+      }
+    });
+
+    const unsubBookmarks = subscribeToUserBookmarks(user.id, (liveBookmarks) => {
+      if (liveBookmarks) {
+        setBookmarks(liveBookmarks);
+      }
+    });
+
+    return () => {
+      unsubAttempts();
+      unsubBookmarks();
+    };
   }, [user]);
 
   // Bookmark Toggle
@@ -112,8 +198,7 @@ const MainAppContent: React.FC = () => {
         (b) => b.type === type && b.itemId === itemId
       );
 
-      await api.toggleBookmark(type, itemId);
-
+      // Optimistic UI update
       if (isCurrentlyBookmarked) {
         setBookmarks((prev) =>
           (Array.isArray(prev) ? prev : []).filter(
@@ -126,6 +211,10 @@ const MainAppContent: React.FC = () => {
           { id: `bm-${Date.now()}`, type, itemId, userId: user.id },
         ]);
       }
+
+      // Sync with Firestore & backend API
+      toggleBookmarkInFirestore(user.id, type, itemId).catch(() => {});
+      await api.toggleBookmark(type, itemId).catch(() => {});
     } catch (err) {
       console.error('Error toggling bookmark:', err);
     }
@@ -140,7 +229,19 @@ const MainAppContent: React.FC = () => {
     .filter((b) => b.type === 'question')
     .map((b) => b.itemId);
 
-  const savedNotes = notes.filter((n) => bookmarkedNoteIds.includes(n.id));
+  // Segmented Content: Single Source of Truth
+  // Students ONLY see published content. Admins see all items (draft, published, archived) in AdminDashboard.
+  const publishedNotes = notes.filter((n) => {
+    const isPub = n.status ? n.status === 'published' : n.isPublished !== false;
+    return isPub && n.status !== 'draft' && n.status !== 'archived';
+  });
+
+  const publishedExams = exams.filter((e) => {
+    const isPub = e.status ? e.status === 'published' : e.isPublished !== false;
+    return isPub && e.status !== 'draft' && e.status !== 'archived';
+  });
+
+  const savedNotes = publishedNotes.filter((n) => bookmarkedNoteIds.includes(n.id));
   const savedQuestions = questions.filter((q) =>
     bookmarkedQuestionIds.includes(q.id)
   );
@@ -160,7 +261,7 @@ const MainAppContent: React.FC = () => {
   // Search Results
   const searchResults = {
     notes: searchQuery
-      ? notes.filter(
+      ? publishedNotes.filter(
           (n) =>
             n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             n.topic.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -191,18 +292,6 @@ const MainAppContent: React.FC = () => {
     );
   }
 
-  // Enforce Compulsory Registration / Login before using the app
-  if (!user) {
-    return (
-      <AuthScreen
-        levels={levels}
-        onSuccess={() => {
-          fetchData();
-        }}
-      />
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#0b0f19] text-slate-100 flex flex-col font-sans selection:bg-teal-500 selection:text-white">
       {/* Main Top Navigation */}
@@ -222,8 +311,8 @@ const MainAppContent: React.FC = () => {
         {currentView === 'home' && (
           <StudentHome
             subjects={subjects}
-            notes={notes}
-            exams={exams}
+            notes={publishedNotes}
+            exams={publishedExams}
             recentAttempts={recentAttempts}
             announcements={announcements}
             levels={levels}
@@ -236,7 +325,7 @@ const MainAppContent: React.FC = () => {
 
         {currentView === 'notes' && (
           <StudyNotes
-            notes={notes}
+            notes={publishedNotes}
             subjects={subjects}
             levels={levels}
             selectedNoteId={extraParams?.noteId}
@@ -262,7 +351,7 @@ const MainAppContent: React.FC = () => {
 
         {currentView === 'cbt' && (
           <CbtExam
-            exams={exams}
+            exams={publishedExams}
             activeExamId={extraParams?.examId}
             onFinishExam={(attemptId) => {
               api.getAttempts().then(setRecentAttempts);
@@ -502,7 +591,9 @@ const MainAppContent: React.FC = () => {
 export default function App() {
   return (
     <AuthProvider>
-      <MainAppContent />
+      <AuthGate>
+        <MainAppContent />
+      </AuthGate>
     </AuthProvider>
   );
 }

@@ -30,6 +30,7 @@ export const StudyNoteFormModal: React.FC<StudyNoteFormModalProps> = ({
     summary: '',
     content: '',
     readingTime: 5,
+    status: 'published',
     isPublished: true,
   });
   const [pearlsInput, setPearlsInput] = useState('');
@@ -39,12 +40,14 @@ export const StudyNoteFormModal: React.FC<StudyNoteFormModalProps> = ({
 
   useEffect(() => {
     if (note) {
+      const derivedStatus = note.status || (note.isPublished ? 'published' : 'draft');
       setFormData({
         ...note,
         subjectId: note.subjectId || subjects[0]?.id || '',
         levelId: note.levelId || 'ND1',
         readingTime: note.readingTime || 5,
-        isPublished: note.isPublished !== undefined ? note.isPublished : true,
+        status: derivedStatus,
+        isPublished: derivedStatus === 'published',
       });
       setPearlsInput(note.clinicalPearls ? note.clinicalPearls.join('\n') : '');
       setPointsInput(note.keyPoints ? note.keyPoints.join('\n') : '');
@@ -57,6 +60,7 @@ export const StudyNoteFormModal: React.FC<StudyNoteFormModalProps> = ({
         summary: '',
         content: '',
         readingTime: 5,
+        status: 'published',
         isPublished: true,
       });
       setPearlsInput('');
@@ -93,6 +97,8 @@ export const StudyNoteFormModal: React.FC<StudyNoteFormModalProps> = ({
         .map((s) => s.trim())
         .filter(Boolean);
 
+      const status = formData.status || 'published';
+
       await onSave({
         ...formData,
         title: formData.title.trim(),
@@ -100,6 +106,8 @@ export const StudyNoteFormModal: React.FC<StudyNoteFormModalProps> = ({
         clinicalPearls,
         keyPoints,
         readingTime: Number(formData.readingTime) || 5,
+        status,
+        isPublished: status === 'published',
       });
     } catch (err: any) {
       setErrorMessage(err.message || 'Failed to save study note');
@@ -325,32 +333,71 @@ export const StudyNoteFormModal: React.FC<StudyNoteFormModalProps> = ({
             />
           </div>
 
-          {/* Row 6: Publish Status */}
-          <div className="flex items-center justify-between p-3 bg-slate-900/60 rounded-xl border border-slate-800">
-            <div className="flex items-center gap-2.5">
-              <input
-                type="checkbox"
-                id="note-publish-checkbox"
-                checked={formData.isPublished}
-                onChange={(e) => setFormData({ ...formData, isPublished: e.target.checked })}
-                className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 border-slate-700 bg-slate-800 cursor-pointer"
-              />
-              <label
-                htmlFor="note-publish-checkbox"
-                className="text-xs font-bold text-slate-200 cursor-pointer"
-              >
-                Publish immediately to students for study and revision
+          {/* Row 6: Content Lifecycle Status */}
+          <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-200">
+                Content Lifecycle & Visibility Status
               </label>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                  formData.status === 'published'
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                    : formData.status === 'archived'
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+              >
+                {formData.status === 'published'
+                  ? '● Live for Students'
+                  : formData.status === 'archived'
+                  ? 'Archived'
+                  : 'Draft (Admin Only)'}
+              </span>
             </div>
-            <span
-              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                formData.isPublished
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                  : 'bg-slate-800 text-slate-400 border-slate-700'
-              }`}
-            >
-              {formData.isPublished ? 'Published' : 'Draft'}
-            </span>
+
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, status: 'draft', isPublished: false })}
+                className={`py-2 px-3 rounded-lg text-xs font-semibold border transition-all text-center ${
+                  formData.status === 'draft'
+                    ? 'bg-slate-800 text-white border-slate-600 shadow-xs ring-1 ring-slate-500'
+                    : 'bg-slate-950/60 text-slate-400 border-slate-800/80 hover:bg-slate-900 hover:text-slate-300'
+                }`}
+              >
+                Draft (Private)
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, status: 'published', isPublished: true })}
+                className={`py-2 px-3 rounded-lg text-xs font-semibold border transition-all text-center ${
+                  formData.status === 'published'
+                    ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/60 shadow-xs ring-1 ring-emerald-400/40'
+                    : 'bg-slate-950/60 text-slate-400 border-slate-800/80 hover:bg-slate-900 hover:text-slate-300'
+                }`}
+              >
+                Published (Live)
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, status: 'archived', isPublished: false })}
+                className={`py-2 px-3 rounded-lg text-xs font-semibold border transition-all text-center ${
+                  formData.status === 'archived'
+                    ? 'bg-amber-950/80 text-amber-300 border-amber-500/60 shadow-xs ring-1 ring-amber-400/40'
+                    : 'bg-slate-950/60 text-slate-400 border-slate-800/80 hover:bg-slate-900 hover:text-slate-300'
+                }`}
+              >
+                Archived
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              {formData.status === 'published'
+                ? 'Appears instantly in real-time on all active student portals across mobile and desktop.'
+                : formData.status === 'archived'
+                ? 'Safely stored in admin historical archives without deleting any student study records.'
+                : 'Visible and editable only to verified platform administrators.'}
+            </p>
           </div>
 
           {/* Actions */}

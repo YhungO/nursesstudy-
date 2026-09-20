@@ -16,7 +16,21 @@ import {
   writeBatch,
   Firestore,
 } from 'firebase/firestore';
-import { getAuth, Auth } from 'firebase/auth';
+import {
+  getAuth,
+  setPersistence,
+  browserLocalPersistence,
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+  sendPasswordResetEmail,
+  verifyPasswordResetCode,
+  confirmPasswordReset,
+  sendEmailVerification,
+  Auth,
+} from 'firebase/auth';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase App
@@ -28,8 +42,15 @@ export const db: Firestore =
     ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
     : getFirestore(app);
 
-// Initialize Firebase Authentication
+// Initialize Firebase Authentication with explicit browser local persistence
 export const auth: Auth = getAuth(app);
+
+// Ensure local persistence so user remains authenticated across refreshes and tab closures
+if (typeof window !== 'undefined') {
+  setPersistence(auth, browserLocalPersistence).catch((err) => {
+    console.warn('[Firebase Auth] Persistence initialization notice:', err);
+  });
+}
 
 export const FIREBASE_CONFIG = firebaseConfig;
 
@@ -47,6 +68,18 @@ export {
   orderBy,
   limit,
   writeBatch,
+  setPersistence,
+  browserLocalPersistence,
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+  sendPasswordResetEmail,
+  verifyPasswordResetCode,
+  confirmPasswordReset,
+  sendEmailVerification,
 };
 
 export default app;
+

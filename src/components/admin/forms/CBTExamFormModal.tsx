@@ -29,6 +29,7 @@ export const CBTExamFormModal: React.FC<CBTExamFormModalProps> = ({
     durationMinutes: 30,
     totalQuestions: 15,
     passingScore: 70,
+    status: 'published',
     isPublished: true,
     instructions: [],
   });
@@ -39,6 +40,7 @@ export const CBTExamFormModal: React.FC<CBTExamFormModalProps> = ({
 
   useEffect(() => {
     if (exam) {
+      const derivedStatus = exam.status || (exam.isPublished ? 'published' : 'draft');
       setFormData({
         ...exam,
         subjectId: exam.subjectId || 'all',
@@ -46,7 +48,8 @@ export const CBTExamFormModal: React.FC<CBTExamFormModalProps> = ({
         durationMinutes: exam.durationMinutes || 30,
         totalQuestions: exam.totalQuestions || 15,
         passingScore: exam.passingScore || 70,
-        isPublished: exam.isPublished !== undefined ? exam.isPublished : true,
+        status: derivedStatus,
+        isPublished: derivedStatus === 'published',
       });
       setInstructionsInput(
         (exam.instructions || [
@@ -65,6 +68,7 @@ export const CBTExamFormModal: React.FC<CBTExamFormModalProps> = ({
         durationMinutes: 30,
         totalQuestions: 15,
         passingScore: 70,
+        status: 'published',
         isPublished: true,
         instructions: [],
       });
@@ -95,6 +99,8 @@ export const CBTExamFormModal: React.FC<CBTExamFormModalProps> = ({
         .map((s) => s.trim())
         .filter(Boolean);
 
+      const status = formData.status || 'published';
+
       await onSave({
         ...formData,
         title: formData.title.trim(),
@@ -102,6 +108,8 @@ export const CBTExamFormModal: React.FC<CBTExamFormModalProps> = ({
         durationMinutes: Number(formData.durationMinutes) || 30,
         totalQuestions: Number(formData.totalQuestions) || 15,
         passingScore: Number(formData.passingScore) || 70,
+        status,
+        isPublished: status === 'published',
         instructions,
       });
     } catch (err: any) {
@@ -305,32 +313,71 @@ export const CBTExamFormModal: React.FC<CBTExamFormModalProps> = ({
             />
           </div>
 
-          {/* Row 5: Publish Status Switch */}
-          <div className="flex items-center justify-between p-3 bg-slate-900/60 rounded-xl border border-slate-800">
-            <div className="flex items-center gap-2.5">
-              <input
-                type="checkbox"
-                id="exam-publish-checkbox"
-                checked={formData.isPublished}
-                onChange={(e) => setFormData({ ...formData, isPublished: e.target.checked })}
-                className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 border-slate-700 bg-slate-800 cursor-pointer"
-              />
-              <label
-                htmlFor="exam-publish-checkbox"
-                className="text-xs font-bold text-slate-200 cursor-pointer"
-              >
-                Publish immediately for active student CBT testing
+          {/* Row 5: Content Lifecycle & Examination Availability */}
+          <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-200">
+                Examination Lifecycle & Student Availability
               </label>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                  formData.status === 'published'
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                    : formData.status === 'archived'
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+              >
+                {formData.status === 'published'
+                  ? '● Live in CBT Hall'
+                  : formData.status === 'archived'
+                  ? 'Archived (Scores Kept)'
+                  : 'Draft / Closed'}
+              </span>
             </div>
-            <span
-              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                formData.isPublished
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                  : 'bg-slate-800 text-slate-400 border-slate-700'
-              }`}
-            >
-              {formData.isPublished ? 'Active / Open' : 'Draft / Closed'}
-            </span>
+
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, status: 'draft', isPublished: false })}
+                className={`py-2 px-3 rounded-lg text-xs font-semibold border transition-all text-center ${
+                  formData.status === 'draft'
+                    ? 'bg-slate-800 text-white border-slate-600 shadow-xs ring-1 ring-slate-500'
+                    : 'bg-slate-950/60 text-slate-400 border-slate-800/80 hover:bg-slate-900 hover:text-slate-300'
+                }`}
+              >
+                Draft (Closed)
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, status: 'published', isPublished: true })}
+                className={`py-2 px-3 rounded-lg text-xs font-semibold border transition-all text-center ${
+                  formData.status === 'published'
+                    ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/60 shadow-xs ring-1 ring-emerald-400/40'
+                    : 'bg-slate-950/60 text-slate-400 border-slate-800/80 hover:bg-slate-900 hover:text-slate-300'
+                }`}
+              >
+                Published (Live)
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, status: 'archived', isPublished: false })}
+                className={`py-2 px-3 rounded-lg text-xs font-semibold border transition-all text-center ${
+                  formData.status === 'archived'
+                    ? 'bg-amber-950/80 text-amber-300 border-amber-500/60 shadow-xs ring-1 ring-amber-400/40'
+                    : 'bg-slate-950/60 text-slate-400 border-slate-800/80 hover:bg-slate-900 hover:text-slate-300'
+                }`}
+              >
+                Archived
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              {formData.status === 'published'
+                ? 'Appears immediately for candidate seating in the CBT Examination Hall.'
+                : formData.status === 'archived'
+                ? 'Concluded and archived. All historical student scores, results, and attempts are permanently preserved.'
+                : 'Hidden from students. Test cannot be started by candidates while in draft mode.'}
+            </p>
           </div>
 
           {/* Actions */}
