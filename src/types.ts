@@ -131,6 +131,7 @@ export interface ExamAttempt {
   totalQuestions: number;
   timeSpentSeconds: number;
   passed: boolean;
+  submissionReason?: 'manual' | 'timeout' | 'forced';
   answers: {
     questionId: string;
     selectedOption: 'A' | 'B' | 'C' | 'D' | null;

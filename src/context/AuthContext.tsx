@@ -16,6 +16,7 @@ import {
 } from '../firebase';
 import {
   saveUserToFirestore,
+  saveStudentProfileToFirestore,
   getOrCreateUserProfile,
   getUserFromFirestore,
   updateEmailVerificationInFirestore,
@@ -221,6 +222,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               gradYear: '2027',
               createdAt: new Date().toISOString(),
             };
+            if (fallback.role === 'student') {
+              saveStudentProfileToFirestore(fallback).catch(() => {});
+            }
             setStoredUser(fallback);
             setUser(fallback);
             setAuthStatus('AUTHENTICATED');
@@ -450,10 +454,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     (newProfile as any).emailVerified = fbUser.emailVerified || false;
 
     // 8. Create Firestore student profile using that UID (students/{uid} and users/{uid})
-    await saveUserToFirestore(newProfile).catch((err) => {
-      console.warn('[Firestore] Profile save notice:', err);
-    });
+    let saved = await saveStudentProfileToFirestore(newProfile);
+    if (!saved) {
+      console.warn('[Firestore] Initial profile save returned false; retrying profile save...');
+      saved = await saveStudentProfileToFirestore(newProfile);
+    }
 
+    // Inform backend for synchronization
     api.syncUser(newProfile).catch(() => {});
 
     // Update session state

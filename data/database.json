@@ -224,140 +224,7 @@
       "createdAt": "2026-09-18T06:14:12.471Z"
     }
   ],
-  "notes": [
-    {
-      "id": "note-ana-endocrine-1",
-      "subjectId": "subj-anatomy",
-      "levelId": "lvl-nd1",
-      "title": "Anatomy of the Human Endocrine System: Hypothalamus & Pituitary Axis",
-      "topic": "Gross Anatomy & Functional Organization of Endocrine Glands",
-      "summary": "High-yield review of the master endocrine regulatory organs: pituitary gland anatomy in the sella turcica, hypophyseal portal circulation, thyroid, parathyroids, and adrenal cortex.",
-      "content": "### 1. Overview of the Endocrine System\nThe endocrine system is composed of ductless glands that synthesize and secrete chemical messengers called hormones directly into capillary plexuses for distribution throughout the vascular system.\n\n### 2. The Pituitary Gland (Hypophysis Cerebri)\n- **Anatomical Location**: Occupies the hypophyseal fossa within the sella turcica of the sphenoid bone. Weighs approximately 500 mg.\n- **Adenohypophysis (Anterior Lobe)**: Derived from oral ectoderm (Rathke's pouch). Secretes GH, TSH, ACTH, FSH, LH, and Prolactin.\n- **Neurohypophysis (Posterior Lobe)**: Derived from the neuroectoderm of the diencephalon floor. Connected via the infundibulum and hypothalamic-hypophyseal tract. Stores and releases Oxytocin and Antidiuretic Hormone (Vasopressin), both produced in the paraventricular and supraoptic hypothalamic nuclei.\n\n### 3. Hypothalamic-Hypophyseal Portal System\nA specialized microvascular network that carries hypothalamic releasing and inhibiting peptides directly from the median eminence to sinusoidal capillaries surrounding anterior pituitary cells, avoiding systemic dilution.\n\n### 4. Thyroid & Parathyroid Glands\n- **Thyroid Gland**: Sits anterior to the trachea (C5-T1), with lateral lobes united across tracheal rings 2-4 by an isthmus. Secretes Thyroxine (T4), Triiodothyronine (T3), and Calcitonin from parafollicular C-cells.\n- **Parathyroid Glands**: Typically four small ovoid glands embedded on the posterior capsule of the thyroid lobes. Secrete Parathyroid Hormone (PTH) in response to low serum calcium ion levels.\n\n### 5. Adrenal (Suprarenal) Glands\n- **Cortex**: Derived from mesoderm. Consists of three zones: Zona glomerulosa (Mineralocorticoids/Aldosterone), Zona fasciculata (Glucocorticoids/Cortisol), and Zona reticularis (Androgens/DHEA).\n- **Medulla**: Derived from neural crest chromaffin cells. Innervated by preganglionic sympathetic fibers; secretes Epinephrine (80%) and Norepinephrine (20%).",
-      "keyPoints": [
-        "Pituitary rests in the sella turcica of the sphenoid bone.",
-        "Posterior pituitary releases hormones synthesized in hypothalamic nuclei.",
-        "Adrenal cortex zones: GFR (Glomerulosa, Fasciculata, Reticularis) secrete Salt, Sugar, and Sex steroids."
-      ],
-      "clinicalPearls": [
-        "Transsphenoidal hypophysectomy approaches the pituitary through the sphenoid sinus.",
-        "Accidental parathyroid removal during thyroidectomy triggers severe hypocalcemia and tetany (positive Chvostek and Trousseau signs)."
-      ],
-      "readingTime": 6,
-      "isPublished": true,
-      "createdAt": "2026-09-18T00:00:00.000Z",
-      "updatedAt": "2026-09-18T00:00:00.000Z"
-    },
-    {
-      "id": "note-fns-asepsis-1",
-      "subjectId": "subj-fns",
-      "levelId": "lvl-nd1",
-      "title": "Principles of Surgical & Medical Asepsis, Hand Hygiene, and Vital Signs",
-      "topic": "Infection Control Protocols & Clinical Measurement Benchmarks",
-      "summary": "Core guidelines on the chain of infection, hand hygiene techniques according to WHO 5 moments, standard vs transmission precautions, and vital signs reference ranges.",
-      "content": "### 1. Chain of Infection\nInfection transmission requires six interconnected links: Infectious Agent → Reservoir → Portal of Exit → Mode of Transmission → Portal of Entry → Susceptible Host. Breaking any single link halts disease transmission.\n\n### 2. Medical vs. Surgical Asepsis\n- **Medical Asepsis (Clean Technique)**: Procedures that decrease the number of organisms and prevent their spread (e.g., routine handwashing, barrier nursing, clean linens).\n- **Surgical Asepsis (Sterile Technique)**: Eliminates all microorganisms and spores from an area or object. Mandatory during urinary catheterization, wound dressing changes, and invasive surgeries.\n\n### 3. Golden Rules of Sterile Fields\n1. All items within a sterile field must be completely sterile.\n2. A sterile barrier permeated by moisture becomes unsterile by capillary action (strike-through).\n3. Gowns are considered sterile only in front from chest to sterile field level, and sleeves from 2 inches above elbow to cuff.\n4. The 1-inch (2.5 cm) perimeter of a sterile field is considered unsterile.\n5. Items out of direct visual field or below waist level are considered unsterile.\n\n### 4. Vital Signs Clinical Reference Benchmarks\n- **Blood Pressure**: Normal adult systolic < 120 mmHg, diastolic < 80 mmHg.\n- **Pulse**: 60–100 beats per minute at rest. Apical-radial deficit indicates arrhythmia.\n- **Respiration**: 12–20 breaths per minute, rhythmic and unlabored.\n- **Core Temperature**: 36.5°C – 37.5°C (Normothermia).",
-      "keyPoints": [
-        "Hand hygiene is the single most effective intervention to break the chain of nosocomial infection.",
-        "The outer 1-inch border of a sterile drape is considered contaminated.",
-        "Always keep sterile hands above waist level and within direct sightline."
-      ],
-      "clinicalPearls": [
-        "Alcohol-based hand rub is ineffective against spore-forming organisms like Clostridioides difficile; mandatory soap and water friction is required.",
-        "Blood pressure cuff bladder width must equal 40% of arm circumference to avoid false readings."
-      ],
-      "readingTime": 8,
-      "isPublished": true,
-      "createdAt": "2026-09-18T00:00:00.000Z",
-      "updatedAt": "2026-09-18T00:00:00.000Z"
-    },
-    {
-      "id": "note-phs-homeostasis-1",
-      "subjectId": "subj-physiology",
-      "levelId": "lvl-nd1",
-      "title": "Renal Physiology & Electrolyte Homeostasis",
-      "topic": "Glomerular Filtration, Tubular Reabsorption & Acid-Base Balance",
-      "summary": "Comprehensive breakdown of nephron physiology, GFR regulation, renin-angiotensin-aldosterone system (RAAS), and buffer systems maintaining physiological pH.",
-      "content": "### 1. Functional Nephron Architecture\nThe functional unit of the kidney is the nephron (~1 million per kidney). Consists of a renal corpuscle (Bowman's capsule + glomerulus) and renal tubule system (PCT, loop of Henle, DCT, and collecting duct).\n\n### 2. Glomerular Filtration Rate (GFR)\n- Normal GFR is approximately 125 mL/min (180 L/day in an adult).\n- Governed by Starling forces: Glomerular capillary hydrostatic pressure promotes filtration; Bowman's space hydrostatic pressure and plasma oncotic pressure oppose filtration.\n\n### 3. Tubular Reabsorption & Secretion\n- **Proximal Convoluted Tubule (PCT)**: Reabsorbs 65% of filtered water and NaCl, 100% of filtered glucose and amino acids via sodium cotransporters.\n- **Loop of Henle**: Creates countercurrent osmotic gradient in renal medulla. Descending limb permeable to water; thick ascending limb actively pumps Na+-K+-2Cl- without water permeability.\n- **Distal Convoluted Tubule & Collecting Duct**: Fine-tuned by hormones (Aldosterone increases Na+ reabsorption and K+/H+ excretion; ADH inserts Aquaporin-2 channels to concentrate urine).\n\n### 4. Renin-Angiotensin-Aldosterone System (RAAS)\nJuxtaglomerular cells secrete Renin in response to hypotension, decreased renal perfusion, or sympathetic stimulation. Renin converts Angiotensinogen to Angiotensin I; ACE in pulmonary capillaries converts it to Angiotensin II, a potent vasoconstrictor that stimulates Aldosterone release.",
-      "keyPoints": [
-        "Normal adult GFR is 125 mL/min; 99% of filtered water is reabsorbed.",
-        "PCT reabsorbs all normal physiological glucose up to transport maximum (~180-200 mg/dL).",
-        "Aldosterone saves sodium and excretes potassium."
-      ],
-      "clinicalPearls": [
-        "Oliguria is defined as urine output < 400 mL/24 hr or < 0.5 mL/kg/hr in adults, requiring immediate nursing assessment for hypovolemia or acute kidney injury.",
-        "Serum creatinine is a more reliable marker of GFR than blood urea nitrogen (BUN)."
-      ],
-      "readingTime": 7,
-      "isPublished": true,
-      "createdAt": "2026-09-18T00:00:00.000Z",
-      "updatedAt": "2026-09-18T00:00:00.000Z"
-    },
-    {
-      "id": "note-pha-pharmacokinetics-1",
-      "subjectId": "subj-pharmacology",
-      "levelId": "lvl-nd1",
-      "title": "Fundamental Pharmacokinetics: ADME & The 10 Rights of Drug Administration",
-      "topic": "Drug Absorption, First-Pass Metabolism & Clinical Medication Safety",
-      "summary": "Essential pharmacokinetic mechanisms governing how the body processes medications, half-life calculations, therapeutic index, and clinical protocols preventing medication errors.",
-      "content": "### 1. Introduction to Pharmacokinetics\nPharmacokinetics describes what the body does to the drug, characterized by four phases: Absorption, Distribution, Metabolism, and Excretion (ADME).\n\n### 2. The ADME Phases\n- **Absorption**: Rate and extent of drug entry into systemic circulation from its administration site. Bioavailability (F) is 100% for intravenous routes.\n- **First-Pass Effect**: Orally administered drugs travel through portal circulation to the liver, where extensive enzymatic metabolism can significantly reduce active bioavailability before reaching systemic tissues.\n- **Distribution**: Movement of drug molecules through capillary walls into interstitial fluid and intracellular spaces. Dependent on blood flow, capillary permeability, plasma protein binding (principally Albumin), and lipid solubility.\n- **Metabolism (Biotransformation)**: Hepatic conversion of lipophilic compounds into hydrophilic metabolites. Phase I (Cytochrome P450 oxidation, reduction, hydrolysis) and Phase II (Conjugation, glucuronidation).\n- **Excretion**: Elimination of drug from the body, primarily via renal glomerular filtration and tubular secretion.\n\n### 3. The 10 Rights of Medication Administration\n1. Right Patient (two identifiers: full name and hospital/date-of-birth record)\n2. Right Medication (triple label check)\n3. Right Dose (double-check dosage calculations with high-alert drugs)\n4. Right Route (oral, IV, IM, SC, topical, rectal)\n5. Right Time (within 30-minute clinical window)\n6. Right Patient Education\n7. Right Assessment & Indication\n8. Right Documentation (chart immediately after, never before)\n9. Right to Refuse (educate, document, notify prescriber)\n10. Right Evaluation (monitor therapeutic response and adverse reactions)",
-      "keyPoints": [
-        "Bioavailability is fraction of administered drug reaching systemic circulation intact.",
-        "High protein-bound drugs have significant displacement interactions when two competing drugs are co-administered.",
-        "Always confirm patient identity with two independent identifiers before administering medication."
-      ],
-      "clinicalPearls": [
-        "Sublingual nitroglycerin bypasses first-pass hepatic metabolism, providing rapid systemic vasodilation in acute coronary syndrome.",
-        "Narrow therapeutic index drugs (e.g., Digoxin, Lithium, Gentamicin, Phenytoin) require routine therapeutic drug monitoring (peak and trough serum levels)."
-      ],
-      "readingTime": 9,
-      "isPublished": true,
-      "createdAt": "2026-09-18T00:00:00.000Z",
-      "updatedAt": "2026-09-18T00:00:00.000Z"
-    },
-    {
-      "id": "note-phc-immunization-1",
-      "subjectId": "subj-phc",
-      "levelId": "lvl-nd1",
-      "title": "National Primary Health Care & Expanded Programme on Immunization (EPI)",
-      "topic": "Vaccine Schedules, Cold Chain Maintenance & Community Disease Prevention",
-      "summary": "Core principles of Alma-Ata declaration, standard pediatric immunization schedules, cold chain temperature monitoring (+2°C to +8°C), and preventive health strategies.",
-      "content": "### 1. Principles of Primary Health Care\nDefined at Alma-Ata (1978) as essential healthcare based on practical, scientifically sound, and socially acceptable methods made universally accessible to individuals and families in the community at a cost they can afford.\n\n### 2. Eight Essential Elements of PHC (ELEMENTS)\n- **E**ducation concerning prevailing health problems and methods of prevention\n- **L**ocally endemic disease prevention and control\n- **E**xpanded Programme on Immunization (EPI)\n- **M**aternal and child health care, including family planning\n- **E**ssential drugs provision\n- **N**utrition and adequate food supply\n- **T**reatment of common diseases and injuries\n- **S**anitation and safe water supply\n\n### 3. Expanded Programme on Immunization (EPI) Schedule\n- **Birth**: BCG (intradermal, left deltoid), OPV-0 (oral drops), Hepatitis B birth dose (IM anterolateral thigh).\n- **6 Weeks**: Pentavalent 1 (DPT-HepB-Hib), OPV-1, PCV-1, Rota-1.\n- **10 Weeks**: Pentavalent 2, OPV-2, PCV-2, Rota-2.\n- **14 Weeks**: Pentavalent 3, OPV-3, PCV-3, IPV-1 (inactivated polio vaccine, SC/IM).\n- **9 Months**: Measles vaccine, Yellow Fever vaccine, Vitamin A supplementation.\n\n### 4. Vaccine Cold Chain Integrity\n- Recommended storage temperature for refrigerated vaccines: **+2°C to +8°C**.\n- Freezers (-15°C to -25°C) reserved for OPV and Yellow Fever vaccines at central and regional stores.\n- Shake Test: Used to determine if freeze-sensitive adsorbed vaccines (Pentavalent, Td, Hepatitis B) have suffered irreversible freezing damage.",
-      "keyPoints": [
-        "Cold chain maintains vaccine viability from manufacturer to patient arm (+2°C to +8°C).",
-        "BCG is administered strictly intradermally, producing a characteristic papule and scar.",
-        "The shake test verifies whether freeze-sensitive vaccines were compromised by freezing."
-      ],
-      "clinicalPearls": [
-        "Never freeze adsorbed vaccines like Pentavalent or Tetanus Toxoid; freezing denatures the aluminum adjuvant, nullifying immunogenicity.",
-        "Vitamin A deficiency impairs epithelial integrity and increases measles mortality tenfold."
-      ],
-      "readingTime": 7,
-      "isPublished": true,
-      "createdAt": "2026-09-18T00:00:00.000Z",
-      "updatedAt": "2026-09-18T00:00:00.000Z"
-    },
-    {
-      "id": "note-nut-therapeutic-1",
-      "subjectId": "subj-food-nutrition",
-      "levelId": "lvl-nd1",
-      "title": "Clinical Nutrition: Macronutrients, Micronutrients & Therapeutic Diets",
-      "topic": "Dietary Assessment, Enteral vs Parenteral Nutrition, and Disease-Specific Diets",
-      "summary": "Review of nutritional biochemistry, kwashiorkor vs marasmus, therapeutic diets (DASH, renal, diabetic, low-residue), and enteral tube feeding nursing interventions.",
-      "content": "### 1. Essential Macronutrients\n- **Proteins**: 4 kcal/g. Essential for tissue repair, enzyme synthesis, and oncotic pressure maintenance (Albumin).\n- **Carbohydrates**: 4 kcal/g. Primary cellular energy currency.\n- **Fats**: 9 kcal/g. Essential fatty acids, cell membrane integrity, and fat-soluble vitamin absorption (A, D, E, K).\n\n### 2. Protein-Energy Malnutrition (PEM)\n- **Kwashiorkor**: Severe protein deficiency with adequate caloric intake. Signs: bilateral pitting edema, ascites, hepatomegaly ('pot belly'), flag sign in hair, moon face, flaky paint dermatosis.\n- **Marasmus**: Severe total caloric deficiency. Signs: severe muscle wasting, absent subcutaneous fat, 'old man' wrinkled facies, hunger, alert demeanour.\n\n### 3. Common Therapeutic Diets\n- **DASH Diet (Dietary Approaches to Stop Hypertension)**: Rich in potassium, calcium, magnesium, high fiber; restricted sodium (< 2,300 mg/day, ideal < 1,500 mg/day).\n- **Renal Diet**: Restricted potassium, phosphorus, sodium, and carefully titrated protein depending on dialysis status.\n- **Diabetic Diet**: Consistent carbohydrate distribution, low glycemic index foods, high soluble fiber.\n- **Clear Liquid Diet**: Foods transparent at room temperature (broth, gelatin, clear juices, water); used pre- and post-op to minimize GI stress.\n\n### 4. Enteral Feeding Nursing Considerations\n- Elevate head of bed 30° to 45° during and for at least 60 minutes following feeds to prevent aspiration.\n- Check tube placement (aspirate pH < 5.5 confirms gastric placement; X-ray is gold standard).\n- Flush with 30 mL sterile water before and after medication administration.",
-      "keyPoints": [
-        "Kwashiorkor has edema caused by severe hypoalbuminemia; Marasmus has severe wasting without edema.",
-        "Keep head of bed elevated 30-45 degrees during enteral nutrition to prevent aspiration pneumonia.",
-        "Renal diets limit phosphorus and potassium to prevent arrhythmias and bone disease."
-      ],
-      "clinicalPearls": [
-        "Refeeding syndrome: aggressive feeding of severely malnourished patients causes sudden intracellular shifts of phosphate, potassium, and magnesium, triggering fatal cardiac arrest.",
-        "Vitamin C (ascorbic acid) significantly enhances non-heme iron absorption from plant sources."
-      ],
-      "readingTime": 7,
-      "isPublished": true,
-      "createdAt": "2026-09-18T00:00:00.000Z",
-      "updatedAt": "2026-09-18T00:00:00.000Z"
-    }
-  ],
+  "notes": [],
   "questions": [
     {
       "id": 1,
@@ -2984,6 +2851,1244 @@
     }
   ],
   "attempts": [
+    {
+      "id": "att-1790031252491",
+      "userId": "usr-admin-1",
+      "userName": "YHUNGO",
+      "userEmail": "chigaemezuaugustine43@gmail.com",
+      "examId": "cbt-1789721643942",
+      "examTitle": "ND1 Nursing – Endocrine System CBT",
+      "subjectName": "Anatomy / Endocrine System",
+      "type": "cbt_exam",
+      "score": 0,
+      "correctCount": 0,
+      "totalQuestions": 100,
+      "timeSpentSeconds": 2700,
+      "passed": false,
+      "submissionReason": "timeout",
+      "answers": [
+        {
+          "questionId": "1",
+          "selectedOption": "A",
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "2",
+          "selectedOption": "B",
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "3",
+          "selectedOption": "C",
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "4",
+          "selectedOption": "D",
+          "correctOption": "C",
+          "isCorrect": false
+        },
+        {
+          "questionId": "5",
+          "selectedOption": "A",
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "6",
+          "selectedOption": null,
+          "correctOption": "C",
+          "isCorrect": false
+        },
+        {
+          "questionId": "7",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "8",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "9",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "10",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "11",
+          "selectedOption": null,
+          "correctOption": "C",
+          "isCorrect": false
+        },
+        {
+          "questionId": "12",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "13",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "14",
+          "selectedOption": null,
+          "correctOption": "C",
+          "isCorrect": false
+        },
+        {
+          "questionId": "15",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "16",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "17",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "18",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "19",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "20",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "21",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "22",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "23",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "24",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "25",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "26",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "27",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "28",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "29",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "30",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "31",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "32",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "33",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "34",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "35",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "36",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "37",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "38",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "39",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "40",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "41",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "42",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "43",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "44",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "45",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "46",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "47",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "48",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "49",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "50",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "51",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "52",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "53",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "54",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "55",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "56",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "57",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "58",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "59",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "60",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "61",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "62",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "63",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "64",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "65",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "66",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "67",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "68",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "69",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "70",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "71",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "72",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "73",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "74",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "75",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "76",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "77",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "78",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "79",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "80",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "81",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "82",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "83",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "84",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "85",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "86",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "87",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "88",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "89",
+          "selectedOption": null,
+          "correctOption": "C",
+          "isCorrect": false
+        },
+        {
+          "questionId": "90",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "91",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "92",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "93",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "94",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "95",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "96",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "97",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "98",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "99",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "100",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        }
+      ],
+      "createdAt": "2026-09-21T22:54:12.491Z"
+    },
+    {
+      "id": "att-1790031248528",
+      "userId": "usr-admin-1",
+      "userName": "YHUNGO",
+      "userEmail": "chigaemezuaugustine43@gmail.com",
+      "examId": "cbt-1789721643942",
+      "examTitle": "ND1 Nursing – Endocrine System CBT",
+      "subjectName": "Anatomy / Endocrine System",
+      "type": "cbt_exam",
+      "score": 1,
+      "correctCount": 1,
+      "totalQuestions": 100,
+      "timeSpentSeconds": 1800,
+      "passed": false,
+      "submissionReason": "timeout",
+      "answers": [
+        {
+          "questionId": "1",
+          "selectedOption": "B",
+          "correctOption": "B",
+          "isCorrect": true
+        },
+        {
+          "questionId": "2",
+          "selectedOption": "C",
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "3",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "4",
+          "selectedOption": null,
+          "correctOption": "C",
+          "isCorrect": false
+        },
+        {
+          "questionId": "5",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "6",
+          "selectedOption": null,
+          "correctOption": "C",
+          "isCorrect": false
+        },
+        {
+          "questionId": "7",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "8",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "9",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "10",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "11",
+          "selectedOption": null,
+          "correctOption": "C",
+          "isCorrect": false
+        },
+        {
+          "questionId": "12",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "13",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "14",
+          "selectedOption": null,
+          "correctOption": "C",
+          "isCorrect": false
+        },
+        {
+          "questionId": "15",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "16",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "17",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "18",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "19",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "20",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "21",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "22",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "23",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "24",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "25",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "26",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "27",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "28",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "29",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "30",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "31",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "32",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "33",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "34",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "35",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "36",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "37",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "38",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "39",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "40",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "41",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "42",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "43",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "44",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "45",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "46",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "47",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "48",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "49",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "50",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "51",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "52",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "53",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "54",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "55",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "56",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "57",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "58",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "59",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "60",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "61",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "62",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "63",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "64",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "65",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "66",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "67",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "68",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "69",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "70",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "71",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "72",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "73",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "74",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "75",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "76",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "77",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "78",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "79",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "80",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "81",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "82",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "83",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "84",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "85",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "86",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "87",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "88",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "89",
+          "selectedOption": null,
+          "correctOption": "C",
+          "isCorrect": false
+        },
+        {
+          "questionId": "90",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "91",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "92",
+          "selectedOption": null,
+          "correctOption": "B",
+          "isCorrect": false
+        },
+        {
+          "questionId": "93",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "94",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "95",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "96",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "97",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "98",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "99",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        },
+        {
+          "questionId": "100",
+          "selectedOption": null,
+          "correctOption": "A",
+          "isCorrect": false
+        }
+      ],
+      "createdAt": "2026-09-21T22:54:08.528Z"
+    },
     {
       "id": "att-1789721677300",
       "userId": "usr-admin-1",

@@ -924,7 +924,7 @@ app.delete('/api/exams/:id', requireAdmin, (req, res) => {
 app.post('/api/exams/:id/submit', requireAuth, (req, res) => {
   const { id } = req.params;
   const user = (req as any).user as User;
-  const { answers, timeSpentSeconds } = req.body; // answers: Record<string, 'A'|'B'|'C'|'D'|null>
+  const { answers, timeSpentSeconds, submissionReason } = req.body; // answers: Record<string, 'A'|'B'|'C'|'D'|null>
   const database = db.get();
   const exam = database.exams.find(e => e.id === id);
   if (!exam) return res.status(404).json({ error: 'Exam not found' });
@@ -946,7 +946,9 @@ app.post('/api/exams/:id/submit', requireAuth, (req, res) => {
   const OPTION_KEYS: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
   let correctCount = 0;
   const detailedAnswers = targetQuestions.map(q => {
-    const selectedOption = answers ? (answers[q.id] ?? answers[String(q.id)] ?? null) : null;
+    const rawVal = answers ? (answers[q.id] ?? answers[String(q.id)] ?? null) : null;
+    const selectedOption: 'A' | 'B' | 'C' | 'D' | null =
+      rawVal === 'A' || rawVal === 'B' || rawVal === 'C' || rawVal === 'D' ? rawVal : null;
     
     // Normalize correct option
     let expectedOption: string = q.correctOption || '';
@@ -956,7 +958,7 @@ app.post('/api/exams/:id/submit', requireAuth, (req, res) => {
 
     const isCorrect = selectedOption !== null && (
       selectedOption === expectedOption ||
-      (typeof q.correct === 'number' && (selectedOption === q.correct || selectedOption === OPTION_KEYS[q.correct]))
+      (typeof q.correct === 'number' && selectedOption === OPTION_KEYS[q.correct])
     );
 
     if (isCorrect) correctCount++;
@@ -1004,9 +1006,10 @@ app.post('/api/exams/:id/submit', requireAuth, (req, res) => {
     totalQuestions,
     timeSpentSeconds: Number(timeSpentSeconds) || 0,
     passed,
+    submissionReason: submissionReason === 'timeout' ? 'timeout' : submissionReason === 'forced' ? 'forced' : 'manual',
     answers: detailedAnswers.map(a => ({
       questionId: String(a.questionId),
-      selectedOption: (a.selectedOption || 'A') as 'A' | 'B' | 'C' | 'D',
+      selectedOption: a.selectedOption,
       correctOption: (a.correctOption || 'A') as 'A' | 'B' | 'C' | 'D',
       isCorrect: a.isCorrect,
     })),
@@ -1045,7 +1048,7 @@ app.post('/api/practice/submit', requireAuth, (req, res) => {
 
     const isCorrect = selectedOption !== null && (
       selectedOption === expectedOption ||
-      (typeof q.correct === 'number' && (selectedOption === q.correct || selectedOption === OPTION_KEYS[q.correct]))
+      (typeof q.correct === 'number' && selectedOption === OPTION_KEYS[q.correct])
     );
 
     if (isCorrect) correctCount++;

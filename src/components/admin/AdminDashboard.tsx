@@ -32,6 +32,9 @@ import {
   deleteUserFromFirestore,
   deleteAttemptFromFirestore,
   subscribeToUsers,
+  subscribeToStudents,
+  getStudentsFromFirestore,
+  updateStudentStatusInFirestore,
   subscribeToAuditLogs,
   FIREBASE_CONFIG,
 } from '../../services/firestoreService';
@@ -123,6 +126,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [studentFilterStatus, setStudentFilterStatus] = useState<'all' | 'active' | 'suspended'>('all');
   const [attemptsList, setAttemptsList] = useState<ExamAttempt[]>([]);
+  const attemptsListRef = useRef<ExamAttempt[]>([]);
   const [, setLoading] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
 
@@ -170,23 +174,62 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setLocalAnnouncements(announcements.filter((a) => !deletedItemIdsRef.current.has(String(a.id))));
   }, [announcements]);
 
-  // Load Admin Data
+  // Load Admin Data (Authoritative Firestore direct read for Students)
   const loadAdminData = async () => {
     setLoading(true);
     try {
-      const [s, stud, att] = await Promise.all([
+      const [s, firestoreStudents, att] = await Promise.all([
         api.getAdminStats(),
-        api.getAdminStudents(),
+        getStudentsFromFirestore(),
         api.getAttempts(),
       ]);
-      setStats(s);
-      const filteredStud = (stud || []).filter(
-        (st) =>
-          !deletedStudentIdsRef.current.has(st.id) &&
-          (!st.email || !deletedStudentIdsRef.current.has(st.email.toLowerCase().trim()))
-      );
-      setStudentsList(filteredStud);
-      setAttemptsList(att);
+
+      const currentAttempts = att || [];
+      setAttemptsList(currentAttempts);
+      attemptsListRef.current = currentAttempts;
+
+      const activeStudentCount = (firestoreStudents || []).length;
+      if (s) {
+        setStats({ ...s, totalStudents: activeStudentCount });
+      }
+
+      const mappedStudents = (firestoreStudents || [])
+        .filter(
+          (st) =>
+            !deletedStudentIdsRef.current.has(st.id) &&
+            (!st.email || !deletedStudentIdsRef.current.has(st.email.toLowerCase().trim()))
+        )
+        .map((fu) => {
+          const studentAttempts = currentAttempts.filter(
+            (a) =>
+              a.userId === fu.id ||
+              (fu.email && a.userEmail?.toLowerCase() === fu.email.toLowerCase())
+          );
+          const totalAttempts = studentAttempts.length;
+          const avgScore =
+            totalAttempts > 0
+              ? Math.round(
+                  studentAttempts.reduce((acc, a) => acc + (a.score || 0), 0) / totalAttempts
+                )
+              : 0;
+
+          return {
+            id: fu.id,
+            name: fu.name,
+            email: fu.email,
+            levelId: fu.levelId || 'lvl-nd1',
+            levelName: levels.find((l) => l.id === fu.levelId)?.name || 'ND 1',
+            status: fu.status || 'active',
+            school: fu.school || 'College of Nursing Sciences',
+            gradYear: fu.gradYear || '2027',
+            createdAt: fu.createdAt || new Date().toISOString(),
+            emailVerified: (fu as any).emailVerified ?? false,
+            totalAttempts,
+            avgScore,
+          };
+        });
+
+      setStudentsList(mappedStudents);
     } catch (err) {
       console.error('Failed to load admin data:', err);
     } finally {
@@ -197,56 +240,54 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   useEffect(() => {
     loadAdminData();
 
-    // Listen to real-time student registrations from Google Cloud Firestore
-    const unsubscribeUsers = subscribeToUsers((firestoreUsers) => {
-      if (firestoreUsers && firestoreUsers.length > 0) {
-        setStudentsList((prev) => {
-          const map = new Map<string, any>();
-          // Existing local records that have not been deleted
-          prev
-            .filter(
-              (st) =>
-                !deletedStudentIdsRef.current.has(st.id) &&
-                (!st.email || !deletedStudentIdsRef.current.has(st.email.toLowerCase().trim()))
-            )
-            .forEach((st) => map.set(st.email?.toLowerCase().trim() || st.id, st));
+    // Listen to real-time student registrations directly from Google Cloud Firestore
+    const unsubscribeStudents = subscribeToStudents((firestoreStudents) => {
+      if (firestoreStudents) {
+        const currentAttempts = attemptsListRef.current;
+        const filtered = firestoreStudents
+          .filter(
+            (u) =>
+              u.role !== 'admin' &&
+              !deletedStudentIdsRef.current.has(u.id) &&
+              (!u.email || !deletedStudentIdsRef.current.has(u.email.toLowerCase().trim()))
+          )
+          .map((fu) => {
+            const studentAttempts = currentAttempts.filter(
+              (a) =>
+                a.userId === fu.id ||
+                (fu.email && a.userEmail?.toLowerCase() === fu.email.toLowerCase())
+            );
+            const totalAttempts = studentAttempts.length;
+            const avgScore =
+              totalAttempts > 0
+                ? Math.round(
+                    studentAttempts.reduce((acc, a) => acc + (a.score || 0), 0) / totalAttempts
+                  )
+                : 0;
 
-          // Merge or prepend Firestore records, strictly filtering out deleted students
-          firestoreUsers
-            .filter(
-              (u) =>
-                u.role !== 'admin' &&
-                !deletedStudentIdsRef.current.has(u.id) &&
-                (!u.email || !deletedStudentIdsRef.current.has(u.email.toLowerCase().trim()))
-            )
-            .forEach((fu) => {
-              const key = fu.email?.toLowerCase().trim() || fu.id;
-              const existing = map.get(key);
-              if (existing) {
-                map.set(key, { ...existing, ...fu });
-              } else {
-                map.set(key, {
-                  id: fu.id,
-                  name: fu.name,
-                  email: fu.email,
-                  levelId: fu.levelId || 'lvl-nd1',
-                  levelName: levels.find((l) => l.id === fu.levelId)?.name || 'ND 1',
-                  status: fu.status || 'active',
-                  school: fu.school || 'College of Nursing',
-                  gradYear: fu.gradYear || '2027',
-                  createdAt: fu.createdAt || new Date().toISOString(),
-                  totalAttempts: 0,
-                  avgScore: 0,
-                });
-              }
-            });
-          return Array.from(map.values());
-        });
+            return {
+              id: fu.id,
+              name: fu.name,
+              email: fu.email,
+              levelId: fu.levelId || 'lvl-nd1',
+              levelName: levels.find((l) => l.id === fu.levelId)?.name || 'ND 1',
+              status: fu.status || 'active',
+              school: fu.school || 'College of Nursing Sciences',
+              gradYear: fu.gradYear || '2027',
+              createdAt: fu.createdAt || new Date().toISOString(),
+              emailVerified: (fu as any).emailVerified ?? false,
+              totalAttempts,
+              avgScore,
+            };
+          });
+
+        setStudentsList(filtered);
+        setStats((prev) => (prev ? { ...prev, totalStudents: filtered.length } : prev));
       }
     });
 
     return () => {
-      unsubscribeUsers();
+      unsubscribeStudents();
     };
   }, [levels]);
 
@@ -483,12 +524,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
 
     try {
-      const studObj = studentsList.find(
-        (s) => s.id === studentId || (targetEmail && s.email?.toLowerCase().trim() === targetEmail)
-      );
-      if (studObj) {
-        await saveUserToFirestore({ ...studObj, status: newStatus } as any);
-      }
+      await updateStudentStatusInFirestore(studentId, newStatus);
     } catch (fErr) {
       console.warn('Firestore update status notice:', fErr);
     }
@@ -1509,13 +1545,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30">
                   {studentsList.length} Registered
                 </span>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 flex items-center gap-1">
-                  <Cloud className="w-3 h-3 text-cyan-400" />
-                  <span>Cloud Synced</span>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-950/70 text-teal-300 border border-teal-500/30 flex items-center gap-1">
+                  <Cloud className="w-3 h-3 text-teal-400 animate-pulse" />
+                  <span>Firestore Authoritative (Real-Time)</span>
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                All registered nursing students appear here automatically from registration and Firebase
+                Authoritative Firestore student roster synchronized in real-time. Every student signup automatically appears here.
               </p>
             </div>
 
@@ -1618,6 +1654,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700">
                           {stud.levelName || 'ND 1'}
                         </span>
+                        {stud.emailVerified ? (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            Verified Email
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                            Unverified
+                          </span>
+                        )}
                       </div>
                       <p className="text-[11px] text-slate-400 mt-0.5">
                         <span className="text-slate-300 font-mono">{stud.email}</span> •{' '}

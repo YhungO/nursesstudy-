@@ -229,7 +229,11 @@ export const api = {
     request<{ success: boolean }>(`/api/exams/${id}`, { method: 'DELETE' }),
   submitExam: (
     id: string,
-    payload: { answers: Record<string, 'A' | 'B' | 'C' | 'D' | null>; timeSpentSeconds: number }
+    payload: {
+      answers: Record<string, 'A' | 'B' | 'C' | 'D' | null>;
+      timeSpentSeconds: number;
+      submissionReason?: 'manual' | 'timeout' | 'forced';
+    }
   ) =>
     request<{ attempt: ExamAttempt; detailedAnswers: any[] }>(`/api/exams/${id}/submit`, {
       method: 'POST',

@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { CBTExam, Question, ExamAttempt } from '../../types';
 import { api } from '../../services/api';
 import { saveAttemptToFirestore } from '../../services/firestoreService';
+import { cbtSessionManager, CbtActiveSession } from '../../services/cbtSessionManager';
 import {
   Clock,
   AlertTriangle,
@@ -15,6 +16,9 @@ import {
   ShieldAlert,
   Award,
   BookOpen,
+  HelpCircle,
+  RefreshCw,
+  Info,
 } from 'lucide-react';
 import { ExamTopBar } from './cbt/ExamTopBar';
 import { ExamContextBar } from './cbt/ExamContextBar';
@@ -54,38 +58,230 @@ export const CbtExam: React.FC<CbtExamProps> = ({
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showPaletteDrawer, setShowPaletteDrawer] = useState(false);
 
+  // Session restoration and failure banners
+  const [restoredBanner, setRestoredBanner] = useState<{ message: string; count: number } | null>(null);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+
   // Result state
   const [examResult, setExamResult] = useState<{
     attempt: ExamAttempt;
     detailedAnswers: any[];
   } | null>(null);
 
+  // CRITICAL REFS: Bypasses React state stale closures during async callbacks and setInterval ticks
+  const answersRef = useRef<Record<string, 'A' | 'B' | 'C' | 'D' | null>>({});
+  const examDataRef = useRef<(CBTExam & { questions: Question[] }) | null>(null);
+  const examStartTimeRef = useRef<number>(Date.now());
+  const examEndTimeRef = useRef<number>(0);
   const timerRef = useRef<any>(null);
-  const startTimeRef = useRef<number>(Date.now());
+  const isSubmittingRef = useRef<boolean>(false);
+  const hasSubmittedRef = useRef<boolean>(false);
 
-  // Auto-load if activeExamId passed
+  // Format seconds to mm:ss
+  const formatTime = (totalSec: number) => {
+    const mins = Math.floor(Math.max(0, totalSec) / 60);
+    const secs = Math.max(0, totalSec) % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Sync examData to ref
   useEffect(() => {
-    if (activeExamId) {
-      const found = exams?.find((e) => e.id === activeExamId);
-      if (found) {
-        startExam(found.id);
-      }
-    }
-  }, [activeExamId, exams]);
+    examDataRef.current = examData;
+  }, [examData]);
 
+  // Sync selectedAnswers to ref continuously
+  useEffect(() => {
+    answersRef.current = { ...selectedAnswers };
+  }, [selectedAnswers]);
+
+  // Central Submission Handler
+  const submitCBT = useCallback(
+    async (reason: 'manual' | 'timeout' | 'forced') => {
+      // 1. Concurrency lock to prevent double submissions
+      if (hasSubmittedRef.current || isSubmittingRef.current) {
+        return;
+      }
+      hasSubmittedRef.current = true;
+      isSubmittingRef.current = true;
+      setIsSubmitting(true);
+      setShowSubmitConfirm(false);
+      setSubmissionError(null);
+
+      // 2. Stop timer immediately
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+
+      const currentExam = examDataRef.current;
+      if (!currentExam) {
+        hasSubmittedRef.current = false;
+        isSubmittingRef.current = false;
+        setIsSubmitting(false);
+        return;
+      }
+
+      // 3. Obtain the absolute latest answers from synchronous ref
+      const finalAnswers: Record<string, 'A' | 'B' | 'C' | 'D' | null> = {
+        ...answersRef.current,
+      };
+
+      // 4. Fallback check: merge any answers saved in persistent local storage
+      const savedSession = cbtSessionManager.getSession(currentExam.id);
+      if (savedSession?.answers) {
+        for (const [qid, opt] of Object.entries(savedSession.answers)) {
+          if ((finalAnswers[qid] === undefined || finalAnswers[qid] === null) && opt !== null) {
+            finalAnswers[qid] = opt;
+          }
+        }
+      }
+
+      // 5. Calculate exam duration and time spent
+      const totalDurationSec = (currentExam.durationMinutes || 30) * 60;
+      const elapsedSec = Math.floor((Date.now() - examStartTimeRef.current) / 1000);
+      const timeSpentSeconds =
+        reason === 'timeout'
+          ? totalDurationSec
+          : Math.min(totalDurationSec, Math.max(1, elapsedSec));
+
+      try {
+        const result = await api.submitExam(currentExam.id, {
+          answers: finalAnswers,
+          timeSpentSeconds,
+          submissionReason: reason,
+        });
+
+        // Clear active session upon verified submission
+        cbtSessionManager.clearSession(currentExam.id);
+        cbtSessionManager.removePendingSubmission(currentExam.id);
+
+        setExamResult(result);
+
+        // Background sync to Firestore
+        if (result?.attempt) {
+          saveAttemptToFirestore(result.attempt).catch((err) => {
+            console.warn('[CBT] Notice: background sync to Firestore:', err);
+          });
+        }
+      } catch (err: any) {
+        console.error('[CBT] Submission network error:', err);
+
+        // Queue in pending submissions for offline recovery
+        cbtSessionManager.savePendingSubmission({
+          examId: currentExam.id,
+          answers: finalAnswers,
+          timeSpentSeconds,
+          submissionReason: reason,
+          timestamp: Date.now(),
+        });
+
+        setSubmissionError(
+          err.message ||
+            'Network connectivity error while submitting. All your answers are safely preserved on your device. Please click "Retry Submission" below.'
+        );
+
+        // Unlock submission state so the student can retry without losing their work
+        hasSubmittedRef.current = false;
+        isSubmittingRef.current = false;
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    []
+  );
+
+  // Start or resume an examination
   const startExam = async (examId: string) => {
     setLoading(true);
     setError(null);
+    setSubmissionError(null);
+    setRestoredBanner(null);
+    hasSubmittedRef.current = false;
+    isSubmittingRef.current = false;
+
     try {
       const data = await api.getExamDetails(examId);
+      examDataRef.current = data;
       setExamData(data);
       setSelectedExam(data);
-      setCurrentIndex(0);
+
+      // Check for active preserved session in localStorage
+      const existingSession = cbtSessionManager.getSession(examId);
+
+      if (existingSession && existingSession.endTime) {
+        const now = Date.now();
+        const isExpired = now >= existingSession.endTime;
+
+        if (!isExpired) {
+          // RESTORE ACTIVE IN-PROGRESS SESSION
+          const restoredAnswers = existingSession.answers || {};
+          answersRef.current = { ...restoredAnswers };
+          setSelectedAnswers({ ...restoredAnswers });
+          setFlaggedQuestions(existingSession.flaggedQuestions || {});
+          setCurrentIndex(
+            Math.min(
+              (data.questions?.length || 1) - 1,
+              Math.max(0, existingSession.currentIndex || 0)
+            )
+          );
+
+          examStartTimeRef.current = existingSession.startTime;
+          examEndTimeRef.current = existingSession.endTime;
+
+          const remainingSec = Math.max(0, Math.ceil((existingSession.endTime - now) / 1000));
+          setSecondsRemaining(remainingSec);
+
+          const answeredCount = Object.values(restoredAnswers).filter(Boolean).length;
+          setRestoredBanner({
+            message: `Active CBT session resumed. ${answeredCount} answered question${
+              answeredCount === 1 ? '' : 's'
+            } preserved.`,
+            count: answeredCount,
+          });
+
+          setExamResult(null);
+          return;
+        } else {
+          // EXAM EXPIRED WHILE AWAY: Load answers and auto-submit immediately
+          const restoredAnswers = existingSession.answers || {};
+          answersRef.current = { ...restoredAnswers };
+          setSelectedAnswers({ ...restoredAnswers });
+          examStartTimeRef.current = existingSession.startTime;
+          examEndTimeRef.current = existingSession.endTime;
+
+          setTimeout(() => {
+            submitCBT('timeout');
+          }, 100);
+          return;
+        }
+      }
+
+      // INITIALIZE BRAND NEW SESSION
+      const now = Date.now();
+      const durationSec = (data.durationMinutes || 30) * 60;
+      const deadline = now + durationSec * 1000;
+
+      examStartTimeRef.current = now;
+      examEndTimeRef.current = deadline;
+      answersRef.current = {};
       setSelectedAnswers({});
       setFlaggedQuestions({});
-      setSecondsRemaining(data.durationMinutes * 60);
-      startTimeRef.current = Date.now();
+      setCurrentIndex(0);
+      setSecondsRemaining(durationSec);
       setExamResult(null);
+
+      // Persist fresh session immediately
+      cbtSessionManager.saveSession({
+        examId: data.id,
+        examTitle: data.title,
+        startTime: now,
+        endTime: deadline,
+        durationMinutes: data.durationMinutes || 30,
+        currentIndex: 0,
+        answers: {},
+        flaggedQuestions: {},
+        lastUpdated: now,
+      });
     } catch (err: any) {
       setError(err.message || 'Failed to initialize CBT examination');
     } finally {
@@ -93,82 +289,206 @@ export const CbtExam: React.FC<CbtExamProps> = ({
     }
   };
 
-  // Timer loop
+  // Auto-start if activeExamId was provided
+  useEffect(() => {
+    if (activeExamId) {
+      startExam(activeExamId);
+    }
+  }, [activeExamId]);
+
+  // Wall-Clock Timer Loop & Mobile Tab Visibility Listener
   useEffect(() => {
     if (!examData || examResult) return;
 
-    timerRef.current = setInterval(() => {
-      setSecondsRemaining((prev) => {
-        if (prev <= 1) {
+    const checkTimerTick = () => {
+      if (hasSubmittedRef.current || isSubmittingRef.current) return;
+
+      const now = Date.now();
+      const deadline = examEndTimeRef.current;
+      if (!deadline) return;
+
+      const remainingSec = Math.max(0, Math.ceil((deadline - now) / 1000));
+      setSecondsRemaining(remainingSec);
+
+      if (remainingSec <= 0) {
+        if (timerRef.current) {
           clearInterval(timerRef.current);
-          handleForceSubmit();
-          return 0;
+          timerRef.current = null;
         }
-        return prev - 1;
-      });
-    }, 1000);
+        submitCBT('timeout');
+      }
+    };
+
+    // Run immediately
+    checkTimerTick();
+
+    // Tick every 1000ms
+    timerRef.current = setInterval(checkTimerTick, 1000);
+
+    // Resilient to phone sleep, background tabs, and browser throttling
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkTimerTick();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', checkTimerTick);
 
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [examData, examResult]);
-
-  const handleForceSubmit = () => {
-    handleSubmitExam();
-  };
-
-  const handleSelectOption = (questionId: string | number, option: 'A' | 'B' | 'C' | 'D') => {
-    setSelectedAnswers((prev) => ({
-      ...prev,
-      [questionId]: option,
-    }));
-  };
-
-  const toggleFlag = (questionId: string | number) => {
-    setFlaggedQuestions((prev) => ({
-      ...prev,
-      [questionId]: !prev[questionId],
-    }));
-  };
-
-  const handleSubmitExam = async () => {
-    if (!examData || isSubmitting) return;
-    setIsSubmitting(true);
-    setShowSubmitConfirm(false);
-
-    if (timerRef.current) clearInterval(timerRef.current);
-
-    const timeSpentSeconds = Math.floor((Date.now() - startTimeRef.current) / 1000);
-
-    try {
-      const result = await api.submitExam(examData.id, {
-        answers: selectedAnswers,
-        timeSpentSeconds,
-      });
-      setExamResult(result);
-      if (result?.attempt) {
-        saveAttemptToFirestore(result.attempt).catch(() => {});
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to submit examination');
-    } finally {
-      setIsSubmitting(false);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', checkTimerTick);
+    };
+  }, [examData?.id, !!examResult, submitCBT]);
+
+  // Retry offline pending submissions when online
+  useEffect(() => {
+    const handleOnline = () => {
+      const pendingList = cbtSessionManager.getPendingSubmissions();
+      if (pendingList.length > 0 && examData) {
+        const matching = pendingList.find((p) => p.examId === examData.id);
+        if (matching && !examResult && !isSubmittingRef.current) {
+          submitCBT(matching.submissionReason);
+        }
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [examData, examResult, submitCBT]);
+
+  // Option selection with immediate ref update and persistent auto-save
+  const handleSelectOption = (questionId: string | number, option: 'A' | 'B' | 'C' | 'D') => {
+    if (isSubmittingRef.current || hasSubmittedRef.current) return;
+    const qKey = String(questionId);
+
+    // 1. Immediately update ref (synchronous source of truth)
+    answersRef.current[qKey] = option;
+
+    // 2. Update React state
+    setSelectedAnswers((prev) => {
+      const next = { ...prev, [qKey]: option };
+
+      // 3. Immediately persist to localStorage
+      if (examDataRef.current) {
+        cbtSessionManager.saveSession({
+          examId: examDataRef.current.id,
+          examTitle: examDataRef.current.title,
+          startTime: examStartTimeRef.current,
+          endTime: examEndTimeRef.current,
+          durationMinutes: examDataRef.current.durationMinutes || 30,
+          currentIndex,
+          answers: next,
+          flaggedQuestions,
+          lastUpdated: Date.now(),
+        });
+      }
+
+      return next;
+    });
+  };
+
+  // Flag toggle with persistent auto-save
+  const toggleFlag = (questionId: string | number) => {
+    if (isSubmittingRef.current || hasSubmittedRef.current) return;
+    const qKey = String(questionId);
+
+    setFlaggedQuestions((prev) => {
+      const next = { ...prev, [qKey]: !prev[qKey] };
+
+      if (examDataRef.current) {
+        cbtSessionManager.saveSession({
+          examId: examDataRef.current.id,
+          examTitle: examDataRef.current.title,
+          startTime: examStartTimeRef.current,
+          endTime: examEndTimeRef.current,
+          durationMinutes: examDataRef.current.durationMinutes || 30,
+          currentIndex,
+          answers: answersRef.current,
+          flaggedQuestions: next,
+          lastUpdated: Date.now(),
+        });
+      }
+
+      return next;
+    });
+  };
+
+  // Navigation handlers
+  const handleNext = () => {
+    if (!examData) return;
+    const nextIdx = Math.min(examData.questions.length - 1, currentIndex + 1);
+    setCurrentIndex(nextIdx);
+    if (examDataRef.current) {
+      cbtSessionManager.saveSession({
+        examId: examDataRef.current.id,
+        examTitle: examDataRef.current.title,
+        startTime: examStartTimeRef.current,
+        endTime: examEndTimeRef.current,
+        durationMinutes: examDataRef.current.durationMinutes || 30,
+        currentIndex: nextIdx,
+        answers: answersRef.current,
+        flaggedQuestions,
+        lastUpdated: Date.now(),
+      });
     }
   };
 
-  // Format seconds to mm:ss
-  const formatTime = (totalSec: number) => {
-    const mins = Math.floor(totalSec / 60);
-    const secs = totalSec % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  const handlePrevious = () => {
+    if (!examData) return;
+    const prevIdx = Math.max(0, currentIndex - 1);
+    setCurrentIndex(prevIdx);
+    if (examDataRef.current) {
+      cbtSessionManager.saveSession({
+        examId: examDataRef.current.id,
+        examTitle: examDataRef.current.title,
+        startTime: examStartTimeRef.current,
+        endTime: examEndTimeRef.current,
+        durationMinutes: examDataRef.current.durationMinutes || 30,
+        currentIndex: prevIdx,
+        answers: answersRef.current,
+        flaggedQuestions,
+        lastUpdated: Date.now(),
+      });
+    }
   };
 
-  // 1. Result Display View
+  const handleSelectQuestion = (idx: number) => {
+    if (!examData) return;
+    setCurrentIndex(idx);
+    setShowPaletteDrawer(false);
+    if (examDataRef.current) {
+      cbtSessionManager.saveSession({
+        examId: examDataRef.current.id,
+        examTitle: examDataRef.current.title,
+        startTime: examStartTimeRef.current,
+        endTime: examEndTimeRef.current,
+        durationMinutes: examDataRef.current.durationMinutes || 30,
+        currentIndex: idx,
+        answers: answersRef.current,
+        flaggedQuestions,
+        lastUpdated: Date.now(),
+      });
+    }
+  };
+
+  // ==================== VIEW 1: COMPLETED RESULT DISPLAY ==================== //
   if (examResult) {
     const { attempt, detailedAnswers } = examResult;
     const passingScore = selectedExam?.passingScore ?? 50;
     const circumference = 2 * Math.PI * 52;
     const strokeDashoffset = circumference - (attempt.score / 100) * circumference;
+
+    const answeredCount = Array.isArray(attempt.answers)
+      ? attempt.answers.filter((a) => a.selectedOption !== null && a.selectedOption !== undefined).length
+      : attempt.correctCount;
+    const unansweredCount = Math.max(0, attempt.totalQuestions - answeredCount);
+    const wrongCount = Math.max(0, attempt.totalQuestions - attempt.correctCount);
+    const isTimeout = attempt.submissionReason === 'timeout';
 
     return (
       <div className="max-w-4xl mx-auto space-y-6 pb-16 animate-in fade-in">
@@ -185,7 +505,6 @@ export const CbtExam: React.FC<CbtExamProps> = ({
             <div className="flex flex-col items-center shrink-0">
               <div className="relative w-40 h-40 flex items-center justify-center">
                 <svg className="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
-                  {/* Background Track */}
                   <circle
                     cx="60"
                     cy="60"
@@ -195,7 +514,6 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                     strokeWidth="10"
                     className="text-slate-800/80"
                   />
-                  {/* Progress Arc */}
                   <circle
                     cx="60"
                     cy="60"
@@ -211,7 +529,6 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                     }`}
                   />
                 </svg>
-                {/* Center Content */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                   <span className="text-3xl font-extrabold tracking-tight text-white">
                     {attempt.score}%
@@ -221,6 +538,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                   </span>
                 </div>
               </div>
+
               <div className="mt-2 text-center">
                 <span
                   className={`inline-block text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full border ${
@@ -229,51 +547,75 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                       : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
                   }`}
                 >
-                  {attempt.passed ? 'Status: Passed' : 'Status: Failed'}
+                  {attempt.passed ? 'Status: Passed' : 'Status: Examination Failed'}
                 </span>
               </div>
             </div>
 
             {/* Score Details & Stats Breakdown */}
             <div className="flex-1 text-center md:text-left space-y-4">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 text-white backdrop-blur-xs border border-white/15">
-                <Award className="w-3.5 h-3.5 text-amber-400" />
-                <span>Automated CBT Examination Result</span>
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 text-white backdrop-blur-xs border border-white/15">
+                  <Award className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Verified CBT Examination Result</span>
+                </div>
+
+                {/* Submission Mode Badge */}
+                <span
+                  className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${
+                    isTimeout
+                      ? 'bg-amber-950/70 border-amber-500/40 text-amber-300'
+                      : 'bg-teal-950/70 border-teal-500/40 text-teal-300'
+                  }`}
+                >
+                  <Clock className="w-3 h-3" />
+                  <span>
+                    {isTimeout ? 'Auto-submitted (Timer Expired)' : 'Submitted by Student'}
+                  </span>
+                </span>
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-                {attempt.passed ? '🎉 Excellent Job! Exam Passed' : '⚠️ Examination Threshold Not Met'}
+                {attempt.passed ? '🎉 Congratulations! Benchmark Achieved' : '⚠️ Examination Threshold Not Met'}
               </h1>
 
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-xl">
-                The official passing benchmark is <strong className="text-white">{passingScore}%</strong>. You answered{' '}
-                <strong className="text-white">{attempt.correctCount} out of {attempt.totalQuestions} questions</strong> correctly in{' '}
+                Official passing benchmark is <strong className="text-white">{passingScore}%</strong>. You answered{' '}
+                <strong className="text-white">{answeredCount} of {attempt.totalQuestions} questions</strong> ({attempt.correctCount} correct, {wrongCount} wrong, {unansweredCount} unanswered) in{' '}
                 <strong className="text-white">{Math.round(attempt.timeSpentSeconds / 60)} minutes</strong>.
               </p>
 
-              {/* 3 Metric Gauges Grid */}
-              <div className="grid grid-cols-3 gap-3 pt-2">
+              {/* 4 Metric Stats Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
                 <div className="bg-slate-900/80 p-3 rounded-2xl border border-slate-800 text-center">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                    Passing Cutoff
+                    Answered
                   </span>
-                  <span className="text-base font-extrabold text-white mt-0.5 block">{passingScore}%</span>
-                </div>
-                <div className="bg-slate-900/80 p-3 rounded-2xl border border-slate-800 text-center">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                    Avg Speed / Q
-                  </span>
-                  <span className="text-base font-extrabold text-white mt-0.5 block">
-                    {attempt.totalQuestions > 0
-                      ? Math.round(attempt.timeSpentSeconds / attempt.totalQuestions)
-                      : 0}s
+                  <span className="text-base font-extrabold text-teal-400 mt-0.5 block">
+                    {answeredCount}/{attempt.totalQuestions}
                   </span>
                 </div>
                 <div className="bg-slate-900/80 p-3 rounded-2xl border border-slate-800 text-center">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                    Total Time
+                    Unanswered
                   </span>
-                  <span className="text-base font-extrabold text-white mt-0.5 block">
+                  <span className={`text-base font-extrabold mt-0.5 block ${unansweredCount > 0 ? 'text-amber-400' : 'text-slate-300'}`}>
+                    {unansweredCount}
+                  </span>
+                </div>
+                <div className="bg-slate-900/80 p-3 rounded-2xl border border-slate-800 text-center">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                    Correct Keys
+                  </span>
+                  <span className="text-base font-extrabold text-emerald-400 mt-0.5 block">
+                    {attempt.correctCount}
+                  </span>
+                </div>
+                <div className="bg-slate-900/80 p-3 rounded-2xl border border-slate-800 text-center">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                    Time Spent
+                  </span>
+                  <span className="text-base font-extrabold text-white mt-0.5 block font-mono">
                     {formatTime(attempt.timeSpentSeconds)}
                   </span>
                 </div>
@@ -281,7 +623,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
 
               <div className="pt-3 flex flex-wrap items-center justify-center md:justify-start gap-3">
                 <button
-                  onClick={() => startExam(selectedExam!.id)}
+                  onClick={() => selectedExam && startExam(selectedExam.id)}
                   className="px-5 py-2.5 bg-white text-slate-950 hover:bg-slate-100 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
                 >
                   <RotateCcw className="w-4 h-4 text-teal-600" />
@@ -309,17 +651,23 @@ export const CbtExam: React.FC<CbtExamProps> = ({
               Clinical Performance & Rationales Breakdown
             </h2>
             <span className="text-xs font-medium text-slate-400">
-              Review correct keys and distractors
+              Review correct keys and clinical distractors
             </span>
           </div>
 
           {detailedAnswers.map((item, idx) => {
             const isCorrect = item.isCorrect;
+            const isUnanswered = item.selectedOption === null || item.selectedOption === undefined;
+
             return (
               <div
-                key={item.questionId}
+                key={item.questionId || idx}
                 className={`p-6 bg-[#111827] rounded-2xl border transition-all shadow-md ${
-                  isCorrect ? 'border-emerald-500/40' : 'border-rose-500/40'
+                  isCorrect
+                    ? 'border-emerald-500/40'
+                    : isUnanswered
+                    ? 'border-slate-700'
+                    : 'border-rose-500/40'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2 mb-2.5">
@@ -328,12 +676,18 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                     className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full flex items-center gap-1 border ${
                       isCorrect
                         ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : isUnanswered
+                        ? 'bg-slate-800 text-slate-300 border-slate-700'
                         : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
                     }`}
                   >
                     {isCorrect ? (
                       <>
                         <CheckCircle2 className="w-3.5 h-3.5" /> Correct (+1)
+                      </>
+                    ) : isUnanswered ? (
+                      <>
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> Not Answered (0)
                       </>
                     ) : (
                       <>
@@ -355,33 +709,35 @@ export const CbtExam: React.FC<CbtExamProps> = ({
 
                 {/* Options Review */}
                 <div className="space-y-2 mb-4">
-                  {((item.options || []).map((opt: any, optIdx: number) => {
-                    if (typeof opt === 'string') {
-                      const letters = ['A', 'B', 'C', 'D'];
-                      return { id: letters[optIdx] || 'A', text: opt };
-                    }
-                    return opt;
-                  })).map((opt: any) => {
-                    const isOptionCorrect = opt.id === item.correctOption;
-                    const isSelectedByStudent = opt.id === item.selectedOption;
+                  {(item.options || []).map((opt: any, optIdx: number) => {
+                    const letters = ['A', 'B', 'C', 'D'];
+                    const optObj =
+                      typeof opt === 'string'
+                        ? { id: letters[optIdx] || 'A', text: opt }
+                        : opt;
+
+                    const isOptionCorrect = optObj.id === item.correctOption;
+                    const isSelectedByStudent = optObj.id === item.selectedOption;
 
                     let optStyle = 'bg-slate-900/60 border-slate-800 text-slate-300';
                     if (isOptionCorrect) {
-                      optStyle = 'bg-emerald-950/60 border-emerald-500 text-emerald-200 font-bold ring-1 ring-emerald-500/40';
+                      optStyle =
+                        'bg-emerald-950/60 border-emerald-500 text-emerald-200 font-bold ring-1 ring-emerald-500/40';
                     } else if (isSelectedByStudent && !isOptionCorrect) {
-                      optStyle = 'bg-rose-950/60 border-rose-500 text-rose-200 ring-1 ring-rose-500/40';
+                      optStyle =
+                        'bg-rose-950/60 border-rose-500 text-rose-200 ring-1 ring-rose-500/40';
                     }
 
                     return (
                       <div
-                        key={opt.id}
+                        key={optObj.id}
                         className={`p-3 rounded-xl border text-xs flex items-center justify-between ${optStyle}`}
                       >
                         <div className="flex items-center gap-2.5">
                           <span className="w-5 h-5 rounded-md bg-slate-800 text-slate-300 font-bold text-[11px] flex items-center justify-center">
-                            {opt.id}
+                            {optObj.id}
                           </span>
-                          <span>{opt.text}</span>
+                          <span>{optObj.text}</span>
                         </div>
                         {isOptionCorrect && (
                           <span className="text-[10px] font-bold text-emerald-400 uppercase">
@@ -398,13 +754,15 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                   })}
                 </div>
 
-                {/* Explanation */}
+                {/* Clinical Rationale */}
                 <div className="p-4 rounded-xl bg-teal-950/40 border border-teal-500/30 text-xs text-slate-200 space-y-1">
                   <div className="font-bold text-teal-300 flex items-center gap-1.5">
                     <BookOpen className="w-3.5 h-3.5 text-teal-400" />
                     <span>Clinical Rationale</span>
                   </div>
-                  <p className="leading-relaxed">{item.explanation || item.rationale || 'No rationale available.'}</p>
+                  <p className="leading-relaxed">
+                    {item.explanation || item.rationale || 'No rationale available.'}
+                  </p>
                 </div>
               </div>
             );
@@ -414,7 +772,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
     );
   }
 
-  // 2. Active Testing Session View
+  // ==================== VIEW 2: ACTIVE EXAMINATION TESTING SESSION ==================== //
   if (examData) {
     const currentQ = examData.questions[currentIndex];
     const totalQ = examData.questions.length;
@@ -425,7 +783,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
 
     return (
       <div className="min-h-[calc(100vh-6rem)] flex flex-col justify-between -mx-4 sm:mx-auto max-w-3xl pb-2 animate-in fade-in duration-150">
-        {/* 1. TOP ACTION BAR */}
+        {/* TOP ACTION BAR WITH LIVE COUNTDOWN TIMER */}
         <ExamTopBar
           onExitClick={() => setShowExitConfirm(true)}
           isFlagged={isFlagged}
@@ -438,7 +796,52 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           totalQuestions={totalQ}
         />
 
-        {/* 2. EXAM/SECTION CONTEXT & 3. QUESTION PROGRESS */}
+        {/* RESTORED SESSION BANNER */}
+        {restoredBanner && (
+          <div className="mx-4 mt-2 p-3 bg-teal-950/70 border border-teal-500/40 rounded-xl text-xs text-teal-200 flex items-center justify-between gap-2 shadow-sm animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <Info className="w-4 h-4 text-teal-400 shrink-0" />
+              <span>{restoredBanner.message}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setRestoredBanner(null)}
+              className="text-teal-400 hover:text-white text-[11px] font-bold px-2 py-0.5 rounded cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {/* SUBMISSION NETWORK NOTICE / RETRY BUTTON */}
+        {submissionError && (
+          <div className="mx-4 mt-2 p-4 bg-rose-950/80 border border-rose-500/60 rounded-xl text-xs text-rose-200 space-y-2 shadow-lg animate-in fade-in">
+            <div className="flex items-start gap-2.5">
+              <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-white text-sm">Submission Incomplete</p>
+                <p className="mt-0.5 leading-relaxed">{submissionError}</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => submitCBT('timeout')}
+                disabled={isSubmitting}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isSubmitting ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="w-4 h-4" />
+                )}
+                <span>Retry Submission</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* EXAM/SECTION CONTEXT & QUESTION PROGRESS */}
         <div className="w-full">
           <ExamContextBar
             levelName={examData.levelId ? 'ND1 NURSING' : undefined}
@@ -453,41 +856,42 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           />
         </div>
 
-        {/* 4. QUESTION CONTENT & 5. ANSWER OPTIONS (MAIN FOCUS) */}
-        <main className="flex-1 flex flex-col justify-start py-2 sm:py-3 space-y-4">
+        {/* QUESTION CONTENT & MULTIPLE-CHOICE OPTIONS */}
+        <div className="flex-1 flex flex-col justify-center py-2 sm:py-4">
           {currentQ ? (
-            <>
+            <div className="space-y-4">
               <QuestionContent
-                question={currentQ}
-                currentIndex={currentIndex}
-                totalQuestions={totalQ}
+                questionId={currentQ.id}
+                scenario={currentQ.scenario}
+                questionText={currentQ.questionText || currentQ.question}
               />
 
               <AnswerOptions
                 questionId={currentQ.id}
                 options={currentQ.options || []}
                 selectedAnswer={currentAnswer}
-                onSelectOption={(optionId) => handleSelectOption(currentQ.id, optionId)}
+                onSelectOption={(opt) => handleSelectOption(currentQ.id, opt)}
               />
-            </>
+            </div>
           ) : (
-            <div className="text-center py-12 text-slate-400 text-sm">
-              No question found at this index.
+            <div className="text-center p-8 text-slate-400 text-xs">
+              <HelpCircle className="w-8 h-8 mx-auto mb-2 text-slate-600" />
+              <span>No questions found for this examination.</span>
             </div>
           )}
-        </main>
+        </div>
 
-        {/* 6. BOTTOM ACTION BAR */}
+        {/* BOTTOM NAVIGATION ACTION BAR (PREV / PALETTE / NEXT or FINISH) */}
         <BottomActionBar
           currentIndex={currentIndex}
           totalQuestions={totalQ}
-          onPrevious={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-          onNext={() => setCurrentIndex((prev) => Math.min(totalQ - 1, prev + 1))}
+          onPrevious={handlePrevious}
+          onNext={handleNext}
           onOpenPalette={() => setShowPaletteDrawer(true)}
           onSubmit={() => setShowSubmitConfirm(true)}
         />
 
-        {/* 7. QUESTION PALETTE DRAWER (ACCESSIBLE ON DEMAND) */}
+        {/* QUESTION PALETTE DRAWER */}
         <QuestionPaletteDrawer
           isOpen={showPaletteDrawer}
           onClose={() => setShowPaletteDrawer(false)}
@@ -495,15 +899,18 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           currentIndex={currentIndex}
           selectedAnswers={selectedAnswers}
           flaggedQuestions={flaggedQuestions}
-          onSelectQuestion={(idx) => setCurrentIndex(idx)}
-          onSubmitClick={() => setShowSubmitConfirm(true)}
+          onSelectQuestion={handleSelectQuestion}
+          onSubmitClick={() => {
+            setShowPaletteDrawer(false);
+            setShowSubmitConfirm(true);
+          }}
         />
 
-        {/* 9. SUBMIT / FINISH EXAM CONFIRMATION DIALOG */}
+        {/* SUBMIT / FINISH CONFIRMATION DIALOG */}
         <ExamSubmitDialog
           isOpen={showSubmitConfirm}
           onCancel={() => setShowSubmitConfirm(false)}
-          onConfirm={handleSubmitExam}
+          onConfirm={() => submitCBT('manual')}
           answeredCount={answeredCount}
           totalQuestions={totalQ}
           flaggedCount={flaggedCount}
@@ -519,6 +926,9 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           onConfirm={() => {
             setShowExitConfirm(false);
             if (timerRef.current) clearInterval(timerRef.current);
+            if (examData) {
+              cbtSessionManager.clearSession(examData.id);
+            }
             setExamData(null);
             setSelectedExam(null);
             if (onNavigateHome) onNavigateHome();
@@ -528,7 +938,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
     );
   }
 
-  // 3. Examination Lobby View
+  // ==================== VIEW 3: EXAMINATION LOBBY ==================== //
   return (
     <div className="space-y-6 pb-16">
       <div>
@@ -537,7 +947,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           <span>Timed Computer-Based Testing (CBT) Hall</span>
         </h1>
         <p className="text-xs sm:text-sm text-slate-400 mt-1">
-          Simulate nursing council examination conditions with an active countdown timer and automated scoring.
+          Simulate nursing council examination conditions with active wall-clock countdown timers, auto-save state recovery, and automated grading.
         </p>
       </div>
 
@@ -601,7 +1011,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                 <button
                   disabled={loading}
                   onClick={() => startExam(exam.id)}
-                  className="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-purple-900/30 flex items-center justify-center gap-1.5"
+                  className="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-purple-900/30 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   <Clock className="w-4 h-4" />
                   <span>Start Exam</span>

@@ -20,6 +20,28 @@
       },
       "required": ["id", "name", "email", "role"]
     },
+    "Student": {
+      "title": "Student",
+      "description": "Registered nursing student profile stored in students/{uid}",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["student"] },
+        "levelId": { "type": "string" },
+        "nursingLevel": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "suspended"] },
+        "school": { "type": "string" },
+        "gradYear": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "emailVerified": { "type": "boolean" }
+      },
+      "required": ["uid", "email"]
+    },
     "NursingLevel": {
       "title": "NursingLevel",
       "description": "Academic cohort level (ND 1, ND 2, HND, Year 1-4, RN Prep)",
@@ -191,6 +213,7 @@
     }
   },
   "firestore": {
+    "students": { "schema": "Student", "description": "Student profiles and directories" },
     "users": { "schema": "User", "description": "User profiles" },
     "levels": { "schema": "NursingLevel", "description": "Academic levels" },
     "subjects": { "schema": "Subject", "description": "Nursing subjects" },

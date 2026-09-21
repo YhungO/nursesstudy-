@@ -468,22 +468,116 @@ export function subscribeToUsers(
   callback: (users: User[]) => void,
   onError?: (err: any) => void
 ) {
+  return subscribeToStudents(callback, onError);
+}
+
+/**
+ * Real-time listener for the Authoritative Students Directory in Firestore.
+ * Subscribes to the `students` collection and reconciles with `users` collection.
+ * Ensures every registered student appears immediately without page reload.
+ */
+export function subscribeToStudents(
+  callback: (students: User[]) => void,
+  onError?: (err: any) => void
+): () => void {
   try {
-    const q = query(collection(db, COLLECTIONS.USERS));
-    return onSnapshot(
-      q,
+    // Primary subscription to students/{uid} collection
+    const studentsCol = collection(db, 'students');
+    const unsubStudents = onSnapshot(
+      studentsCol,
       (snapshot) => {
-        const items: User[] = [];
-        snapshot.forEach((d) => items.push({ ...(d.data() as User), id: d.id }));
-        callback(items);
+        const studentMap = new Map<string, User>();
+
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          const uid = data.uid || data.id || docSnap.id;
+          const studentProfile: User = {
+            id: uid,
+            name: data.fullName || data.name || (data.email ? data.email.split('@')[0] : 'Nursing Student'),
+            email: data.email || '',
+            role: 'student',
+            levelId: data.levelId || data.nursingLevel || 'lvl-nd1',
+            status: data.status || 'active',
+            school: data.school || 'College of Nursing Sciences',
+            gradYear: data.gradYear || '2027',
+            createdAt: data.createdAt || new Date().toISOString(),
+          };
+          (studentProfile as any).emailVerified = Boolean(data.emailVerified);
+          studentMap.set(uid, studentProfile);
+        });
+
+        // Also cross-fetch / merge from users collection to reconcile any students that might only exist there
+        getDocs(collection(db, COLLECTIONS.USERS))
+          .then((usersSnap) => {
+            usersSnap.forEach((userDoc) => {
+              const uData = userDoc.data() as User;
+              if (uData.role === 'student' || (!uData.role && uData.levelId)) {
+                const uid = uData.id || userDoc.id;
+                if (!studentMap.has(uid)) {
+                  const reconciledProfile: User = {
+                    id: uid,
+                    name: uData.name || (uData.email ? uData.email.split('@')[0] : 'Nursing Student'),
+                    email: uData.email || '',
+                    role: 'student',
+                    levelId: uData.levelId || 'lvl-nd1',
+                    status: uData.status || 'active',
+                    school: uData.school || 'College of Nursing Sciences',
+                    gradYear: uData.gradYear || '2027',
+                    createdAt: uData.createdAt || new Date().toISOString(),
+                  };
+                  (reconciledProfile as any).emailVerified = Boolean((uData as any).emailVerified);
+                  studentMap.set(uid, reconciledProfile);
+
+                  // Asynchronously reconcile missing students/{uid} document in Firestore
+                  setDoc(
+                    doc(db, 'students', uid),
+                    {
+                      id: uid,
+                      uid: uid,
+                      fullName: reconciledProfile.name,
+                      name: reconciledProfile.name,
+                      email: reconciledProfile.email,
+                      role: 'student',
+                      nursingLevel: reconciledProfile.levelId,
+                      levelId: reconciledProfile.levelId,
+                      school: reconciledProfile.school,
+                      gradYear: reconciledProfile.gradYear,
+                      status: reconciledProfile.status,
+                      createdAt: reconciledProfile.createdAt,
+                      updatedAt: new Date().toISOString(),
+                      emailVerified: Boolean((reconciledProfile as any).emailVerified),
+                    },
+                    { merge: true }
+                  ).catch(() => {});
+                }
+              }
+            });
+
+            const sortedStudents = Array.from(studentMap.values()).sort(
+              (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+            );
+            callback(sortedStudents);
+          })
+          .catch((uErr) => {
+            console.warn('[Firestore] users cross-reconciliation notice:', uErr);
+            const sortedStudents = Array.from(studentMap.values()).sort(
+              (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+            );
+            callback(sortedStudents);
+          });
       },
       (error) => {
-        console.warn('Firestore users listener notice:', error);
+        console.warn('[Firestore] students collection listener notice:', error);
         if (onError) onError(error);
       }
     );
+
+    return () => {
+      unsubStudents();
+    };
   } catch (err) {
-    console.warn('Could not attach users listener:', err);
+    console.warn('[Firestore] Could not attach students listener:', err);
+    if (onError) onError(err);
     return () => {};
   }
 }
@@ -884,6 +978,11 @@ export async function saveAttemptToFirestore(attempt: ExamAttempt): Promise<void
           ? Math.round((attempt.correctCount / attempt.totalQuestions) * 100)
           : 0;
 
+      const answeredCount = Array.isArray(attempt.answers)
+        ? attempt.answers.filter((a) => a.selectedOption !== null && a.selectedOption !== undefined).length
+        : attempt.correctCount;
+      const unansweredCount = Math.max(0, attempt.totalQuestions - answeredCount);
+
       await setDoc(
         doc(db, 'students', attempt.userId, 'results', attempt.id),
         {
@@ -891,15 +990,21 @@ export async function saveAttemptToFirestore(attempt: ExamAttempt): Promise<void
           resultId: attempt.id,
           score: attempt.score,
           totalQuestions: attempt.totalQuestions,
+          answeredQuestions: answeredCount,
+          unansweredQuestions: unansweredCount,
           percentage,
           subject: attempt.subjectName || 'Nursing Assessment',
           examTitle: attempt.examTitle,
+          examId: attempt.examId,
           date: attempt.createdAt || new Date().toISOString(),
           duration: attempt.timeSpentSeconds,
           correctAnswers: attempt.correctCount,
           wrongAnswers: Math.max(0, attempt.totalQuestions - attempt.correctCount),
           passed: attempt.passed,
           type: attempt.type,
+          submissionReason: attempt.submissionReason || 'manual',
+          timeExpired: attempt.submissionReason === 'timeout',
+          submittedAt: attempt.createdAt || new Date().toISOString(),
           createdAt: attempt.createdAt || new Date().toISOString(),
         }
       ).catch((err) => {
@@ -971,8 +1076,68 @@ export async function toggleBookmarkInFirestore(
 }
 
 // User & Student Profile Operations
+// User & Student Profile Operations
+
+/**
+ * Authoritative save function for Student Profiles.
+ * Saves strictly to `students/{uid}` and `users/{uid}` using UID as document ID.
+ * Never stores passwords or sensitive security credentials.
+ */
+export async function saveStudentProfileToFirestore(student: User): Promise<boolean> {
+  const uid = student.id;
+  if (!uid) {
+    console.error('[Firestore] Cannot save student profile: missing UID');
+    return false;
+  }
+
+  const cleanEmail = (student.email || '').toLowerCase().trim();
+  const cleanName = (student.name || '').trim() || (cleanEmail ? cleanEmail.split('@')[0] : 'Nursing Student');
+  const level = student.levelId || 'lvl-nd1';
+  const school = (student.school || '').trim() || 'College of Nursing Sciences';
+  const gradYear = (student.gradYear || '').trim() || '2027';
+  const status = student.status || 'active';
+  const createdAt = student.createdAt || new Date().toISOString();
+  const updatedAt = new Date().toISOString();
+  const emailVerified = Boolean((student as any).emailVerified);
+
+  const studentDoc = {
+    id: uid,
+    uid: uid,
+    name: cleanName,
+    fullName: cleanName,
+    email: cleanEmail,
+    role: 'student' as const,
+    levelId: level,
+    nursingLevel: level,
+    school,
+    gradYear,
+    status,
+    createdAt,
+    updatedAt,
+    emailVerified,
+  };
+
+  try {
+    // 1. Primary write to authoritative students/{uid} document
+    await setDoc(doc(db, 'students', uid), studentDoc, { merge: true });
+
+    // 2. Synchronize to users/{uid} for general authentication profile compatibility
+    await setDoc(doc(db, COLLECTIONS.USERS, uid), studentDoc, { merge: true });
+
+    console.info(`[Firestore] Student profile successfully saved to students/${uid} and users/${uid}`);
+    return true;
+  } catch (err: any) {
+    console.error(`[Firestore] Error saving student profile for UID ${uid}:`, err);
+    return false;
+  }
+}
+
 export async function saveUserToFirestore(user: User): Promise<boolean> {
   try {
+    if (user.role === 'student' || !user.role) {
+      return await saveStudentProfileToFirestore(user);
+    }
+
     const { ...userDoc } = user as any;
     delete userDoc.password;
     delete userDoc.passwordResetToken;
@@ -985,23 +1150,6 @@ export async function saveUserToFirestore(user: User): Promise<boolean> {
       },
       { merge: true }
     );
-
-    // If student, also maintain synchronized profile in students/{uid}
-    if (user.role === 'student' || !user.role) {
-      await setDoc(
-        doc(db, 'students', user.id),
-        {
-          uid: user.id,
-          fullName: user.name,
-          email: user.email,
-          nursingLevel: user.levelId || 'lvl-nd1',
-          createdAt: user.createdAt || new Date().toISOString(),
-          emailVerified: (user as any).emailVerified ?? false,
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      ).catch(() => {});
-    }
 
     return true;
   } catch (err) {
@@ -1031,12 +1179,53 @@ export async function updateEmailVerificationInFirestore(
   }
 }
 
+export async function updateStudentStatusInFirestore(
+  studentId: string,
+  status: 'active' | 'suspended',
+  levelId?: string
+): Promise<boolean> {
+  try {
+    const updatePayload: Record<string, any> = {
+      status,
+      updatedAt: new Date().toISOString(),
+    };
+    if (levelId) {
+      updatePayload.levelId = levelId;
+      updatePayload.nursingLevel = levelId;
+    }
+
+    await setDoc(doc(db, 'students', studentId), updatePayload, { merge: true }).catch(() => {});
+    await setDoc(doc(db, COLLECTIONS.USERS, studentId), updatePayload, { merge: true }).catch(() => {});
+    return true;
+  } catch (err) {
+    console.warn('[Firestore] Failed to update student status:', err);
+    return false;
+  }
+}
+
 export async function getUserFromFirestore(userId: string): Promise<User | null> {
   try {
     const userDocRef = doc(db, COLLECTIONS.USERS, userId);
     const snap = await getDoc(userDocRef);
     if (snap.exists()) {
       return { ...(snap.data() as User), id: snap.id };
+    }
+
+    const studentDocRef = doc(db, 'students', userId);
+    const sSnap = await getDoc(studentDocRef);
+    if (sSnap.exists()) {
+      const sData = sSnap.data();
+      return {
+        id: sSnap.id,
+        name: sData.fullName || sData.name || 'Nursing Student',
+        email: sData.email || '',
+        role: 'student',
+        levelId: sData.levelId || sData.nursingLevel || 'lvl-nd1',
+        status: sData.status || 'active',
+        school: sData.school || 'College of Nursing Sciences',
+        gradYear: sData.gradYear || '2027',
+        createdAt: sData.createdAt || new Date().toISOString(),
+      };
     }
     return null;
   } catch (err) {
@@ -1057,6 +1246,10 @@ export async function getOrCreateUserProfile(fbUser: {
   try {
     const existing = await getUserFromFirestore(uid);
     if (existing) {
+      // Reconcile students/{uid} if missing
+      if (existing.role === 'student') {
+        saveStudentProfileToFirestore(existing).catch(() => {});
+      }
       return existing;
     }
 
@@ -1069,12 +1262,12 @@ export async function getOrCreateUserProfile(fbUser: {
         email: cleanEmail,
         role: 'student',
         levelId: sData.nursingLevel || sData.levelId || 'lvl-nd1',
-        status: 'active',
+        status: sData.status || 'active',
         school: sData.school || 'College of Nursing Sciences',
         gradYear: sData.gradYear || '2027',
         createdAt: sData.createdAt || new Date().toISOString(),
       };
-      await saveUserToFirestore(studentProfile).catch(() => {});
+      await saveStudentProfileToFirestore(studentProfile).catch(() => {});
       return studentProfile;
     }
   } catch (err) {
@@ -1124,28 +1317,119 @@ export async function getOrCreateUserProfile(fbUser: {
 export async function deleteUserFromFirestore(userId: string, email?: string): Promise<boolean> {
   try {
     if (userId) {
+      // Delete from both users and students collections
       await deleteDoc(doc(db, COLLECTIONS.USERS, userId)).catch((err) => {
-        console.warn('[Firestore] Error deleting user by doc id:', err);
+        console.warn('[Firestore] Error deleting user doc:', err);
+      });
+      await deleteDoc(doc(db, 'students', userId)).catch((err) => {
+        console.warn('[Firestore] Error deleting student doc:', err);
       });
     }
+
     if (email) {
+      const targetEmail = email.toLowerCase().trim();
       try {
-        const q = query(
+        const qUsers = query(
           collection(db, COLLECTIONS.USERS),
-          where('email', '==', email.toLowerCase().trim())
+          where('email', '==', targetEmail)
         );
-        const snap = await getDocs(q);
-        for (const userDoc of snap.docs) {
+        const snapUsers = await getDocs(qUsers);
+        for (const userDoc of snapUsers.docs) {
           await deleteDoc(userDoc.ref).catch(() => {});
         }
       } catch (qErr) {
         console.warn('[Firestore] Error deleting user by email query:', qErr);
+      }
+
+      try {
+        const qStudents = query(
+          collection(db, 'students'),
+          where('email', '==', targetEmail)
+        );
+        const snapStudents = await getDocs(qStudents);
+        for (const sDoc of snapStudents.docs) {
+          await deleteDoc(sDoc.ref).catch(() => {});
+        }
+      } catch (sErr) {
+        console.warn('[Firestore] Error deleting student by email query:', sErr);
       }
     }
     return true;
   } catch (err) {
     console.warn('[Firestore] Failed to delete user record:', err);
     return false;
+  }
+}
+
+export async function getStudentsFromFirestore(): Promise<User[]> {
+  try {
+    const studentMap = new Map<string, User>();
+
+    // 1. Fetch from students collection
+    const snapStudents = await getDocs(collection(db, 'students')).catch((err) => {
+      console.warn('[Firestore] Failed to query students collection:', err);
+      return null;
+    });
+
+    if (snapStudents) {
+      snapStudents.forEach((d) => {
+        const data = d.data();
+        const uid = data.uid || data.id || d.id;
+        const studentProfile: User = {
+          id: uid,
+          name: data.fullName || data.name || (data.email ? data.email.split('@')[0] : 'Nursing Student'),
+          email: data.email || '',
+          role: 'student',
+          levelId: data.levelId || data.nursingLevel || 'lvl-nd1',
+          status: data.status || 'active',
+          school: data.school || 'College of Nursing Sciences',
+          gradYear: data.gradYear || '2027',
+          createdAt: data.createdAt || new Date().toISOString(),
+        };
+        (studentProfile as any).emailVerified = Boolean(data.emailVerified);
+        studentMap.set(uid, studentProfile);
+      });
+    }
+
+    // 2. Fetch and reconcile with users collection
+    const snapUsers = await getDocs(collection(db, COLLECTIONS.USERS)).catch((err) => {
+      console.warn('[Firestore] Failed to query users collection for reconciliation:', err);
+      return null;
+    });
+
+    if (snapUsers) {
+      snapUsers.forEach((d) => {
+        const data = d.data() as User;
+        if (data.role === 'student' || (!data.role && data.levelId)) {
+          const uid = data.id || d.id;
+          if (!studentMap.has(uid)) {
+            const profile: User = {
+              id: uid,
+              name: data.name || (data.email ? data.email.split('@')[0] : 'Nursing Student'),
+              email: data.email || '',
+              role: 'student',
+              levelId: data.levelId || 'lvl-nd1',
+              status: data.status || 'active',
+              school: data.school || 'College of Nursing Sciences',
+              gradYear: data.gradYear || '2027',
+              createdAt: data.createdAt || new Date().toISOString(),
+            };
+            (profile as any).emailVerified = Boolean((data as any).emailVerified);
+            studentMap.set(uid, profile);
+
+            // Save missing profile to students/{uid}
+            saveStudentProfileToFirestore(profile).catch(() => {});
+          }
+        }
+      });
+    }
+
+    return Array.from(studentMap.values()).sort(
+      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    );
+  } catch (err) {
+    console.warn('[Firestore] Failed to get students from Firestore:', err);
+    return [];
   }
 }
 

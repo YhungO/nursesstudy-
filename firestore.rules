@@ -10,12 +10,17 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() &&
         (request.auth.token.role == 'admin' ||
-         request.auth.token.email == 'chigaemezuaugustine43@gmail.com' ||
-         request.auth.token.email == 'tiktokyhung@gmail.com' ||
+         (request.auth.token.email != null &&
+          (request.auth.token.email == 'chigaemezuaugustine43@gmail.com' ||
+           request.auth.token.email == 'tiktokyhung@gmail.com' ||
+           request.auth.token.email.lower() == 'chigaemezuaugustine43@gmail.com' ||
+           request.auth.token.email.lower() == 'tiktokyhung@gmail.com')) ||
          request.auth.uid == 'usr-admin-1' ||
          request.auth.uid == 'usr-admin-2' ||
          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+         (exists(/databases/$(database)/documents/students/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/students/$(request.auth.uid)).data.role == 'admin'));
     }
 
     function isOwner(userId) {
