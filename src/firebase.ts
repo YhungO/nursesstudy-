@@ -14,6 +14,7 @@ import {
   orderBy,
   limit,
   writeBatch,
+  serverTimestamp,
   Firestore,
 } from 'firebase/firestore';
 import {
@@ -29,6 +30,7 @@ import {
   verifyPasswordResetCode,
   confirmPasswordReset,
   sendEmailVerification,
+  reload,
   Auth,
 } from 'firebase/auth';
 import firebaseConfig from '../firebase-applet-config.json';
@@ -79,6 +81,8 @@ export {
   verifyPasswordResetCode,
   confirmPasswordReset,
   sendEmailVerification,
+  reload,
+  serverTimestamp,
 };
 
 export default app;

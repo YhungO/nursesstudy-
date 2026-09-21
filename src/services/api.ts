@@ -47,7 +47,11 @@ export const setAuthToken = (
 
 export const setStoredUser = (user: User | null) => {
   if (user) {
-    localStorage.setItem('nursesstudy_user_profile', JSON.stringify(user));
+    const safeUser = { ...user } as any;
+    delete safeUser.password;
+    delete safeUser.passwordResetToken;
+    delete safeUser.passwordResetExpires;
+    localStorage.setItem('nursesstudy_user_profile', JSON.stringify(safeUser));
   } else {
     localStorage.removeItem('nursesstudy_user_profile');
   }

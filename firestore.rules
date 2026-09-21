@@ -11,7 +11,9 @@ service cloud.firestore {
       return isAuthenticated() &&
         (request.auth.token.role == 'admin' ||
          request.auth.token.email == 'chigaemezuaugustine43@gmail.com' ||
+         request.auth.token.email == 'tiktokyhung@gmail.com' ||
          request.auth.uid == 'usr-admin-1' ||
+         request.auth.uid == 'usr-admin-2' ||
          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
     }
@@ -26,6 +28,20 @@ service cloud.firestore {
       allow create: if isAuthenticated() && (isOwner(userId) || isAdmin());
       allow update: if isAuthenticated() && (isOwner(userId) || isAdmin());
       allow delete: if isAdmin();
+    }
+
+    // Students collection (private student record and CBT test results subcollection)
+    match /students/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create, update: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow delete: if isAdmin();
+
+      // Student CBT test results: students can read and record their own results, but cannot edit previous scores
+      match /results/{resultId} {
+        allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+        allow create: if isAuthenticated() && (isOwner(userId) || isAdmin());
+        allow update, delete: if isAdmin();
+      }
     }
 
     // Academic Levels (curriculum structure)

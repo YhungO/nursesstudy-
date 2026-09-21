@@ -30,7 +30,7 @@ function getAuthUser(req: express.Request): User | null {
     const nameHeader = req.headers['x-user-name'] as string | undefined;
     const isEmail = token.includes('@');
     const cleanEmail = isEmail ? token.toLowerCase().trim() : (emailHeader ? emailHeader.toLowerCase().trim() : `user_${token.slice(0, 8)}@nursesstudy.com`);
-    const isAdmin = cleanEmail === 'chigaemezuaugustine43@gmail.com';
+    const isAdmin = cleanEmail === 'chigaemezuaugustine43@gmail.com' || cleanEmail === 'tiktokyhung@gmail.com';
 
     user = {
       id: token,

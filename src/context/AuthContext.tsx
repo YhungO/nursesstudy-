@@ -12,11 +12,13 @@ import {
   verifyPasswordResetCode,
   confirmPasswordReset,
   sendEmailVerification,
+  reload,
 } from '../firebase';
 import {
   saveUserToFirestore,
   getOrCreateUserProfile,
   getUserFromFirestore,
+  updateEmailVerificationInFirestore,
 } from '../services/firestoreService';
 import type { User as FirebaseUser } from 'firebase/auth';
 
@@ -27,41 +29,103 @@ export type AuthStatus =
   | 'EMAIL_VERIFICATION_REQUIRED'
   | 'AUTH_ERROR';
 
+export interface PasswordValidationResult {
+  isValid: boolean;
+  hasMinLength: boolean;
+  hasUpper: boolean;
+  hasLower: boolean;
+  hasNumber: boolean;
+  hasSpecial: boolean;
+  score: number;
+  feedback: string[];
+}
+
+export function validatePasswordStrength(password: string): PasswordValidationResult {
+  const pwd = password || '';
+  const hasMinLength = pwd.length >= 8;
+  const hasUpper = /[A-Z]/.test(pwd);
+  const hasLower = /[a-z]/.test(pwd);
+  const hasNumber = /[0-9]/.test(pwd);
+  const hasSpecial = /[^A-Za-z0-9]/.test(pwd);
+
+  let score = 0;
+  if (hasMinLength) score++;
+  if (hasUpper) score++;
+  if (hasLower) score++;
+  if (hasNumber) score++;
+  if (hasSpecial) score++;
+
+  const feedback: string[] = [];
+  if (!hasMinLength) feedback.push('Password must contain at least 8 characters.');
+  if (!hasUpper) feedback.push('Include at least one uppercase letter (A-Z).');
+  if (!hasLower) feedback.push('Include at least one lowercase letter (a-z).');
+  if (!hasNumber) feedback.push('Include at least one number (0-9).');
+  if (!hasSpecial) feedback.push('Include at least one special character (!@#$%^&*...).');
+
+  // Policy: min 8 characters, requires letters (upper or lower) and numbers
+  const isValid = hasMinLength && (hasUpper || hasLower) && hasNumber;
+
+  return {
+    isValid,
+    hasMinLength,
+    hasUpper,
+    hasLower,
+    hasNumber,
+    hasSpecial,
+    score,
+    feedback,
+  };
+}
+
+export function isProviderDisabledError(err: any): boolean {
+  if (!err) return false;
+  const code = typeof err === 'string' ? err : err.code || '';
+  const message = typeof err === 'string' ? err : err.message || '';
+  return (
+    code === 'auth/operation-not-allowed' ||
+    code === 'auth/configuration-not-found' ||
+    message.includes('operation-not-allowed') ||
+    message.includes('Email/Password sign-in is not enabled') ||
+    message.includes('CONFIGURATION_NOT_FOUND')
+  );
+}
+
 export function getFirebaseAuthErrorMessage(err: any): string {
   if (!err) return 'Authentication failed. Please try again.';
-  const message = err.message || '';
   const code = err.code || '';
+  const message = err.message || '';
 
-  if (message && !message.includes('auth/') && !message.includes('Firebase:')) {
-    return message;
+  if (isProviderDisabledError(err)) {
+    return 'Email/Password sign-in is not enabled in the Firebase project.';
   }
 
   switch (code) {
     case 'auth/email-already-in-use':
-      return 'This email is already registered. Please log in instead.';
+      return 'This email is already registered. Please log in.';
     case 'auth/invalid-email':
       return 'Please enter a valid email address.';
     case 'auth/weak-password':
-      return 'Password is too weak. Please use at least 6 characters.';
+      return 'Your password is too weak. Please use a stronger password.';
     case 'auth/user-not-found':
-      return 'Account not found. No registered account with this email exists.';
     case 'auth/wrong-password':
-      return 'Incorrect password. Please check your password and try again.';
     case 'auth/invalid-credential':
-      return 'Invalid credentials. Please verify your email and password.';
+      return 'The email or password is incorrect.';
     case 'auth/too-many-requests':
-      return 'Too many attempts. Access has been temporarily paused. Please try again in a few minutes.';
-    case 'auth/network-request-failed':
-      return 'Network connection issue. Please check your internet connection.';
+      return 'Too many attempts. Please wait and try again.';
     case 'auth/operation-not-allowed':
-      return 'Email/Password sign-in is not enabled in the Firebase project.';
-    case 'auth/invalid-action-code':
-      return 'This password reset link is invalid or has already been used. Please request a new one.';
-    case 'auth/expired-action-code':
-      return 'This password reset link has expired. Please request a new password reset link.';
+      return 'Email/password authentication is currently disabled. Please enable Email/Password authentication in Firebase Console.';
+    case 'auth/network-request-failed':
+      return 'Network connection problem. Please check your internet connection and try again.';
     case 'auth/user-disabled':
-      return 'This account has been disabled. Please contact the administrator.';
+      return 'This student account has been disabled. Please contact your administrator.';
+    case 'auth/invalid-action-code':
+      return 'This verification or password reset link is invalid or has already been used.';
+    case 'auth/expired-action-code':
+      return 'This link has expired. Please request a new link.';
     default:
+      if (message.includes('auth/')) {
+        return 'Authentication failed. Please check your credentials and try again.';
+      }
       return message.replace(/^Firebase:\s*/, '') || 'Authentication failed. Please check your credentials.';
   }
 }
@@ -72,6 +136,7 @@ interface AuthContextType {
   authStatus: AuthStatus;
   loading: boolean;
   authError: string | null;
+  isEmailVerified: boolean;
   login: (email: string, password: string) => Promise<User>;
   register: (data: {
     name: string;
@@ -92,6 +157,7 @@ interface AuthContextType {
     confirmPassword?: string;
   }) => Promise<void>;
   sendVerificationEmail: () => Promise<void>;
+  reloadUserVerification: () => Promise<boolean>;
   logout: () => Promise<void>;
   switchDemoRole: (role: 'student' | 'admin') => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -148,7 +214,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               id: fbUser.uid,
               name: fbUser.displayName || (fbUser.email ? fbUser.email.split('@')[0] : 'Nursing Student'),
               email: fbUser.email || '',
-              role: fbUser.email === 'chigaemezuaugustine43@gmail.com' ? 'admin' : 'student',
+              role: (fbUser.email === 'chigaemezuaugustine43@gmail.com' || fbUser.email === 'tiktokyhung@gmail.com') ? 'admin' : 'student',
               levelId: 'lvl-nd1',
               status: 'active',
               school: 'College of Nursing Sciences',
@@ -235,6 +301,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanEmail = email.trim().toLowerCase();
     setAuthError(null);
 
+    if (!cleanEmail) {
+      throw new Error('Please enter a valid email address.');
+    }
+    if (!password) {
+      throw new Error('Please enter your password.');
+    }
+
     let fbUser: FirebaseUser | null = null;
     let fbError: any = null;
 
@@ -257,6 +330,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: fbUser.email,
         displayName: fbUser.displayName,
       });
+
+      if (fbUser.emailVerified && !(profile as any).emailVerified) {
+        (profile as any).emailVerified = true;
+        updateEmailVerificationInFirestore(fbUser.uid, true).catch(() => {});
+      }
 
       // Also notify backend server of active session
       api.syncUser(profile).catch(() => {});
@@ -309,33 +387,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanName = data.name.trim();
     setAuthError(null);
 
+    // 1. Validate the full name
     if (!cleanName) {
-      throw new Error('Full Name is required.');
+      throw new Error('Please enter your full name.');
     }
-    if (!cleanEmail) {
-      throw new Error('Email Address is required.');
+
+    // 2. Validate the email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      throw new Error('Please enter a valid email address.');
     }
-    if (!data.password || data.password.length < 6) {
-      throw new Error('Password must be at least 6 characters long.');
+
+    // 3. Validate the nursing level
+    if (!data.levelId) {
+      throw new Error('Please select your nursing level.');
     }
+
+    // 4. Validate the password policy
+    const pwCheck = validatePasswordStrength(data.password);
+    if (!pwCheck.hasMinLength) {
+      throw new Error('Password must contain at least 8 characters.');
+    }
+    if (!pwCheck.isValid) {
+      throw new Error(pwCheck.feedback[0] || 'Password does not meet security requirements.');
+    }
+
+    // 5. Confirm both passwords match
     if (data.confirmPassword !== undefined && data.password !== data.confirmPassword) {
       throw new Error('Passwords do not match.');
     }
 
-    // 1. Create account with Firebase Authentication
+    // 6. Create the Firebase Authentication account using email/password
     let fbUser: FirebaseUser;
     try {
       const fbCred = await createUserWithEmailAndPassword(auth, cleanEmail, data.password);
       fbUser = fbCred.user;
       await updateProfile(fbUser, { displayName: cleanName }).catch(() => {});
+
+      // Dispatch Firebase email verification link immediately
+      await sendEmailVerification(fbUser).catch((vErr) => {
+        console.warn('[Firebase Auth] Verification email dispatch note:', vErr);
+      });
     } catch (fbErr: any) {
       const message = getFirebaseAuthErrorMessage(fbErr);
       setAuthError(message);
       throw new Error(message);
     }
 
-    // 2. Build canonical user profile using Firebase UID as permanent identifier (Part 5)
-    const isAdminEmail = cleanEmail === 'chigaemezuaugustine43@gmail.com';
+    // 7. Obtain the authenticated user's UID and build student profile
+    const isAdminEmail = cleanEmail === 'chigaemezuaugustine43@gmail.com' || cleanEmail === 'tiktokyhung@gmail.com';
     const newProfile: User = {
       id: fbUser.uid,
       name: cleanName,
@@ -347,15 +447,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       gradYear: (data.gradYear && data.gradYear.trim()) || '2027',
       createdAt: new Date().toISOString(),
     };
+    (newProfile as any).emailVerified = fbUser.emailVerified || false;
 
-    // 3. Save profile to Firestore and sync with backend
+    // 8. Create Firestore student profile using that UID (students/{uid} and users/{uid})
     await saveUserToFirestore(newProfile).catch((err) => {
       console.warn('[Firestore] Profile save notice:', err);
     });
 
     api.syncUser(newProfile).catch(() => {});
 
-    // 4. Update session state
+    // Update session state
     setFirebaseUser(fbUser);
     setAuthToken(fbUser.uid, cleanEmail, cleanName);
     setStoredUser(newProfile);
@@ -469,9 +570,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  const isEmailVerified = Boolean(firebaseUser?.emailVerified || (user as any)?.emailVerified);
+
+  const reloadUserVerification = async (): Promise<boolean> => {
+    if (auth.currentUser) {
+      try {
+        await reload(auth.currentUser);
+        const verified = Boolean(auth.currentUser.emailVerified);
+        if (verified) {
+          await updateEmailVerificationInFirestore(auth.currentUser.uid, true);
+          if (user) {
+            const updated = { ...user, emailVerified: true };
+            setUser(updated);
+            setStoredUser(updated);
+          }
+        }
+        return verified;
+      } catch (err) {
+        console.warn('[Firebase Auth] Error refreshing verification status:', err);
+      }
+    }
+    return false;
+  };
+
   const sendVerificationEmail = async () => {
     if (auth.currentUser) {
       await sendEmailVerification(auth.currentUser);
+    } else {
+      throw new Error('No active user session to send verification email to.');
     }
   };
 
@@ -537,6 +663,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         authStatus,
         loading,
         authError,
+        isEmailVerified,
         login,
         register,
         forgotPassword,
@@ -544,6 +671,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         confirmPasswordResetAction,
         resetPassword,
         sendVerificationEmail,
+        reloadUserVerification,
         logout,
         switchDemoRole,
         refreshProfile,

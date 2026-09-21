@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth, getFirebaseAuthErrorMessage } from '../../context/AuthContext';
+import {
+  useAuth,
+  getFirebaseAuthErrorMessage,
+  validatePasswordStrength,
+  isProviderDisabledError,
+} from '../../context/AuthContext';
 import { NursingLevel } from '../../types';
 import {
   X,
@@ -74,6 +79,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [resetEmailSent, setResetEmailSent] = useState(false);
+
+  const passwordStrength = validatePasswordStrength(password);
+  const isProviderDisabled =
+    Boolean(error && isProviderDisabledError(error)) ||
+    Boolean(error && error.includes('Email/Password sign-in is not enabled'));
 
   if (!isOpen) return null;
 
@@ -304,10 +314,36 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         )}
 
         <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4">
-          {error && (
+          {error && !isProviderDisabled && (
             <div className="p-3 bg-rose-950/70 border border-rose-500/50 rounded-xl text-rose-200 text-xs flex items-start gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
               <span>{error}</span>
+            </div>
+          )}
+
+          {isProviderDisabled && (
+            <div className="p-3.5 bg-amber-950/80 border border-amber-500/60 rounded-xl text-amber-100 text-xs space-y-2.5">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+                <div>
+                  <h4 className="font-bold text-amber-200">Firebase Console Action Required</h4>
+                  <p className="text-[11px] text-amber-300/90 mt-0.5">
+                    Email/Password sign-in provider is disabled in Firebase. Enable it to allow registration:
+                  </p>
+                </div>
+              </div>
+              <div className="p-2 bg-slate-950/90 border border-amber-500/30 rounded-lg font-mono text-[10px] text-amber-300">
+                Firebase Console &rarr; Authentication &rarr; Sign-in method &rarr; Email/Password &rarr; Enable &rarr; Save
+              </div>
+              <a
+                href="https://console.firebase.google.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs hover:bg-amber-400 transition-colors"
+              >
+                <span>Open Firebase Console</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </a>
             </div>
           )}
 
@@ -426,6 +462,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+
+              {mode === 'register' && (
+                <div className="mt-2 p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1 text-[10px]">
+                  <div className="text-slate-400 font-semibold uppercase tracking-wider mb-0.5">Requirements:</div>
+                  <div className="grid grid-cols-2 gap-1">
+                    <span className={passwordStrength.hasMinLength ? 'text-teal-400 font-medium' : 'text-slate-500'}>
+                      {passwordStrength.hasMinLength ? '✓' : '•'} 8+ characters
+                    </span>
+                    <span className={passwordStrength.hasUpper ? 'text-teal-400 font-medium' : 'text-slate-500'}>
+                      {passwordStrength.hasUpper ? '✓' : '•'} Uppercase (A-Z)
+                    </span>
+                    <span className={passwordStrength.hasLower ? 'text-teal-400 font-medium' : 'text-slate-500'}>
+                      {passwordStrength.hasLower ? '✓' : '•'} Lowercase (a-z)
+                    </span>
+                    <span className={passwordStrength.hasNumber ? 'text-teal-400 font-medium' : 'text-slate-500'}>
+                      {passwordStrength.hasNumber ? '✓' : '•'} Number (0-9)
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

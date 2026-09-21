@@ -1,5 +1,6 @@
 import {
   db,
+  auth,
   collection,
   doc,
   getDocs,
@@ -114,14 +115,30 @@ export function subscribeToAuditLogs(
 }
 
 // ==================== SEEDING ==================== //
-export async function seedFirestoreIfEmpty(initialData: {
-  levels: NursingLevel[];
-  subjects: Subject[];
-  notes: StudyNote[];
-  questions: Question[];
-  exams: CBTExam[];
-  announcements: Announcement[];
-}): Promise<boolean> {
+export async function seedFirestoreIfEmpty(
+  initialData: {
+    levels: NursingLevel[];
+    subjects: Subject[];
+    notes: StudyNote[];
+    questions: Question[];
+    exams: CBTExam[];
+    announcements: Announcement[];
+  },
+  currentUser?: { role?: string; email?: string } | null
+): Promise<boolean> {
+  const currentAuthUser = auth.currentUser;
+  const isUserAdmin =
+    currentUser?.role === 'admin' ||
+    currentUser?.email?.toLowerCase().trim() === 'chigaemezuaugustine43@gmail.com' ||
+    currentUser?.email?.toLowerCase().trim() === 'tiktokyhung@gmail.com' ||
+    currentAuthUser?.email?.toLowerCase().trim() === 'chigaemezuaugustine43@gmail.com' ||
+    currentAuthUser?.email?.toLowerCase().trim() === 'tiktokyhung@gmail.com';
+
+  // Do not attempt to write to Firestore if no admin is authenticated
+  if (!currentAuthUser || !isUserAdmin) {
+    return false;
+  }
+
   try {
     const levelsRef = collection(db, COLLECTIONS.LEVELS);
     const existingSnap = await getDocs(levelsRef);
@@ -166,8 +183,8 @@ export async function seedFirestoreIfEmpty(initialData: {
 
     console.log('[Firestore] Successfully seeded initial curriculum to Cloud Firestore!');
     return true;
-  } catch (err) {
-    console.error('[Firestore] Seeding error:', err);
+  } catch (err: any) {
+    console.warn('[Firestore] Seeding notice (requires admin privileges):', err?.message || err);
     return false;
   }
 }
@@ -859,6 +876,36 @@ export async function deleteAnnouncementFromFirestore(
 export async function saveAttemptToFirestore(attempt: ExamAttempt): Promise<void> {
   try {
     await setDoc(doc(db, COLLECTIONS.ATTEMPTS, attempt.id), attempt);
+
+    // Also store score result under student's private results subcollection (students/{uid}/results/{resultId})
+    if (attempt.userId) {
+      const percentage =
+        attempt.totalQuestions > 0
+          ? Math.round((attempt.correctCount / attempt.totalQuestions) * 100)
+          : 0;
+
+      await setDoc(
+        doc(db, 'students', attempt.userId, 'results', attempt.id),
+        {
+          uid: attempt.userId,
+          resultId: attempt.id,
+          score: attempt.score,
+          totalQuestions: attempt.totalQuestions,
+          percentage,
+          subject: attempt.subjectName || 'Nursing Assessment',
+          examTitle: attempt.examTitle,
+          date: attempt.createdAt || new Date().toISOString(),
+          duration: attempt.timeSpentSeconds,
+          correctAnswers: attempt.correctCount,
+          wrongAnswers: Math.max(0, attempt.totalQuestions - attempt.correctCount),
+          passed: attempt.passed,
+          type: attempt.type,
+          createdAt: attempt.createdAt || new Date().toISOString(),
+        }
+      ).catch((err) => {
+        console.warn('[Firestore] Notice saving to student results subcollection:', err);
+      });
+    }
   } catch (err) {
     console.warn('[Firestore] Failed to save attempt to cloud:', err);
     throw err;
@@ -938,10 +985,49 @@ export async function saveUserToFirestore(user: User): Promise<boolean> {
       },
       { merge: true }
     );
+
+    // If student, also maintain synchronized profile in students/{uid}
+    if (user.role === 'student' || !user.role) {
+      await setDoc(
+        doc(db, 'students', user.id),
+        {
+          uid: user.id,
+          fullName: user.name,
+          email: user.email,
+          nursingLevel: user.levelId || 'lvl-nd1',
+          createdAt: user.createdAt || new Date().toISOString(),
+          emailVerified: (user as any).emailVerified ?? false,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      ).catch(() => {});
+    }
+
     return true;
   } catch (err) {
     console.warn('[Firestore] Failed to save user record:', err);
     return false;
+  }
+}
+
+export async function updateEmailVerificationInFirestore(
+  userId: string,
+  emailVerified: boolean
+): Promise<void> {
+  try {
+    await setDoc(
+      doc(db, COLLECTIONS.USERS, userId),
+      { emailVerified, updatedAt: new Date().toISOString() },
+      { merge: true }
+    ).catch(() => {});
+
+    await setDoc(
+      doc(db, 'students', userId),
+      { emailVerified, updatedAt: new Date().toISOString() },
+      { merge: true }
+    ).catch(() => {});
+  } catch (err) {
+    console.warn('[Firestore] Failed to update email verification status:', err);
   }
 }
 
@@ -966,12 +1052,30 @@ export async function getOrCreateUserProfile(fbUser: {
 }): Promise<User> {
   const uid = fbUser.uid;
   const cleanEmail = (fbUser.email || '').toLowerCase().trim();
-  const isAdminEmail = cleanEmail === 'chigaemezuaugustine43@gmail.com';
+  const isAdminEmail = cleanEmail === 'chigaemezuaugustine43@gmail.com' || cleanEmail === 'tiktokyhung@gmail.com';
 
   try {
     const existing = await getUserFromFirestore(uid);
     if (existing) {
       return existing;
+    }
+
+    const studentSnap = await getDoc(doc(db, 'students', uid)).catch(() => null);
+    if (studentSnap && studentSnap.exists()) {
+      const sData = studentSnap.data();
+      const studentProfile: User = {
+        id: uid,
+        name: sData.fullName || sData.name || (cleanEmail ? cleanEmail.split('@')[0] : 'Nursing Student'),
+        email: cleanEmail,
+        role: 'student',
+        levelId: sData.nursingLevel || sData.levelId || 'lvl-nd1',
+        status: 'active',
+        school: sData.school || 'College of Nursing Sciences',
+        gradYear: sData.gradYear || '2027',
+        createdAt: sData.createdAt || new Date().toISOString(),
+      };
+      await saveUserToFirestore(studentProfile).catch(() => {});
+      return studentProfile;
     }
   } catch (err) {
     console.warn('[Firestore] Profile lookup error:', err);

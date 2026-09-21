@@ -358,6 +358,18 @@ export function getInitialData(): DatabaseSchema {
         createdAt: '2026-01-10T08:00:00.000Z',
       },
       {
+        id: 'usr-admin-2',
+        name: 'TikTokYhung',
+        email: 'tiktokyhung@gmail.com',
+        password: 'chiga4006#',
+        role: 'admin',
+        levelId: 'lvl-nd1',
+        status: 'active',
+        school: 'NursesStudy Platform Owner',
+        gradYear: 'Sole Owner & Lead Administrator',
+        createdAt: '2026-01-10T08:00:00.000Z',
+      },
+      {
         id: 'usr-student-1',
         name: 'Amara Vance',
         email: 'student@nursesstudy.com',

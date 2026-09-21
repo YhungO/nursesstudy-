@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth, getFirebaseAuthErrorMessage } from '../../context/AuthContext';
+import {
+  useAuth,
+  getFirebaseAuthErrorMessage,
+  validatePasswordStrength,
+  isProviderDisabledError,
+} from '../../context/AuthContext';
 import { NursingLevel } from '../../types';
 import {
   Activity,
@@ -42,11 +47,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     forgotPassword,
     verifyResetCode,
     confirmPasswordResetAction,
+    sendVerificationEmail,
+    reloadUserVerification,
   } = useAuth();
 
-  const [mode, setMode] = useState<'register' | 'login' | 'admin' | 'forgot_password' | 'reset_password'>(
-    initialOobCode ? 'reset_password' : initialMode
-  );
+  const [mode, setMode] = useState<
+    'register' | 'login' | 'admin' | 'forgot_password' | 'reset_password' | 'verify_email'
+  >(initialMode);
 
   // Form Fields
   const [name, setName] = useState('');
@@ -72,13 +79,37 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
 
-  // Status
+  // Email Verification States
+  const [registeredEmail, setRegisteredEmail] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [isResendingVerification, setIsResendingVerification] = useState(false);
+  const [isCheckingVerification, setIsCheckingVerification] = useState(false);
+  const [verifyStatusMsg, setVerifyStatusMsg] = useState<string | null>(null);
+  const [verifyStatusType, setVerifyStatusType] = useState<'success' | 'warning' | null>(null);
+
+  // In-field validation / touched tracking
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  // Submission Status
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Email format validation helper
   const isEmailValid = (val: string) => EMAIL_REGEX.test(val.trim());
+
+  // Password strength validation helper
+  const passwordStrength = validatePasswordStrength(password);
+  const newPasswordStrength = validatePasswordStrength(newPassword);
+
+  // 60-Second Cooldown Timer for Resending Verification Email
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   // Check URL query parameters for oobCode on mount or if initialOobCode updates
   useEffect(() => {
@@ -126,34 +157,93 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     }
   }, [mode, oobCode, verifyResetCode]);
 
+  const markTouched = (field: string) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+  };
+
   // Handle Main Form Submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccessMsg(null);
-    setIsSubmitting(true);
 
     const cleanEmail = email.trim().toLowerCase();
 
+    // Comprehensive client-side form validation before sending request to Firebase
+    if (mode === 'register') {
+      if (!name.trim()) {
+        setError('Please enter your full name.');
+        return;
+      }
+      if (!cleanEmail) {
+        setError('Please enter a valid email address.');
+        return;
+      }
+      if (!isEmailValid(cleanEmail)) {
+        setError('Please enter a valid email address (e.g. student@example.com).');
+        return;
+      }
+      if (!levelId) {
+        setError('Please select your nursing level.');
+        return;
+      }
+      if (password.length < 8) {
+        setError('Password must contain at least 8 characters.');
+        return;
+      }
+      if (!passwordStrength.isValid) {
+        setError(passwordStrength.feedback[0] || 'Password does not meet security requirements.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError('Passwords do not match.');
+        return;
+      }
+    } else if (mode === 'login' || mode === 'admin') {
+      if (!cleanEmail) {
+        setError('Please enter your email address.');
+        return;
+      }
+      if (!isEmailValid(cleanEmail)) {
+        setError('Please enter a valid email address.');
+        return;
+      }
+      if (!password) {
+        setError('Please enter your password.');
+        return;
+      }
+    } else if (mode === 'forgot_password') {
+      if (!cleanEmail) {
+        setError('Please enter your registered email address.');
+        return;
+      }
+      if (!isEmailValid(cleanEmail)) {
+        setError('Please enter a valid email address.');
+        return;
+      }
+    } else if (mode === 'reset_password') {
+      if (!oobCode.trim()) {
+        setError('Missing password reset action code.');
+        return;
+      }
+      if (newPassword.length < 8) {
+        setError('New password must contain at least 8 characters.');
+        return;
+      }
+      if (!newPasswordStrength.isValid) {
+        setError(newPasswordStrength.feedback[0] || 'Password does not meet security requirements.');
+        return;
+      }
+      if (newPassword !== confirmNewPassword) {
+        setError('Passwords do not match.');
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+
     try {
       if (mode === 'register') {
-        // Validation Checks
-        if (!name.trim()) {
-          throw new Error('Please enter your Full Name.');
-        }
-        if (!cleanEmail) {
-          throw new Error('Please enter your Email Address.');
-        }
-        if (!isEmailValid(cleanEmail)) {
-          throw new Error('Please enter a valid email address (e.g. name@example.com).');
-        }
-        if (password.length < 6) {
-          throw new Error('Password must be at least 6 characters long.');
-        }
-        if (password !== confirmPassword) {
-          throw new Error('Passwords do not match. Please ensure both fields are identical.');
-        }
-
         const registeredUser = await register({
           name: name.trim(),
           email: cleanEmail,
@@ -164,24 +254,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           gradYear: gradYear.trim() || '2027',
         });
 
-        setSuccessMsg(`Account successfully created! Welcome to NursesStudy, ${registeredUser.name}.`);
-        if (onSuccess) onSuccess();
+        // Set registered email and switch to verify_email screen
+        setRegisteredEmail(cleanEmail);
+        setResendCooldown(60);
+        setMode('verify_email');
+        setVerifyStatusMsg(`Verification email dispatched to ${cleanEmail}. Please verify your email.`);
+        setVerifyStatusType('success');
       } else if (mode === 'login') {
-        if (!cleanEmail || !password) {
-          throw new Error('Please enter both your email address and password.');
-        }
-        if (!isEmailValid(cleanEmail)) {
-          throw new Error('Please enter a valid email address.');
-        }
-
         const loggedInUser = await login(cleanEmail, password);
         setSuccessMsg(`Welcome back, ${loggedInUser.name}!`);
         if (onSuccess) onSuccess();
       } else if (mode === 'admin') {
-        if (!cleanEmail || !password) {
-          throw new Error('Administrator email and password are required.');
-        }
-
         const adminUser = await login(cleanEmail, password);
         if (adminUser.role !== 'admin') {
           throw new Error('Access denied: Account does not hold administrator privileges.');
@@ -189,32 +272,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         setSuccessMsg('Administrator credentials verified.');
         if (onSuccess) onSuccess();
       } else if (mode === 'forgot_password') {
-        if (!cleanEmail) {
-          throw new Error('Please enter your registered email address.');
-        }
-        if (!isEmailValid(cleanEmail)) {
-          throw new Error('Please enter a valid email address.');
-        }
-
-        // Real Firebase Password Reset Email Trigger (Part 9, 10, 11)
         const res = await forgotPassword(cleanEmail);
         setResetEmailSent(true);
         setSuccessMsg(res.message);
       } else if (mode === 'reset_password') {
-        if (!oobCode.trim()) {
-          throw new Error('Missing password reset verification code from link.');
-        }
-        if (newPassword.length < 6) {
-          throw new Error('New password must be at least 6 characters long.');
-        }
-        if (newPassword !== confirmNewPassword) {
-          throw new Error('New passwords do not match. Please ensure both fields are identical.');
-        }
-
-        // Real Firebase Confirm Password Reset (Part 12)
         await confirmPasswordResetAction(oobCode.trim(), newPassword);
 
-        // Clean URL query string
         if (typeof window !== 'undefined' && window.history.replaceState) {
           window.history.replaceState({}, document.title, window.location.pathname);
         }
@@ -233,6 +296,56 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       setIsSubmitting(false);
     }
   };
+
+  // Check email verification status manually
+  const handleCheckVerification = async () => {
+    setIsCheckingVerification(true);
+    setVerifyStatusMsg(null);
+
+    try {
+      const isVerified = await reloadUserVerification();
+      if (isVerified) {
+        setVerifyStatusMsg('Email verified successfully! Entering your student portal...');
+        setVerifyStatusType('success');
+        setTimeout(() => {
+          if (onSuccess) onSuccess();
+        }, 1200);
+      } else {
+        setVerifyStatusMsg(
+          'Email not verified yet. Please open the verification link in your inbox or spam folder, then click this button again.'
+        );
+        setVerifyStatusType('warning');
+      }
+    } catch {
+      setVerifyStatusMsg('Could not verify status. Please check your internet connection.');
+      setVerifyStatusType('warning');
+    } finally {
+      setIsCheckingVerification(false);
+    }
+  };
+
+  // Resend verification email
+  const handleResendVerification = async () => {
+    if (resendCooldown > 0) return;
+    setIsResendingVerification(true);
+    setVerifyStatusMsg(null);
+
+    try {
+      await sendVerificationEmail();
+      setResendCooldown(60);
+      setVerifyStatusMsg('A fresh verification link has been sent to your email address.');
+      setVerifyStatusType('success');
+    } catch (err: any) {
+      setVerifyStatusMsg(getFirebaseAuthErrorMessage(err));
+      setVerifyStatusType('warning');
+    } finally {
+      setIsResendingVerification(false);
+    }
+  };
+
+  const isProviderDisabled =
+    Boolean(error && isProviderDisabledError(error)) ||
+    Boolean(error && error.includes('Email/Password sign-in is not enabled'));
 
   return (
     <div className="min-h-screen bg-[#090e17] text-slate-100 flex flex-col justify-center items-center py-10 px-4 sm:px-6 relative overflow-hidden selection:bg-teal-500 selection:text-white">
@@ -257,8 +370,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-            {mode === 'register' && 'Create Your Account'}
+            {mode === 'register' && 'Create Your Student Account'}
             {mode === 'login' && 'Log In to NursesStudy'}
+            {mode === 'verify_email' && 'Verify Your Email'}
             {mode === 'forgot_password' && 'Password Recovery'}
             {mode === 'reset_password' && 'Set New Password'}
             {mode === 'admin' && 'Administrator Portal'}
@@ -268,6 +382,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               'Register your student profile to access lecture materials, question banks, and timed CBT mock examinations.'}
             {mode === 'login' &&
               'Enter your registered credentials to access your course materials, practice questions, and CBT examinations.'}
+            {mode === 'verify_email' &&
+              'Click the verification link sent to your inbox to activate your account and access CBT exams.'}
             {mode === 'forgot_password' &&
               'Enter your registered email address to receive a secure Firebase password reset link.'}
             {mode === 'reset_password' &&
@@ -294,7 +410,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               <span>Back to Log In</span>
             </button>
             <span className="text-[11px] text-teal-400 font-semibold bg-teal-500/10 px-2.5 py-1 rounded-full border border-teal-500/20">
-              {mode === 'register' ? 'New Student' : mode === 'admin' ? 'Staff Portal' : 'Account Recovery'}
+              {mode === 'register'
+                ? 'New Student'
+                : mode === 'verify_email'
+                ? 'Email Verification'
+                : mode === 'admin'
+                ? 'Staff Portal'
+                : 'Account Recovery'}
             </span>
           </div>
         )}
@@ -312,6 +434,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 ? 'Student Registration'
                 : mode === 'login'
                 ? 'Student Access'
+                : mode === 'verify_email'
+                ? 'Account Verification'
                 : mode === 'forgot_password' || mode === 'reset_password'
                 ? 'Password Recovery'
                 : 'Administrator Area'}
@@ -319,7 +443,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           </div>
 
           {/* Feedback Messages */}
-          {error && (
+          {error && !isProviderDisabled && (
             <div
               id="auth-error-banner"
               className="p-3.5 rounded-2xl bg-rose-950/70 border border-rose-500/50 text-rose-200 text-xs flex items-start gap-2.5 animate-in fade-in"
@@ -332,7 +456,67 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             </div>
           )}
 
-          {successMsg && !resetEmailSent && (
+          {/* FIREBASE CONSOLE ACTION REQUIRED SETUP HELPER BANNER */}
+          {isProviderDisabled && (
+            <div
+              id="firebase-console-action-box"
+              className="p-4 rounded-2xl bg-amber-950/80 border border-amber-500/60 text-amber-100 text-xs space-y-3 animate-in fade-in shadow-xl shadow-amber-950/30"
+            >
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-bold text-amber-200 text-sm tracking-tight">
+                    ONE FIREBASE CONSOLE ACTION REQUIRED
+                  </h4>
+                  <p className="text-[11px] text-amber-300/90 mt-0.5 leading-relaxed">
+                    The <strong>Email/Password</strong> sign-in provider is not yet enabled in your Firebase Project. Enable it once to allow student registration:
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-slate-950/90 border border-amber-500/30 rounded-xl p-3 font-mono text-[11px] text-amber-300 space-y-1.5">
+                <div className="text-[10px] text-slate-400 font-sans uppercase font-bold tracking-wider mb-1">
+                  Exact Firebase Console Navigation Path:
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="px-1.5 py-0.5 rounded bg-slate-800 text-white font-semibold">Firebase Console</span>
+                  <span>&rarr;</span>
+                  <span className="px-1.5 py-0.5 rounded bg-slate-800 text-white font-semibold">Authentication</span>
+                  <span>&rarr;</span>
+                  <span className="px-1.5 py-0.5 rounded bg-slate-800 text-white font-semibold">Sign-in method</span>
+                  <span>&rarr;</span>
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold">Email/Password</span>
+                  <span>&rarr;</span>
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">Enable</span>
+                  <span>&rarr;</span>
+                  <span className="px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30 font-semibold">Save</span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <a
+                  href="https://console.firebase.google.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs hover:bg-amber-400 transition-colors shadow-sm"
+                >
+                  <span>Open Firebase Console</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 text-slate-200 font-semibold text-xs hover:bg-slate-700 transition-colors"
+                >
+                  Dismiss Notice
+                </button>
+              </div>
+            </div>
+          )}
+
+          {successMsg && !resetEmailSent && mode !== 'verify_email' && (
             <div
               id="auth-success-banner"
               className="p-3.5 rounded-2xl bg-emerald-950/70 border border-emerald-500/50 text-emerald-200 text-xs flex items-start gap-2.5 animate-in fade-in"
@@ -345,8 +529,102 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             </div>
           )}
 
-          {/* Special Forgot Password Sent View (Part 9, 10, 11) */}
-          {mode === 'forgot_password' && resetEmailSent ? (
+          {/* Special Email Verification Mode */}
+          {mode === 'verify_email' ? (
+            <div className="space-y-5 py-2 text-center animate-in fade-in">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400 shadow-lg shadow-teal-500/10">
+                <Mail className="w-7 h-7" />
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-lg font-bold text-white tracking-tight">Verify Your Email Address</h3>
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-sm mx-auto">
+                  We have sent a Firebase verification link to:
+                  <span className="block mt-1 font-bold text-teal-300 break-all">{registeredEmail || email}</span>
+                </p>
+                <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+                  Please check your Inbox (and Spam/Promotions folder) and click the link to activate your student account.
+                </p>
+              </div>
+
+              {verifyStatusMsg && (
+                <div
+                  className={`p-3 rounded-xl text-xs flex items-center justify-center gap-2 ${
+                    verifyStatusType === 'success'
+                      ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
+                      : 'bg-amber-500/10 border border-amber-500/30 text-amber-300'
+                  }`}
+                >
+                  {verifyStatusType === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                  )}
+                  <span className="text-[11px]">{verifyStatusMsg}</span>
+                </div>
+              )}
+
+              <div className="space-y-2.5 pt-2">
+                <button
+                  type="button"
+                  id="confirm-email-verified-btn"
+                  disabled={isCheckingVerification}
+                  onClick={handleCheckVerification}
+                  className="w-full py-3 px-4 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer ring-1 ring-teal-400/30"
+                >
+                  {isCheckingVerification ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Checking verification status...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>I've Verified My Email — Enter Portal</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  id="resend-verification-email-btn"
+                  disabled={resendCooldown > 0 || isResendingVerification}
+                  onClick={handleResendVerification}
+                  className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-slate-300 hover:text-white font-semibold text-xs rounded-xl border border-slate-800 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {isResendingVerification ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-slate-300 border-t-transparent rounded-full animate-spin" />
+                      <span>Sending verification email...</span>
+                    </>
+                  ) : resendCooldown > 0 ? (
+                    <>
+                      <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Resend available in {resendCooldown}s</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5 text-teal-400" />
+                      <span>Resend Verification Email</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('login');
+                    setError(null);
+                    setSuccessMsg(null);
+                  }}
+                  className="text-xs text-slate-400 hover:text-teal-400 transition-colors py-1 cursor-pointer block mx-auto underline underline-offset-2"
+                >
+                  Back to Log In
+                </button>
+              </div>
+            </div>
+          ) : mode === 'forgot_password' && resetEmailSent ? (
+            /* Special Forgot Password Sent View */
             <div className="space-y-4 py-2 text-center animate-in fade-in">
               <div className="w-12 h-12 mx-auto rounded-2xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400">
                 <Send className="w-6 h-6" />
@@ -452,11 +730,19 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       required
                       id="signup-name-input"
                       value={name}
+                      onBlur={() => markTouched('name')}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="e.g. Augustine Chigaemezu"
-                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-colors"
+                      className={`w-full pl-10 pr-3.5 py-2.5 bg-slate-900 border rounded-xl text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 transition-colors ${
+                        touched.name && !name.trim()
+                          ? 'border-rose-500/60 focus:border-rose-500 focus:ring-rose-500'
+                          : 'border-slate-800 focus:border-teal-500 focus:ring-teal-500'
+                      }`}
                     />
                   </div>
+                  {touched.name && !name.trim() && (
+                    <p className="text-[11px] text-rose-400 mt-1">Please enter your full name.</p>
+                  )}
                 </div>
               )}
 
@@ -474,6 +760,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       required
                       id="auth-email-input"
                       value={email}
+                      onBlur={() => markTouched('email')}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder={
                         mode === 'admin'
@@ -481,14 +768,19 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                           : 'student@nursesstudy.com'
                       }
                       className={`w-full pl-10 pr-3.5 py-2.5 bg-slate-900 border rounded-xl text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 transition-colors ${
-                        email && !isEmailValid(email)
-                          ? 'border-amber-500/60 focus:border-amber-500 focus:ring-amber-500'
+                        touched.email && email && !isEmailValid(email)
+                          ? 'border-rose-500/60 focus:border-rose-500 focus:ring-rose-500'
+                          : touched.email && !email
+                          ? 'border-rose-500/60 focus:border-rose-500 focus:ring-rose-500'
                           : 'border-slate-800 focus:border-teal-500 focus:ring-teal-500'
                       }`}
                     />
                   </div>
-                  {email && !isEmailValid(email) && (
-                    <p className="text-[11px] text-amber-400 mt-1">Please enter a valid email format (e.g. student@domain.com)</p>
+                  {touched.email && !email && (
+                    <p className="text-[11px] text-rose-400 mt-1">Please enter a valid email address.</p>
+                  )}
+                  {touched.email && email && !isEmailValid(email) && (
+                    <p className="text-[11px] text-rose-400 mt-1">Please enter a valid email format (e.g. student@domain.com).</p>
                   )}
                 </div>
               )}
@@ -539,7 +831,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                         Forgot Password?
                       </button>
                     ) : mode === 'register' ? (
-                      <span className="text-[10px] text-slate-400">Min. 6 characters</span>
+                      <span className="text-[10px] text-slate-400">Min. 8 characters</span>
                     ) : null}
                   </div>
                   <div className="relative">
@@ -549,9 +841,16 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       required
                       id="auth-password-input"
                       value={password}
+                      onBlur={() => markTouched('password')}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••••••"
-                      className="w-full pl-10 pr-10 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-colors"
+                      className={`w-full pl-10 pr-10 py-2.5 bg-slate-900 border rounded-xl text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 transition-colors ${
+                        touched.password && mode === 'register' && password && !passwordStrength.isValid
+                          ? 'border-amber-500/60 focus:border-amber-500 focus:ring-amber-500'
+                          : touched.password && !password
+                          ? 'border-rose-500/60 focus:border-rose-500 focus:ring-rose-500'
+                          : 'border-slate-800 focus:border-teal-500 focus:ring-teal-500'
+                      }`}
                     />
                     <button
                       type="button"
@@ -564,6 +863,97 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+
+                  {touched.password && !password && (
+                    <p className="text-[11px] text-rose-400 mt-1">
+                      {mode === 'register' ? 'Password must contain at least 8 characters.' : 'Please enter your password.'}
+                    </p>
+                  )}
+
+                  {/* Password requirements live status */}
+                  {mode === 'register' && (
+                    <div className="mt-2.5 p-3 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5 text-[11px]">
+                      <div className="text-slate-400 font-semibold text-[10px] uppercase tracking-wider mb-1">
+                        Password Requirements:
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
+                        <span
+                          className={`flex items-center gap-1.5 ${
+                            passwordStrength.hasMinLength ? 'text-teal-400 font-semibold' : 'text-slate-400'
+                          }`}
+                        >
+                          <span
+                            className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] shrink-0 ${
+                              passwordStrength.hasMinLength ? 'bg-teal-500/20 text-teal-400 font-bold' : 'bg-slate-800 text-slate-400'
+                            }`}
+                          >
+                            {passwordStrength.hasMinLength ? '✓' : '•'}
+                          </span>
+                          At least 8 characters
+                        </span>
+
+                        <span
+                          className={`flex items-center gap-1.5 ${
+                            passwordStrength.hasUpper ? 'text-teal-400 font-semibold' : 'text-slate-400'
+                          }`}
+                        >
+                          <span
+                            className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] shrink-0 ${
+                              passwordStrength.hasUpper ? 'bg-teal-500/20 text-teal-400 font-bold' : 'bg-slate-800 text-slate-400'
+                            }`}
+                          >
+                            {passwordStrength.hasUpper ? '✓' : '•'}
+                          </span>
+                          Uppercase letter (A-Z)
+                        </span>
+
+                        <span
+                          className={`flex items-center gap-1.5 ${
+                            passwordStrength.hasLower ? 'text-teal-400 font-semibold' : 'text-slate-400'
+                          }`}
+                        >
+                          <span
+                            className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] shrink-0 ${
+                              passwordStrength.hasLower ? 'bg-teal-500/20 text-teal-400 font-bold' : 'bg-slate-800 text-slate-400'
+                            }`}
+                          >
+                            {passwordStrength.hasLower ? '✓' : '•'}
+                          </span>
+                          Lowercase letter (a-z)
+                        </span>
+
+                        <span
+                          className={`flex items-center gap-1.5 ${
+                            passwordStrength.hasNumber ? 'text-teal-400 font-semibold' : 'text-slate-400'
+                          }`}
+                        >
+                          <span
+                            className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] shrink-0 ${
+                              passwordStrength.hasNumber ? 'bg-teal-500/20 text-teal-400 font-bold' : 'bg-slate-800 text-slate-400'
+                            }`}
+                          >
+                            {passwordStrength.hasNumber ? '✓' : '•'}
+                          </span>
+                          At least one number (0-9)
+                        </span>
+
+                        <span
+                          className={`flex items-center gap-1.5 ${
+                            passwordStrength.hasSpecial ? 'text-teal-400 font-semibold' : 'text-slate-400'
+                          }`}
+                        >
+                          <span
+                            className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] shrink-0 ${
+                              passwordStrength.hasSpecial ? 'bg-teal-500/20 text-teal-400 font-bold' : 'bg-slate-800 text-slate-400'
+                            }`}
+                          >
+                            {passwordStrength.hasSpecial ? '✓' : '•'}
+                          </span>
+                          Special character (!@#$)
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -575,9 +965,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       Confirm Password <span className="text-teal-400">*</span>
                     </label>
                     {confirmPassword && password && (
-                      <span className={`text-[10px] font-semibold flex items-center gap-1 ${
-                        password === confirmPassword ? 'text-emerald-400' : 'text-rose-400'
-                      }`}>
+                      <span
+                        className={`text-[10px] font-semibold flex items-center gap-1 ${
+                          password === confirmPassword ? 'text-emerald-400' : 'text-rose-400'
+                        }`}
+                      >
                         {password === confirmPassword ? (
                           <>
                             <Check className="w-3 h-3" /> Passwords match
@@ -595,6 +987,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       required
                       id="signup-confirm-password-input"
                       value={confirmPassword}
+                      onBlur={() => markTouched('confirmPassword')}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="••••••••••••"
                       className={`w-full pl-10 pr-10 py-2.5 bg-slate-900 border rounded-xl text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 transition-colors ${
@@ -614,10 +1007,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  {touched.confirmPassword && confirmPassword && password !== confirmPassword && (
+                    <p className="text-[11px] text-rose-400 mt-1">Passwords do not match.</p>
+                  )}
                 </div>
               )}
 
-              {/* 6. RESET PASSWORD FIELDS (REAL FIREBASE PASSWORD RESET) */}
+              {/* 6. RESET PASSWORD FIELDS */}
               {mode === 'reset_password' && (
                 <div className="space-y-4">
                   {verifiedEmail && (
@@ -647,7 +1043,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
                         New Password <span className="text-teal-400">*</span>
                       </label>
-                      <span className="text-[10px] text-slate-400">Min. 6 characters</span>
+                      <span className="text-[10px] text-slate-400">Min. 8 characters</span>
                     </div>
                     <div className="relative">
                       <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
@@ -677,9 +1073,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                         Confirm New Password <span className="text-teal-400">*</span>
                       </label>
                       {confirmNewPassword && newPassword && (
-                        <span className={`text-[10px] font-semibold flex items-center gap-1 ${
-                          newPassword === confirmNewPassword ? 'text-emerald-400' : 'text-rose-400'
-                        }`}>
+                        <span
+                          className={`text-[10px] font-semibold flex items-center gap-1 ${
+                            newPassword === confirmNewPassword ? 'text-emerald-400' : 'text-rose-400'
+                          }`}
+                        >
                           {newPassword === confirmNewPassword ? (
                             <>
                               <Check className="w-3 h-3" /> Passwords match
@@ -714,7 +1112,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 </div>
               )}
 
-              {/* Submit Button */}
+              {/* Submit Button with Loading States */}
               <button
                 type="submit"
                 id="auth-submit-btn"
@@ -728,7 +1126,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 {isSubmitting ? (
                   <>
                     <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Processing Request...</span>
+                    <span>
+                      {mode === 'register'
+                        ? 'Creating account...'
+                        : mode === 'login'
+                        ? 'Logging in...'
+                        : mode === 'forgot_password'
+                        ? 'Sending reset link...'
+                        : mode === 'reset_password'
+                        ? 'Updating password...'
+                        : 'Signing in...'}
+                    </span>
                   </>
                 ) : mode === 'register' ? (
                   <>
@@ -799,9 +1207,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   Log In to Your Account
                 </button>
               </p>
-            ) : mode === 'forgot_password' || mode === 'reset_password' ? (
+            ) : mode === 'forgot_password' || mode === 'reset_password' || mode === 'verify_email' ? (
               <p className="text-xs text-slate-400">
-                Remember your password?{' '}
+                Remember your credentials?{' '}
                 <button
                   type="button"
                   onClick={() => {

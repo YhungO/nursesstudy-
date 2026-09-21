@@ -82,15 +82,17 @@ const MainAppContent: React.FC = () => {
       if (exms?.length) setExams((prev) => (prev.length === 0 ? exms : prev));
       if (anns?.length) setAnnouncements((prev) => (prev.length === 0 ? anns : prev));
 
-      // Auto-seed Firestore in background if Firestore is currently fresh/empty
-      seedFirestoreIfEmpty({
-        levels: lvls,
-        subjects: subjs,
-        notes: nts,
-        questions: qts,
-        exams: exms,
-        announcements: anns,
-      }).catch((e) => console.warn('Firestore auto-seed notice:', e));
+      // Auto-seed Firestore in background if Firestore is currently fresh/empty and user is admin
+      if (user?.role === 'admin' || user?.email === 'chigaemezuaugustine43@gmail.com' || user?.email === 'tiktokyhung@gmail.com') {
+        seedFirestoreIfEmpty({
+          levels: lvls,
+          subjects: subjs,
+          notes: nts,
+          questions: qts,
+          exams: exms,
+          announcements: anns,
+        }, user).catch((e) => console.warn('Firestore auto-seed notice:', e));
+      }
 
       if (user) {
         try {
@@ -177,6 +179,23 @@ const MainAppContent: React.FC = () => {
         setBookmarks(liveBookmarks);
       }
     });
+
+    // Auto-seed if admin just logged in and data is present
+    if (user.role === 'admin' || user.email === 'chigaemezuaugustine43@gmail.com' || user.email === 'tiktokyhung@gmail.com') {
+      if (levels.length > 0) {
+        seedFirestoreIfEmpty(
+          {
+            levels,
+            subjects,
+            notes,
+            questions,
+            exams,
+            announcements,
+          },
+          user
+        ).catch(() => {});
+      }
+    }
 
     return () => {
       unsubAttempts();
