@@ -61,25 +61,21 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Study Notes & Materials (Students only see published content)
+    // Study Notes & Materials (Curriculum readable by all students, writable only by admin)
     match /notes/{noteId} {
-      allow read: if isAdmin() ||
-        resource.data.status == 'published' ||
-        (resource.data.status == null && resource.data.isPublished == true);
+      allow read: if true;
       allow write: if isAdmin();
     }
 
-    // CBT Questions Bank (Authorized users take practice/exams, admin manages)
+    // CBT Questions Bank (Practice & exams readable by students, writable only by admin)
     match /questions/{questionId} {
-      allow read: if isAuthenticated() || isAdmin();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
-    // CBT Exams (Students only see published exams)
+    // CBT Exams (Exams readable by students, writable only by admin)
     match /exams/{examId} {
-      allow read: if isAdmin() ||
-        resource.data.status == 'published' ||
-        (resource.data.status == null && resource.data.isPublished == true);
+      allow read: if true;
       allow write: if isAdmin();
     }
 

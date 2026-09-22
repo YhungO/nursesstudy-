@@ -76,12 +76,12 @@ const MainAppContent: React.FC = () => {
         api.getAnnouncements(),
       ]);
 
-      if (lvls?.length) setLevels((prev) => (prev.length === 0 ? lvls : prev));
-      if (subjs?.length) setSubjects((prev) => (prev.length === 0 ? subjs : prev));
-      if (nts?.length) setNotes((prev) => (prev.length === 0 ? nts : prev));
-      if (qts?.length) setQuestions((prev) => (prev.length === 0 ? qts : prev));
-      if (exms?.length) setExams((prev) => (prev.length === 0 ? exms : prev));
-      if (anns?.length) setAnnouncements((prev) => (prev.length === 0 ? anns : prev));
+      if (Array.isArray(lvls)) setLevels(lvls);
+      if (Array.isArray(subjs)) setSubjects(subjs);
+      if (Array.isArray(nts)) setNotes(nts);
+      if (Array.isArray(qts)) setQuestions(qts);
+      if (Array.isArray(exms)) setExams(exms);
+      if (Array.isArray(anns)) setAnnouncements(anns);
 
       // Auto-seed Firestore in background if Firestore is currently fresh/empty and user is admin
       if (user?.role === 'admin' || user?.email === 'chigaemezuaugustine43@gmail.com' || user?.email === 'tiktokyhung@gmail.com') {
@@ -127,38 +127,28 @@ const MainAppContent: React.FC = () => {
 
     // Attach real-time listeners to Firestore collections
     const unsubLevels = subscribeToLevels((liveLevels) => {
-      if (liveLevels && liveLevels.length > 0) {
-        setLevels(liveLevels);
-        setIsLoading(false);
-      }
+      setLevels(liveLevels || []);
+      setIsLoading(false);
     });
 
     const unsubSubjects = subscribeToSubjects((liveSubjects) => {
-      if (liveSubjects && liveSubjects.length > 0) {
-        setSubjects(liveSubjects);
-      }
+      setSubjects(liveSubjects || []);
     });
 
     const unsubNotes = subscribeToNotes((liveNotes) => {
-      setNotes(liveNotes);
+      setNotes(liveNotes || []);
     }, { publishedOnly: false });
 
     const unsubQuestions = subscribeToQuestions((liveQuestions) => {
-      if (liveQuestions && liveQuestions.length > 0) {
-        setQuestions(liveQuestions);
-      }
+      setQuestions(liveQuestions || []);
     });
 
     const unsubExams = subscribeToExams((liveExams) => {
-      if (liveExams && liveExams.length > 0) {
-        setExams(liveExams);
-      }
+      setExams(liveExams || []);
     }, { publishedOnly: false });
 
     const unsubAnnouncements = subscribeToAnnouncements((liveAnnouncements) => {
-      if (liveAnnouncements && liveAnnouncements.length > 0) {
-        setAnnouncements(liveAnnouncements);
-      }
+      setAnnouncements(liveAnnouncements || []);
     });
 
     return () => {

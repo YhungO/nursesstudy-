@@ -325,22 +325,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     e.preventDefault();
     if (!editingLevel?.name) return;
     try {
+      const adminActor = user ? { uid: user.id, email: user.email, name: user.name } : undefined;
       if (editingLevel.id) {
+        await saveLevelToFirestore(editingLevel as NursingLevel, adminActor);
         const res = await api.updateLevel(editingLevel.id, editingLevel);
-        saveLevelToFirestore(res).catch(() => {});
         setLocalLevels((prev) => prev.map((l) => (l.id === res.id ? res : l)));
-        showNotify('Nursing level updated & synced to Cloud Firestore');
+        showNotify('Nursing level updated successfully');
       } else {
         const res = await api.createLevel(editingLevel);
-        saveLevelToFirestore(res).catch(() => {});
+        await saveLevelToFirestore(res, adminActor);
         setLocalLevels((prev) => [...prev, res]);
-        showNotify('Nursing level created & synced to Cloud Firestore');
+        showNotify('Nursing level created successfully');
       }
       setEditingLevel(null);
       onDataChanged();
       loadAdminData();
     } catch (err: any) {
-      alert(err.message);
+      console.error('Failed to save level:', err);
+      alert('Failed to save nursing level: ' + (err.message || err));
     }
   };
 
@@ -348,22 +350,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [editingSubject, setEditingSubject] = useState<Partial<Subject> | null>(null);
   const handleSaveSubject = async (data: Partial<Subject>) => {
     try {
+      const adminActor = user ? { uid: user.id, email: user.email, name: user.name } : undefined;
+      const now = new Date().toISOString();
+      const isPub = data.isPublished !== false;
+      const status: ContentStatus = data.status || (isPub ? 'published' : 'draft');
+
       if (data.id) {
-        const res = await api.updateSubject(data.id, data);
-        saveSubjectToFirestore(res).catch(() => {});
+        const subjPayload: Subject = {
+          ...(data as Subject),
+          status,
+          isPublished: isPub,
+          updatedAt: now,
+        };
+        await saveSubjectToFirestore(subjPayload, adminActor);
+        const res = await api.updateSubject(data.id, subjPayload);
         setLocalSubjects((prev) => prev.map((s) => (s.id === res.id ? res : s)));
-        showNotify('Subject updated & synced to Cloud Firestore');
+        showNotify('Subject updated successfully');
       } else {
-        const res = await api.createSubject(data);
-        saveSubjectToFirestore(res).catch(() => {});
+        const res = await api.createSubject({
+          ...data,
+          status,
+          isPublished: isPub,
+          createdAt: now,
+          updatedAt: now,
+        });
+        await saveSubjectToFirestore(res, adminActor);
         setLocalSubjects((prev) => [...prev, res]);
-        showNotify('Subject created & synced to Cloud Firestore');
+        showNotify('Subject created successfully');
       }
       setEditingSubject(null);
       onDataChanged();
       loadAdminData();
     } catch (err: any) {
-      alert(err.message);
+      console.error('Failed to save subject:', err);
+      alert('Failed to save subject: ' + (err.message || err));
     }
   };
 
@@ -382,6 +402,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         summary: '',
         content: '',
         readingTime: 5,
+        status: 'published',
         isPublished: true,
       });
     }
@@ -389,22 +410,65 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleSaveNote = async (data: Partial<StudyNote>) => {
     try {
+      const adminActor = user ? { uid: user.id, email: user.email, name: user.name } : undefined;
+      const now = new Date().toISOString();
+      const status: ContentStatus = data.status || (data.isPublished ? 'published' : 'draft');
+      const isPub = status === 'published';
+
       if (data.id) {
-        const res = await api.updateNote(data.id, data);
-        saveNoteToFirestore(res).catch(() => {});
+        const notePayload: StudyNote = {
+          ...(data as StudyNote),
+          status,
+          isPublished: isPub,
+          publishedAt: isPub ? (data.publishedAt || now) : undefined,
+          updatedAt: now,
+        };
+        await saveNoteToFirestore(notePayload, adminActor);
+        const res = await api.updateNote(data.id, notePayload);
         setLocalNotes((prev) => prev.map((n) => (n.id === res.id ? res : n)));
-        showNotify('Study note updated & synced to Cloud Firestore');
+        showNotify(`Study note ${isPub ? 'published' : 'saved as draft'} successfully`);
       } else {
-        const res = await api.createNote(data);
-        saveNoteToFirestore(res).catch(() => {});
+        const res = await api.createNote({
+          ...data,
+          status,
+          isPublished: isPub,
+          publishedAt: isPub ? now : undefined,
+        });
+        await saveNoteToFirestore(res, adminActor);
         setLocalNotes((prev) => [res, ...prev]);
-        showNotify('Study note published & synced to Cloud Firestore');
+        showNotify(`Study note ${isPub ? 'published' : 'created as draft'} successfully`);
       }
       setEditingNote(null);
       onDataChanged();
       loadAdminData();
     } catch (err: any) {
-      alert(err.message);
+      console.error('Failed to save note:', err);
+      alert('Failed to save study note: ' + (err.message || err));
+    }
+  };
+
+  const handleToggleNotePublish = async (note: StudyNote) => {
+    const isCurrentlyPub = note.status ? note.status === 'published' : note.isPublished !== false;
+    const newStatus: ContentStatus = isCurrentlyPub ? 'draft' : 'published';
+    const isPub = newStatus === 'published';
+    const now = new Date().toISOString();
+    try {
+      const adminActor = user ? { uid: user.id, email: user.email, name: user.name } : undefined;
+      const updatedNote: StudyNote = {
+        ...note,
+        status: newStatus,
+        isPublished: isPub,
+        publishedAt: isPub ? (note.publishedAt || now) : undefined,
+        updatedAt: now,
+      };
+      await saveNoteToFirestore(updatedNote, adminActor);
+      await api.updateNote(note.id, updatedNote);
+      setLocalNotes((prev) => prev.map((n) => (n.id === note.id ? updatedNote : n)));
+      showNotify(`Note ${isPub ? 'published to students' : 'set to draft (hidden from students)'}`);
+      onDataChanged();
+    } catch (err: any) {
+      console.error('Failed to toggle note publish status:', err);
+      alert('Failed to update publication status: ' + (err.message || err));
     }
   };
 
@@ -430,22 +494,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleSaveQuestion = async (data: Partial<Question>) => {
     try {
+      const adminActor = user ? { uid: user.id, email: user.email, name: user.name } : undefined;
+      const now = new Date().toISOString();
       if (data.id) {
-        const res = await api.updateQuestion(data.id, data);
-        saveQuestionToFirestore(res).catch(() => {});
+        const qPayload: Question = {
+          ...(data as Question),
+          updatedAt: now,
+        };
+        await saveQuestionToFirestore(qPayload, adminActor);
+        const res = await api.updateQuestion(data.id, qPayload);
         setLocalQuestions((prev) => prev.map((q) => (String(q.id) === String(res.id) ? res : q)));
-        showNotify('Question updated & synced to Cloud Firestore');
+        showNotify('Question updated successfully');
       } else {
-        const res = await api.createQuestion(data);
-        saveQuestionToFirestore(res).catch(() => {});
+        const res = await api.createQuestion({
+          ...data,
+          createdAt: now,
+          updatedAt: now,
+        });
+        await saveQuestionToFirestore(res, adminActor);
         setLocalQuestions((prev) => [res, ...prev]);
-        showNotify('Question created & synced to Cloud Firestore');
+        showNotify('Question created successfully');
       }
       setEditingQuestion(null);
       onDataChanged();
       loadAdminData();
     } catch (err: any) {
-      alert(err.message);
+      console.error('Failed to save question:', err);
+      alert('Failed to save question: ' + (err.message || err));
     }
   };
 
@@ -454,22 +529,65 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleSaveExam = async (data: Partial<CBTExam>) => {
     try {
+      const adminActor = user ? { uid: user.id, email: user.email, name: user.name } : undefined;
+      const now = new Date().toISOString();
+      const status: ContentStatus = data.status || (data.isPublished ? 'published' : 'draft');
+      const isPub = status === 'published';
+
       if (data.id) {
-        const res = await api.updateExam(data.id, data);
-        saveExamToFirestore(res).catch(() => {});
+        const examPayload: CBTExam = {
+          ...(data as CBTExam),
+          status,
+          isPublished: isPub,
+          publishedAt: isPub ? (data.publishedAt || now) : undefined,
+          updatedAt: now,
+        };
+        await saveExamToFirestore(examPayload, adminActor);
+        const res = await api.updateExam(data.id, examPayload);
         setLocalExams((prev) => prev.map((e) => (e.id === res.id ? res : e)));
-        showNotify('CBT Examination updated & synced to Cloud Firestore');
+        showNotify(`CBT Exam ${isPub ? 'published' : 'saved as draft'} successfully`);
       } else {
-        const res = await api.createExam(data);
-        saveExamToFirestore(res).catch(() => {});
+        const res = await api.createExam({
+          ...data,
+          status,
+          isPublished: isPub,
+          publishedAt: isPub ? now : undefined,
+        });
+        await saveExamToFirestore(res, adminActor);
         setLocalExams((prev) => [res, ...prev]);
-        showNotify('CBT Examination created & synced to Cloud Firestore');
+        showNotify(`CBT Exam ${isPub ? 'published' : 'created as draft'} successfully`);
       }
       setEditingExam(null);
       onDataChanged();
       loadAdminData();
     } catch (err: any) {
-      alert(err.message);
+      console.error('Failed to save exam:', err);
+      alert('Failed to save CBT Examination: ' + (err.message || err));
+    }
+  };
+
+  const handleToggleExamPublish = async (exam: CBTExam) => {
+    const isCurrentlyPub = exam.status ? exam.status === 'published' : exam.isPublished !== false;
+    const newStatus: ContentStatus = isCurrentlyPub ? 'draft' : 'published';
+    const isPub = newStatus === 'published';
+    const now = new Date().toISOString();
+    try {
+      const adminActor = user ? { uid: user.id, email: user.email, name: user.name } : undefined;
+      const updatedExam: CBTExam = {
+        ...exam,
+        status: newStatus,
+        isPublished: isPub,
+        publishedAt: isPub ? (exam.publishedAt || now) : undefined,
+        updatedAt: now,
+      };
+      await saveExamToFirestore(updatedExam, adminActor);
+      await api.updateExam(exam.id, updatedExam);
+      setLocalExams((prev) => prev.map((e) => (e.id === exam.id ? updatedExam : e)));
+      showNotify(`CBT Exam ${isPub ? 'published to students' : 'set to draft (hidden from students)'}`);
+      onDataChanged();
+    } catch (err: any) {
+      console.error('Failed to toggle exam publish status:', err);
+      alert('Failed to update exam publication status: ' + (err.message || err));
     }
   };
 
@@ -483,21 +601,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     e.preventDefault();
     if (!annTitle.trim() || !annContent.trim()) return;
     try {
+      const adminActor = user ? { uid: user.id, email: user.email, name: user.name } : undefined;
       const res = await api.createAnnouncement({
-        title: annTitle,
-        content: annContent,
+        title: annTitle.trim(),
+        content: annContent.trim(),
         priority: annPriority,
         targetLevel: annTargetLevel,
       });
-      saveAnnouncementToFirestore(res).catch(() => {});
+      await saveAnnouncementToFirestore(res, adminActor);
       setLocalAnnouncements((prev) => [res, ...prev]);
       setAnnTitle('');
       setAnnContent('');
-      showNotify('Announcement broadcast sent & synced to Cloud Firestore');
+      showNotify('Announcement broadcast published successfully');
       onDataChanged();
       loadAdminData();
     } catch (err: any) {
-      alert(err.message);
+      console.error('Failed to create announcement:', err);
+      alert('Failed to publish announcement: ' + (err.message || err));
     }
   };
 
@@ -506,27 +626,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
     const targetEmail = email?.toLowerCase().trim();
 
-    // Optimistic UI update immediately
-    setStudentsList((prev) =>
-      prev.map((s) =>
-        s.id === studentId || (targetEmail && s.email?.toLowerCase().trim() === targetEmail)
-          ? { ...s, status: newStatus }
-          : s
-      )
-    );
-
-    showNotify(newStatus === 'suspended' ? 'Student account suspended' : 'Student account reactivated');
-
     try {
       await api.updateStudentStatus(studentId, newStatus, undefined, targetEmail);
-    } catch (err: any) {
-      console.warn('API updateStudentStatus notice:', err);
-    }
-
-    try {
       await updateStudentStatusInFirestore(studentId, newStatus);
-    } catch (fErr) {
-      console.warn('Firestore update status notice:', fErr);
+      setStudentsList((prev) =>
+        prev.map((s) =>
+          s.id === studentId || (targetEmail && s.email?.toLowerCase().trim() === targetEmail)
+            ? { ...s, status: newStatus }
+            : s
+        )
+      );
+      showNotify(newStatus === 'suspended' ? 'Student account suspended' : 'Student account reactivated');
+      onDataChanged();
+    } catch (err: any) {
+      console.error('Failed to update student status:', err);
+      alert('Failed to update student status: ' + (err.message || err));
     }
   };
 
@@ -537,121 +651,93 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const idStr = String(id);
 
     setIsDeleting(true);
-    deletedItemIdsRef.current.add(idStr);
 
-    // Step 1: Immediately remove the item from the list/UI (no page refresh needed)
-    switch (type) {
-      case 'student': {
-        const targetId = String(id);
-        const targetEmail = email?.toLowerCase().trim();
-        deletedStudentIdsRef.current.add(targetId);
-        if (targetEmail) {
-          deletedStudentIdsRef.current.add(targetEmail);
-        }
-        setStudentsList((prev) =>
-          prev.filter(
-            (s) => s.id !== targetId && (!targetEmail || s.email?.toLowerCase().trim() !== targetEmail)
-          )
-        );
-        setStats((prev) => (prev ? { ...prev, totalStudents: Math.max(0, prev.totalStudents - 1) } : null));
-        break;
-      }
-      case 'question': {
-        setLocalQuestions((prev) => prev.filter((q) => String(q.id) !== idStr));
-        setStats((prev) => (prev ? { ...prev, totalQuestions: Math.max(0, prev.totalQuestions - 1) } : null));
-        break;
-      }
-      case 'exam': {
-        setLocalExams((prev) => prev.filter((e) => String(e.id) !== idStr));
-        setStats((prev) => (prev ? { ...prev, totalExams: Math.max(0, prev.totalExams - 1) } : null));
-        break;
-      }
-      case 'subject': {
-        setLocalSubjects((prev) => prev.filter((s) => String(s.id) !== idStr));
-        // Also remove cascade-affected notes and questions locally
-        setLocalNotes((prev) => prev.filter((n) => n.subjectId !== idStr));
-        setLocalQuestions((prev) => prev.filter((q) => q.subjectId !== idStr));
-        setStats((prev) => (prev ? { ...prev, totalSubjects: Math.max(0, prev.totalSubjects - 1) } : null));
-        break;
-      }
-      case 'note': {
-        setLocalNotes((prev) => prev.filter((n) => String(n.id) !== idStr));
-        setStats((prev) => (prev ? { ...prev, totalNotes: Math.max(0, prev.totalNotes - 1) } : null));
-        break;
-      }
-      case 'level': {
-        setLocalLevels((prev) => prev.filter((l) => String(l.id) !== idStr));
-        break;
-      }
-      case 'announcement': {
-        setLocalAnnouncements((prev) => prev.filter((a) => String(a.id) !== idStr));
-        break;
-      }
-      case 'result': {
-        setAttemptsList((prev) => prev.filter((att) => String(att.id) !== idStr));
-        setStats((prev) => (prev ? { ...prev, totalAttempts: Math.max(0, prev.totalAttempts - 1) } : null));
-        break;
-      }
-    }
-
-    // Step 2: Close confirmation dialog
-    setDeleteTarget(null);
-    setIsDeleting(false);
-
-    // Step 3: Show required success toast/message: "Item deleted successfully"
-    showNotify('Item deleted successfully');
-
-    // Step 4: Perform persistent deletion asynchronously in backend and Firestore
     try {
       switch (type) {
         case 'student': {
           const targetId = String(id);
           const targetEmail = email?.toLowerCase().trim();
           await api.deleteStudent(targetId, targetEmail);
-          deleteUserFromFirestore(targetId, targetEmail).catch(() => {});
+          await deleteUserFromFirestore(targetId, targetEmail);
+          deletedStudentIdsRef.current.add(targetId);
+          if (targetEmail) {
+            deletedStudentIdsRef.current.add(targetEmail);
+          }
+          setStudentsList((prev) =>
+            prev.filter(
+              (s) => s.id !== targetId && (!targetEmail || s.email?.toLowerCase().trim() !== targetEmail)
+            )
+          );
+          setStats((prev) => (prev ? { ...prev, totalStudents: Math.max(0, prev.totalStudents - 1) } : null));
           break;
         }
         case 'question': {
+          await deleteQuestionFromFirestore(id);
           await api.deleteQuestion(id);
-          deleteQuestionFromFirestore(id).catch(() => {});
+          deletedItemIdsRef.current.add(idStr);
+          setLocalQuestions((prev) => prev.filter((q) => String(q.id) !== idStr));
+          setStats((prev) => (prev ? { ...prev, totalQuestions: Math.max(0, prev.totalQuestions - 1) } : null));
           break;
         }
         case 'exam': {
+          await deleteExamFromFirestore(idStr);
           await api.deleteExam(idStr);
-          deleteExamFromFirestore(idStr).catch(() => {});
+          deletedItemIdsRef.current.add(idStr);
+          setLocalExams((prev) => prev.filter((e) => String(e.id) !== idStr));
+          setStats((prev) => (prev ? { ...prev, totalExams: Math.max(0, prev.totalExams - 1) } : null));
           break;
         }
         case 'subject': {
+          await deleteSubjectFromFirestore(idStr);
           await api.deleteSubject(idStr);
-          deleteSubjectFromFirestore(idStr).catch(() => {});
+          deletedItemIdsRef.current.add(idStr);
+          setLocalSubjects((prev) => prev.filter((s) => String(s.id) !== idStr));
+          setLocalNotes((prev) => prev.filter((n) => n.subjectId !== idStr));
+          setLocalQuestions((prev) => prev.filter((q) => q.subjectId !== idStr));
+          setStats((prev) => (prev ? { ...prev, totalSubjects: Math.max(0, prev.totalSubjects - 1) } : null));
           break;
         }
         case 'note': {
+          await deleteNoteFromFirestore(idStr);
           await api.deleteNote(idStr);
-          deleteNoteFromFirestore(idStr).catch(() => {});
+          deletedItemIdsRef.current.add(idStr);
+          setLocalNotes((prev) => prev.filter((n) => String(n.id) !== idStr));
+          setStats((prev) => (prev ? { ...prev, totalNotes: Math.max(0, prev.totalNotes - 1) } : null));
           break;
         }
         case 'level': {
+          await deleteLevelFromFirestore(idStr);
           await api.deleteLevel(idStr);
-          deleteLevelFromFirestore(idStr).catch(() => {});
+          deletedItemIdsRef.current.add(idStr);
+          setLocalLevels((prev) => prev.map((l) => (String(l.id) === idStr ? null! : l)).filter(Boolean));
           break;
         }
         case 'announcement': {
+          await deleteAnnouncementFromFirestore(idStr);
           await api.deleteAnnouncement(idStr);
-          deleteAnnouncementFromFirestore(idStr).catch(() => {});
+          deletedItemIdsRef.current.add(idStr);
+          setLocalAnnouncements((prev) => prev.filter((a) => String(a.id) !== idStr));
           break;
         }
         case 'result': {
           await api.deleteAttempt(idStr);
+          deletedItemIdsRef.current.add(idStr);
+          setAttemptsList((prev) => prev.filter((att) => String(att.id) !== idStr));
+          setStats((prev) => (prev ? { ...prev, totalAttempts: Math.max(0, prev.totalAttempts - 1) } : null));
           break;
         }
       }
-    } catch (err: any) {
-      console.warn(`Persistent deletion notice for ${type} (${id}):`, err);
-    }
 
-    onDataChanged();
-    loadAdminData();
+      setDeleteTarget(null);
+      showNotify('Item deleted successfully');
+      onDataChanged();
+      loadAdminData();
+    } catch (err: any) {
+      console.error(`Persistent deletion error for ${type} (${id}):`, err);
+      alert('Failed to delete item: ' + (err.message || 'Network error occurred. The item remains intact.'));
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // 8. Database Seed Reset
@@ -1244,15 +1330,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${lvl.badgeClass}`}>
                           {lvl.badge}
                         </span>
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        <button
+                          type="button"
+                          onClick={() => handleToggleNotePublish(note)}
+                          title="Click to toggle publication status (Published / Draft)"
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border cursor-pointer transition-all hover:scale-105 ${
                             note.isPublished
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                              : 'bg-slate-800 text-slate-400 border-slate-700'
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                              : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-slate-200'
                           }`}
                         >
-                          {note.isPublished ? 'Published' : 'Draft'}
-                        </span>
+                          {note.isPublished ? 'Published (Live)' : 'Draft (Hidden)'}
+                        </button>
                       </div>
                       <h4 className="font-bold text-sm text-white truncate">{note.title}</h4>
                       <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
@@ -1469,15 +1558,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${lvl.badgeClass}`}>
                           {lvl.badge}
                         </span>
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        <button
+                          type="button"
+                          onClick={() => handleToggleExamPublish(exam)}
+                          title="Click to toggle publication status (Published / Draft)"
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border cursor-pointer transition-all hover:scale-105 ${
                             exam.isPublished
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                              : 'bg-slate-800 text-slate-400 border-slate-700'
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                              : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-slate-200'
                           }`}
                         >
-                          {exam.isPublished ? 'Published' : 'Draft'}
-                        </span>
+                          {exam.isPublished ? 'Published (Live)' : 'Draft (Hidden)'}
+                        </button>
                       </div>
                       <div className="flex items-center gap-3 text-xs text-slate-400 flex-wrap">
                         <span className="font-medium text-slate-300">Subject: {exam.subjectName || 'Comprehensive'}</span>

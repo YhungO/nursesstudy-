@@ -47,7 +47,9 @@ export interface StudyNote {
   keyPoints: string[];
   clinicalPearls: string[];
   readingTime: number;
+  status?: 'draft' | 'published' | 'unpublished' | 'archived';
   isPublished: boolean;
+  publishedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -87,9 +89,12 @@ export interface CBTExam {
   totalQuestions: number;
   passingScore: number;
   questionIds: (string | number)[];
+  status?: 'draft' | 'published' | 'unpublished' | 'archived';
   isPublished: boolean;
+  publishedAt?: string;
   instructions: string[];
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface ExamAttempt {

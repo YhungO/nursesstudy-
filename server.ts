@@ -549,7 +549,10 @@ app.get('/api/notes', (req, res) => {
   let notes = database.notes;
 
   if (!user || user.role !== 'admin') {
-    notes = notes.filter(n => n.isPublished);
+    notes = notes.filter(n => {
+      const isPub = n.status ? n.status === 'published' : n.isPublished !== false;
+      return isPub && n.status !== 'draft' && n.status !== 'archived';
+    });
   }
 
   const { subjectId, levelId, search } = req.query;
@@ -589,7 +592,8 @@ app.get('/api/notes/:id', (req, res) => {
   const note = database.notes.find(n => n.id === id);
 
   if (!note) return res.status(404).json({ error: 'Study note not found' });
-  if (!note.isPublished && (!user || user.role !== 'admin')) {
+  const isPub = note.status ? note.status === 'published' : note.isPublished !== false;
+  if ((!isPub || note.status === 'draft' || note.status === 'archived') && (!user || user.role !== 'admin')) {
     return res.status(403).json({ error: 'This study note is currently unpublished' });
   }
 
@@ -602,10 +606,14 @@ app.get('/api/notes/:id', (req, res) => {
 });
 
 app.post('/api/notes', requireAdmin, (req, res) => {
-  const { title, topic, subjectId, levelId, summary, content, keyPoints, clinicalPearls, readingTime, isPublished } = req.body;
+  const { title, topic, subjectId, levelId, summary, content, keyPoints, clinicalPearls, readingTime, isPublished, status } = req.body;
   if (!title || !subjectId) {
     return res.status(400).json({ error: 'Title and Subject are required' });
   }
+
+  const normalizedStatus = status || (isPublished !== false ? 'published' : 'draft');
+  const isPub = normalizedStatus === 'published';
+  const now = new Date().toISOString();
 
   const database = db.get();
   const newNote: StudyNote = {
@@ -619,9 +627,11 @@ app.post('/api/notes', requireAdmin, (req, res) => {
     keyPoints: Array.isArray(keyPoints) ? keyPoints : [],
     clinicalPearls: Array.isArray(clinicalPearls) ? clinicalPearls : [],
     readingTime: Number(readingTime) || 5,
-    isPublished: isPublished !== false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    status: normalizedStatus,
+    isPublished: isPub,
+    publishedAt: isPub ? (req.body.publishedAt || now) : undefined,
+    createdAt: now,
+    updatedAt: now,
   };
 
   database.notes.unshift(newNote);
@@ -792,7 +802,10 @@ app.get('/api/exams', (req, res) => {
   let exams = database.exams;
 
   if (!user || user.role !== 'admin') {
-    exams = exams.filter(e => e.isPublished);
+    exams = exams.filter(e => {
+      const isPub = e.status ? e.status === 'published' : e.isPublished !== false;
+      return isPub && e.status !== 'draft' && e.status !== 'archived';
+    });
   }
 
   const enriched = exams.map(exam => {
@@ -865,8 +878,12 @@ app.get('/api/exams/:id', (req, res) => {
 });
 
 app.post('/api/exams', requireAdmin, (req, res) => {
-  const { title, description, subjectId, levelId, durationMinutes, totalQuestions, passingScore, questionIds, instructions, isPublished } = req.body;
+  const { title, description, subjectId, levelId, durationMinutes, totalQuestions, passingScore, questionIds, instructions, isPublished, status } = req.body;
   if (!title) return res.status(400).json({ error: 'Exam title is required' });
+
+  const normalizedStatus = status || (isPublished !== false ? 'published' : 'draft');
+  const isPub = normalizedStatus === 'published';
+  const now = new Date().toISOString();
 
   const database = db.get();
   const newExam: CBTExam = {
@@ -879,13 +896,16 @@ app.post('/api/exams', requireAdmin, (req, res) => {
     totalQuestions: Number(totalQuestions) || (questionIds?.length || 10),
     passingScore: Number(passingScore) || 70,
     questionIds: Array.isArray(questionIds) ? questionIds : [],
-    isPublished: isPublished !== false,
+    status: normalizedStatus,
+    isPublished: isPub,
+    publishedAt: isPub ? (req.body.publishedAt || now) : undefined,
     instructions: Array.isArray(instructions) ? instructions : [
       'Strictly timed examination environment.',
       'Answer all questions and review flagged questions before final submission.',
       'Passing score is evaluated automatically upon submission.',
     ],
-    createdAt: new Date().toISOString(),
+    createdAt: now,
+    updatedAt: now,
   };
 
   database.exams.push(newExam);
