@@ -4,9 +4,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
-        android:allowBackup="true"
-        android:label="Nurses Study"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+    android:allowBackup="true"
+    android:label="Nurses Study"
+    android:icon="@drawable/nurses_study_logo_012456"
+    android:roundIcon="@drawable/nurses_study_logo_012456"
+    android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <activity
             android:name=".MainActivity"
