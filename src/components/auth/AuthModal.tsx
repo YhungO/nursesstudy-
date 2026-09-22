@@ -412,7 +412,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 >
                   {levels.map((lvl) => (
                     <option key={lvl.id} value={lvl.id}>
-                      {lvl.name} ({lvl.code})
+                      {lvl.name} ({lvl.badge || lvl.id})
                     </option>
                   ))}
                 </select>

@@ -3,17 +3,34 @@ import { Question } from '../../../types';
 import { Stethoscope } from 'lucide-react';
 
 interface QuestionContentProps {
-  question: Question;
-  currentIndex: number;
-  totalQuestions: number;
+  question?: Question;
+  questionId?: string | number;
+  questionText?: string;
+  scenario?: string;
+  image?: string;
+  imageUrl?: string;
+  currentIndex?: number;
+  totalQuestions?: number;
 }
 
 export const QuestionContent: React.FC<QuestionContentProps> = ({
   question,
+  questionText: propQuestionText,
+  scenario: propScenario,
+  image: propImage,
+  imageUrl: propImageUrl,
 }) => {
-  const text = question.questionText || question.question || '';
-  const scenario = question.scenario;
-  const image = (question as any).imageUrl || (question as any).image;
+  const text =
+    propQuestionText ||
+    question?.questionText ||
+    question?.question ||
+    '';
+  const scenario = propScenario ?? question?.scenario;
+  const image =
+    propImage ||
+    propImageUrl ||
+    (question as any)?.imageUrl ||
+    (question as any)?.image;
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 pt-3 pb-4 space-y-3.5">

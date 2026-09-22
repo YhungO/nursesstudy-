@@ -49,10 +49,18 @@ export const MCQQuestionFormModal: React.FC<MCQQuestionFormModalProps> = ({
         difficulty: question.difficulty || 'Medium',
         correctOption: question.correctOption || 'A',
       });
-      setOptionAText(question.options?.find((o) => o.id === 'A')?.text || '');
-      setOptionBText(question.options?.find((o) => o.id === 'B')?.text || '');
-      setOptionCText(question.options?.find((o) => o.id === 'C')?.text || '');
-      setOptionDText(question.options?.find((o) => o.id === 'D')?.text || '');
+      const getOptText = (id: 'A' | 'B' | 'C' | 'D', index: number) => {
+        if (!question.options || !Array.isArray(question.options)) return '';
+        const opt = question.options[index];
+        if (typeof opt === 'string') return opt;
+        const found = question.options.find((o) => typeof o === 'object' && o !== null && o.id === id);
+        if (found && typeof found === 'object') return found.text || '';
+        return typeof opt === 'object' && opt !== null ? opt.text || '' : '';
+      };
+      setOptionAText(getOptText('A', 0));
+      setOptionBText(getOptText('B', 1));
+      setOptionCText(getOptText('C', 2));
+      setOptionDText(getOptText('D', 3));
       setTagsInput((question.tags || []).join(', '));
     } else {
       setFormData({

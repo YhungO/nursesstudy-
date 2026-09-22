@@ -118,36 +118,36 @@ export const Bookmarks: React.FC<BookmarksProps> = ({
               </p>
             </div>
           ) : (
-            questions.map((q) => (
+            questions.filter(Boolean).map((q) => (
               <div
                 key={q.id}
                 className="bg-[#111827] rounded-2xl p-5 border border-slate-800 hover:border-sky-400/50 transition-all shadow-md flex items-center justify-between gap-4 group"
               >
-                <div className="flex-1 min-w-0" onClick={() => onOpenPracticeWithQuestion(q.id)}>
+                <div className="flex-1 min-w-0" onClick={() => onOpenPracticeWithQuestion(String(q.id))}>
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-sky-300 bg-sky-500/15 border border-sky-500/30 px-2 py-0.5 rounded-md">
-                      {q.topic}
+                      {q.topic || 'Clinical Topic'}
                     </span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-300">
-                      {q.difficulty}
+                      {q.difficulty || 'Medium'}
                     </span>
                   </div>
                   <h3 className="font-bold text-sm text-white group-hover:text-sky-300 cursor-pointer line-clamp-2 transition-colors leading-snug">
-                    {q.questionText}
+                    {q.questionText || q.question || 'Clinical Question'}
                   </h3>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
                   <button
-                    onClick={() => onOpenPracticeWithQuestion(q.id)}
-                    className="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors shadow-sm"
+                    onClick={() => onOpenPracticeWithQuestion(String(q.id))}
+                    className="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors shadow-sm cursor-pointer"
                   >
                     <span>Practice</span>
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                   <button
-                    onClick={() => onRemoveBookmark('question', q.id)}
-                    className="p-2 rounded-xl text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 transition-colors"
+                    onClick={() => onRemoveBookmark('question', String(q.id))}
+                    className="p-2 rounded-xl text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 transition-colors cursor-pointer"
                     title="Remove Bookmark"
                   >
                     <Trash2 className="w-4 h-4" />

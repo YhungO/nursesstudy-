@@ -98,10 +98,12 @@ export const QuestionPaletteDrawer: React.FC<QuestionPaletteDrawerProps> = ({
         {/* Questions Number Grid */}
         <div className="p-4 overflow-y-auto flex-1 overscroll-contain">
           <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
-            {questions.map((q, idx) => {
+            {(questions || []).map((q, idx) => {
+              if (!q) return null;
+              const qId = String(q.id ?? idx);
               const isCurrent = idx === currentIndex;
-              const isAnswered = !!selectedAnswers[q.id];
-              const isFlagged = !!flaggedQuestions[q.id];
+              const isAnswered = !!selectedAnswers[qId] || !!selectedAnswers[q.id];
+              const isFlagged = !!flaggedQuestions[qId] || !!flaggedQuestions[q.id];
 
               let buttonStyle =
                 'bg-slate-900/80 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-white';

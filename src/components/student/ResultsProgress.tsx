@@ -172,7 +172,9 @@ export const ResultsProgress: React.FC<ResultsProgressProps> = ({
                 </p>
               )}
 
-              <h4 className="font-bold text-sm text-white mb-3 leading-snug">{ans.questionText}</h4>
+              <h4 className="font-bold text-sm text-white mb-3 leading-snug">
+                {ans.questionText || (ans as any).question || 'Clinical Question'}
+              </h4>
 
               {ans.options && (
                 <div className="space-y-1.5 mb-3">

@@ -21,12 +21,17 @@ export const AnswerOptions: React.FC<AnswerOptionsProps> = ({
       role="radiogroup"
       aria-label="Answer choices"
     >
-      {options.map((option, idx) => {
+      {(options || []).map((option, idx) => {
         const optionLetter = letters[idx] || 'A';
         const optObj =
           typeof option === 'string'
             ? { id: optionLetter, text: option }
-            : option;
+            : option && typeof option === 'object'
+            ? {
+                id: (option as any).id || optionLetter,
+                text: (option as any).text || (option as any).label || (option as any).value || '',
+              }
+            : { id: optionLetter, text: String(option ?? '') };
 
         const isSelected = selectedAnswer === optObj.id;
 

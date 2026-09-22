@@ -13,6 +13,7 @@ import { AdminDashboard } from './components/admin/AdminDashboard';
 import { AdminLogin } from './components/admin/AdminLogin';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { AuthGate } from './components/auth/AuthGate';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { api } from './services/api';
 import {
   subscribeToLevels,
@@ -143,15 +144,21 @@ const MainAppContent: React.FC = () => {
     }, { publishedOnly: false });
 
     const unsubQuestions = subscribeToQuestions((liveQuestions) => {
-      setQuestions(liveQuestions);
+      if (liveQuestions && liveQuestions.length > 0) {
+        setQuestions(liveQuestions);
+      }
     });
 
     const unsubExams = subscribeToExams((liveExams) => {
-      setExams(liveExams);
+      if (liveExams && liveExams.length > 0) {
+        setExams(liveExams);
+      }
     }, { publishedOnly: false });
 
     const unsubAnnouncements = subscribeToAnnouncements((liveAnnouncements) => {
-      setAnnouncements(liveAnnouncements);
+      if (liveAnnouncements && liveAnnouncements.length > 0) {
+        setAnnouncements(liveAnnouncements);
+      }
     });
 
     return () => {
@@ -290,9 +297,10 @@ const MainAppContent: React.FC = () => {
     questions: searchQuery
       ? questions.filter(
           (q) =>
-            q.questionText.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            q.topic.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            q.explanation.toLowerCase().includes(searchQuery.toLowerCase())
+            q &&
+            ((q.questionText || q.question || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (q.topic || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (q.explanation || q.rationale || '').toLowerCase().includes(searchQuery.toLowerCase()))
         )
       : [],
   };
@@ -361,7 +369,7 @@ const MainAppContent: React.FC = () => {
             subjects={subjects}
             initialSubjectId={extraParams?.subjectId}
             bookmarkedQuestionIds={bookmarkedQuestionIds}
-            onToggleBookmark={(qId) => handleToggleBookmark('question', qId)}
+            onToggleBookmark={(qId) => handleToggleBookmark('question', String(qId))}
             onRecordAttempt={() => {
               api.getAttempts().then(setRecentAttempts);
             }}
@@ -369,15 +377,17 @@ const MainAppContent: React.FC = () => {
         )}
 
         {currentView === 'cbt' && (
-          <CbtExam
-            exams={publishedExams}
-            activeExamId={extraParams?.examId}
-            onFinishExam={(attemptId) => {
-              api.getAttempts().then(setRecentAttempts);
-              handleNavigate('results', { attemptId });
-            }}
-            onNavigateHome={() => handleNavigate('home')}
-          />
+          <ErrorBoundary fallbackTitle="CBT Examination Hall Error" onReset={() => handleNavigate('cbt')}>
+            <CbtExam
+              exams={publishedExams}
+              activeExamId={extraParams?.examId}
+              onFinishExam={(attemptId) => {
+                api.getAttempts().then(setRecentAttempts);
+                handleNavigate('results', { attemptId });
+              }}
+              onNavigateHome={() => handleNavigate('home')}
+            />
+          </ErrorBoundary>
         )}
 
         {currentView === 'results' && (
@@ -584,7 +594,7 @@ const MainAppContent: React.FC = () => {
                           {q.topic}
                         </span>
                         <h5 className="font-bold text-xs sm:text-sm text-white mt-1.5 line-clamp-2">
-                          {q.questionText}
+                          {q.questionText || q.question}
                         </h5>
                       </div>
                     ))}

@@ -52,7 +52,8 @@ export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
     });
   }, [questions, selectedSubject, selectedDifficulty]);
 
-  const currentQuestion: Question | undefined = filteredQuestions[currentIndex];
+  const currentQuestion: Question | undefined =
+    filteredQuestions[currentIndex] || (filteredQuestions.length > 0 ? filteredQuestions[0] : undefined);
 
   const handleSelectOption = (optionId: 'A' | 'B' | 'C' | 'D') => {
     if (isAnswerSubmitted) return;

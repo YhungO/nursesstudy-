@@ -19,6 +19,7 @@ import {
   HelpCircle,
   RefreshCw,
   Info,
+  AlertCircle,
 } from 'lucide-react';
 import { ExamTopBar } from './cbt/ExamTopBar';
 import { ExamContextBar } from './cbt/ExamContextBar';
@@ -242,17 +243,8 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           setExamResult(null);
           return;
         } else {
-          // EXAM EXPIRED WHILE AWAY: Load answers and auto-submit immediately
-          const restoredAnswers = existingSession.answers || {};
-          answersRef.current = { ...restoredAnswers };
-          setSelectedAnswers({ ...restoredAnswers });
-          examStartTimeRef.current = existingSession.startTime;
-          examEndTimeRef.current = existingSession.endTime;
-
-          setTimeout(() => {
-            submitCBT('timeout');
-          }, 100);
-          return;
+          // Prior session expired: Clear it so the student can start a fresh session
+          cbtSessionManager.clearSession(examId);
         }
       }
 
@@ -772,10 +764,108 @@ export const CbtExam: React.FC<CbtExamProps> = ({
     );
   }
 
+  // ==================== VIEW: LOADING CBT SESSION ==================== //
+  if (loading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center space-y-4 animate-in fade-in duration-200">
+        <div className="relative">
+          <div className="w-16 h-16 rounded-3xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400">
+            <Clock className="w-8 h-8 animate-spin" style={{ animationDuration: '3s' }} />
+          </div>
+          <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-teal-500 flex items-center justify-center text-slate-950 shadow-md">
+            <span className="w-2 h-2 rounded-full bg-slate-950 animate-ping" />
+          </div>
+        </div>
+        <div className="space-y-1.5 max-w-sm">
+          <h2 className="text-lg font-bold text-white tracking-tight">
+            Preparing Examination Hall
+          </h2>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Loading examination questions, configuring 45-minute countdown timer, and initializing auto-save session...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ==================== VIEW: ERROR STATE WITH RETRY ==================== //
+  if (error && !examData) {
+    return (
+      <div className="min-h-[50vh] flex flex-col items-center justify-center p-6 text-center space-y-4 max-w-md mx-auto animate-in fade-in duration-200">
+        <div className="w-14 h-14 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
+          <AlertCircle className="w-7 h-7" />
+        </div>
+        <div className="space-y-1.5">
+          <h2 className="text-base font-bold text-white">
+            Unable to Load Examination
+          </h2>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            {error}
+          </p>
+        </div>
+        <div className="flex items-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => {
+              const targetId = (selectedExam && selectedExam.id) || activeExamId || (exams.length > 0 ? exams[0].id : null);
+              if (targetId) {
+                startExam(targetId);
+              }
+            }}
+            className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Retry Examination</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setExamData(null);
+              setSelectedExam(null);
+            }}
+            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
+          >
+            <span>Back to Hall</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // ==================== VIEW 2: ACTIVE EXAMINATION TESTING SESSION ==================== //
   if (examData) {
-    const currentQ = examData.questions[currentIndex];
-    const totalQ = examData.questions.length;
+    const questions = Array.isArray(examData.questions) ? examData.questions : [];
+    const totalQ = questions.length;
+
+    if (totalQ === 0) {
+      return (
+        <div className="min-h-[50vh] flex flex-col items-center justify-center p-6 text-center space-y-4 max-w-md mx-auto">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <HelpCircle className="w-7 h-7" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-base font-bold text-white">No Questions Available</h2>
+            <p className="text-xs text-slate-400">
+              This examination currently has no registered questions. Please contact your administrator.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setExamData(null);
+              setSelectedExam(null);
+            }}
+            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold cursor-pointer"
+          >
+            Return to CBT Hall
+          </button>
+        </div>
+      );
+    }
+
+    const safeIndex = Math.max(0, Math.min(currentIndex, totalQ - 1));
+    const currentQ = questions[safeIndex] || null;
     const isFlagged = currentQ ? !!flaggedQuestions[currentQ.id] : false;
     const currentAnswer = currentQ ? selectedAnswers[currentQ.id] : null;
     const answeredCount = Object.values(selectedAnswers).filter(Boolean).length;
@@ -850,7 +940,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           />
 
           <QuestionProgress
-            currentIndex={currentIndex}
+            currentIndex={safeIndex}
             totalQuestions={totalQ}
             answeredCount={answeredCount}
           />
@@ -861,9 +951,12 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           {currentQ ? (
             <div className="space-y-4">
               <QuestionContent
+                question={currentQ}
                 questionId={currentQ.id}
                 scenario={currentQ.scenario}
-                questionText={currentQ.questionText || currentQ.question}
+                questionText={currentQ.questionText || currentQ.question || ''}
+                currentIndex={safeIndex}
+                totalQuestions={totalQ}
               />
 
               <AnswerOptions
@@ -883,7 +976,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
 
         {/* BOTTOM NAVIGATION ACTION BAR (PREV / PALETTE / NEXT or FINISH) */}
         <BottomActionBar
-          currentIndex={currentIndex}
+          currentIndex={safeIndex}
           totalQuestions={totalQ}
           onPrevious={handlePrevious}
           onNext={handleNext}
@@ -895,8 +988,8 @@ export const CbtExam: React.FC<CbtExamProps> = ({
         <QuestionPaletteDrawer
           isOpen={showPaletteDrawer}
           onClose={() => setShowPaletteDrawer(false)}
-          questions={examData.questions}
-          currentIndex={currentIndex}
+          questions={questions}
+          currentIndex={safeIndex}
           selectedAnswers={selectedAnswers}
           flaggedQuestions={flaggedQuestions}
           onSelectQuestion={handleSelectQuestion}
