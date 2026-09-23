@@ -196,6 +196,7 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
   const [showClinicalCasesModal, setShowClinicalCasesModal] = useState(false);
   const [selectedCase, setSelectedCase] = useState<ClinicalCase | null>(CLINICAL_CASES[0]);
+  const [selectedExamId, setSelectedExamId] = useState<string>('');
 
   // Filter announcements for user's level or 'all'
   const relevantAnnouncements = (announcements || []).filter(
@@ -209,8 +210,12 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
     }
   };
 
-  // Primary featured CBT exam
-  const featuredExam = exams[0];
+  // Primary active CBT exam (user selected or most recent)
+  const featuredExam =
+    exams.find((e) => e.id === selectedExamId) ||
+    exams.find((e) => e.id === 'cbt-phc-nur122-set3') ||
+    exams.find((e) => e.id === 'cbt-phc-nur122-set2') ||
+    exams[0];
 
   // Quick stats
   const totalAttempts = recentAttempts.length;
@@ -316,6 +321,37 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
           <div className="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-teal-500/10 blur-3xl pointer-events-none" />
           <div className="absolute -left-12 -bottom-12 w-48 h-48 rounded-full bg-purple-500/10 blur-3xl pointer-events-none" />
 
+          {exams.length > 1 && (
+            <div className="relative z-10 flex items-center gap-2 mb-3.5 overflow-x-auto pb-1 scrollbar-none">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
+                Available CBTs:
+              </span>
+              {exams.map((ex) => {
+                const isSelected = ex.id === featuredExam.id;
+                return (
+                  <button
+                    key={ex.id}
+                    type="button"
+                    onClick={() => setSelectedExamId(ex.id)}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold shrink-0 transition-all border ${
+                      isSelected
+                        ? 'bg-teal-500 text-slate-950 font-bold border-teal-400 shadow-sm'
+                        : 'bg-slate-900/80 text-slate-300 border-slate-700 hover:border-teal-500/50 hover:text-white'
+                    }`}
+                  >
+                    {ex.id === 'cbt-phc-nur122-set3'
+                      ? 'PHC CBT – Set 3'
+                      : ex.id === 'cbt-phc-nur122-set2'
+                      ? 'PHC CBT – Set 2'
+                      : ex.id === 'cbt-phc-nur122'
+                      ? 'PHC CBT – Set 1'
+                      : ex.title.replace('ND1 Nursing – ', '')}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-start sm:items-center gap-3.5 min-w-0">
               <div className="w-12 h-12 rounded-2xl bg-teal-500/15 border border-teal-500/30 text-teal-300 flex items-center justify-center shrink-0 shadow-md">
@@ -340,13 +376,15 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
               </div>
             </div>
 
-            <button
-              onClick={() => onStartExam(featuredExam.id)}
-              className="px-6 py-3 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 active:from-teal-600 active:to-emerald-600 text-slate-950 font-extrabold rounded-2xl text-xs transition-all shadow-lg shadow-teal-500/25 flex items-center justify-center gap-2 shrink-0 self-start md:self-auto cursor-pointer"
-            >
-              <span>Launch CBT Exam</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2 shrink-0 self-start md:self-auto">
+              <button
+                onClick={() => onStartExam(featuredExam.id)}
+                className="px-6 py-3 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 active:from-teal-600 active:to-emerald-600 text-slate-950 font-extrabold rounded-2xl text-xs transition-all shadow-lg shadow-teal-500/25 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>Launch CBT Exam</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       )}

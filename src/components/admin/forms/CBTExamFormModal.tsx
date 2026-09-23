@@ -41,10 +41,16 @@ export const CBTExamFormModal: React.FC<CBTExamFormModalProps> = ({
   useEffect(() => {
     if (exam) {
       const derivedStatus = exam.status || (exam.isPublished ? 'published' : 'draft');
+      const normalizedLevelId =
+        exam.levelId === 'ND1' ? 'lvl-nd1' :
+        exam.levelId === 'ND2' ? 'lvl-nd2' :
+        exam.levelId === 'HND' ? 'lvl-hnd' :
+        (exam.levelId || 'lvl-nd1');
+
       setFormData({
         ...exam,
         subjectId: exam.subjectId || 'all',
-        levelId: exam.levelId || 'ND1',
+        levelId: normalizedLevelId,
         durationMinutes: exam.durationMinutes || 30,
         totalQuestions: exam.totalQuestions || 15,
         passingScore: exam.passingScore || 70,
@@ -64,7 +70,7 @@ export const CBTExamFormModal: React.FC<CBTExamFormModalProps> = ({
         title: '',
         description: '',
         subjectId: 'all',
-        levelId: 'ND1',
+        levelId: 'lvl-nd1',
         durationMinutes: 30,
         totalQuestions: 15,
         passingScore: 70,
@@ -208,7 +214,7 @@ export const CBTExamFormModal: React.FC<CBTExamFormModalProps> = ({
               </label>
               <select
                 id="exam-level-select"
-                value={formData.levelId || 'ND1'}
+                value={formData.levelId || 'lvl-nd1'}
                 onChange={(e) => setFormData({ ...formData, levelId: e.target.value })}
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:ring-2 focus:ring-amber-500"
               >

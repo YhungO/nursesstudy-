@@ -455,6 +455,11 @@ class DatabaseService {
     return this.data;
   }
 
+  public reload(): DatabaseSchema {
+    this.data = this.loadData();
+    return this.data;
+  }
+
   public save() {
     this.saveData(this.data);
   }

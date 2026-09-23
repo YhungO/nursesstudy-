@@ -840,6 +840,16 @@ app.get('/api/exams/:id', (req, res) => {
     if (exam.subjectId && exam.subjectId !== 'all') {
       candidates = candidates.filter(q => q.subjectId === exam.subjectId);
     }
+    if (exam.levelId && exam.levelId !== 'all') {
+      const levelMatches = candidates.filter(q =>
+        q.levelId === exam.levelId ||
+        (exam.levelId === 'ND1' && (q.levelId === 'lvl-nd1' || q.levelId === 'ND1')) ||
+        (exam.levelId === 'lvl-nd1' && (q.levelId === 'lvl-nd1' || q.levelId === 'ND1')) ||
+        (exam.levelId === 'ND2' && (q.levelId === 'lvl-nd2' || q.levelId === 'ND2')) ||
+        (exam.levelId === 'lvl-nd2' && (q.levelId === 'lvl-nd2' || q.levelId === 'ND2'))
+      );
+      if (levelMatches.length > 0) candidates = levelMatches;
+    }
     examQuestions = candidates.slice(0, exam.totalQuestions);
   }
 
@@ -959,6 +969,16 @@ app.post('/api/exams/:id/submit', requireAuth, (req, res) => {
     let candidates = database.questions;
     if (exam.subjectId && exam.subjectId !== 'all') {
       candidates = candidates.filter(q => q.subjectId === exam.subjectId);
+    }
+    if (exam.levelId && exam.levelId !== 'all') {
+      const levelMatches = candidates.filter(q =>
+        q.levelId === exam.levelId ||
+        (exam.levelId === 'ND1' && (q.levelId === 'lvl-nd1' || q.levelId === 'ND1')) ||
+        (exam.levelId === 'lvl-nd1' && (q.levelId === 'lvl-nd1' || q.levelId === 'ND1')) ||
+        (exam.levelId === 'ND2' && (q.levelId === 'lvl-nd2' || q.levelId === 'ND2')) ||
+        (exam.levelId === 'lvl-nd2' && (q.levelId === 'lvl-nd2' || q.levelId === 'ND2'))
+      );
+      if (levelMatches.length > 0) candidates = levelMatches;
     }
     targetQuestions = candidates.slice(0, exam.totalQuestions);
   }

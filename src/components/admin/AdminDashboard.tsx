@@ -304,12 +304,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setCloudSyncing(true);
     setCloudStatus('Uploading curriculum records to Cloud Firestore...');
     try {
-      for (const lvl of localLevels) await saveLevelToFirestore(lvl);
-      for (const subj of localSubjects) await saveSubjectToFirestore(subj);
-      for (const n of localNotes) await saveNoteToFirestore(n);
-      for (const q of localQuestions) await saveQuestionToFirestore(q);
-      for (const ex of localExams) await saveExamToFirestore(ex);
-      for (const ann of localAnnouncements) await saveAnnouncementToFirestore(ann);
+      const levelsToSync = localLevels.length > 0 ? localLevels : await api.getLevels();
+      const subjectsToSync = localSubjects.length > 0 ? localSubjects : await api.getSubjects();
+      const notesToSync = localNotes.length > 0 ? localNotes : await api.getNotes();
+      const questionsToSync = localQuestions.length > 0 ? localQuestions : await api.getQuestions();
+      const examsToSync = localExams.length > 0 ? localExams : await api.getExams();
+      const announcementsToSync = localAnnouncements.length > 0 ? localAnnouncements : await api.getAnnouncements();
+
+      for (const lvl of levelsToSync) await saveLevelToFirestore(lvl);
+      for (const subj of subjectsToSync) await saveSubjectToFirestore(subj);
+      for (const n of notesToSync) await saveNoteToFirestore(n);
+      for (const q of questionsToSync) await saveQuestionToFirestore(q);
+      for (const ex of examsToSync) await saveExamToFirestore(ex);
+      for (const ann of announcementsToSync) await saveAnnouncementToFirestore(ann);
       setCloudStatus('All records synchronized to Google Cloud Firestore!');
       showNotify('Full Cloud Firestore sync complete');
     } catch (err: any) {
@@ -1525,7 +1532,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   title: '',
                   description: '',
                   subjectId: 'all',
-                  levelId: 'ND1',
+                  levelId: 'lvl-nd1',
                   durationMinutes: 30,
                   totalQuestions: 15,
                   passingScore: 70,

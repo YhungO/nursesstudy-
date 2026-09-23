@@ -127,28 +127,44 @@ const MainAppContent: React.FC = () => {
 
     // Attach real-time listeners to Firestore collections
     const unsubLevels = subscribeToLevels((liveLevels) => {
-      setLevels(liveLevels || []);
+      if (Array.isArray(liveLevels) && liveLevels.length > 0) {
+        setLevels(liveLevels);
+      }
       setIsLoading(false);
     });
 
     const unsubSubjects = subscribeToSubjects((liveSubjects) => {
-      setSubjects(liveSubjects || []);
+      if (Array.isArray(liveSubjects) && liveSubjects.length > 0) {
+        setSubjects(liveSubjects);
+      }
     });
 
     const unsubNotes = subscribeToNotes((liveNotes) => {
-      setNotes(liveNotes || []);
+      if (Array.isArray(liveNotes) && liveNotes.length > 0) {
+        setNotes(liveNotes);
+      }
     }, { publishedOnly: false });
 
     const unsubQuestions = subscribeToQuestions((liveQuestions) => {
-      setQuestions(liveQuestions || []);
+      if (Array.isArray(liveQuestions) && liveQuestions.length > 0) {
+        setQuestions(liveQuestions);
+      }
     });
 
     const unsubExams = subscribeToExams((liveExams) => {
-      setExams(liveExams || []);
+      if (Array.isArray(liveExams)) {
+        if (liveExams.length > 0) {
+          setExams(liveExams);
+        } else {
+          setExams((prev) => (prev.length > 0 ? prev : []));
+        }
+      }
     }, { publishedOnly: false });
 
     const unsubAnnouncements = subscribeToAnnouncements((liveAnnouncements) => {
-      setAnnouncements(liveAnnouncements || []);
+      if (Array.isArray(liveAnnouncements) && liveAnnouncements.length > 0) {
+        setAnnouncements(liveAnnouncements);
+      }
     });
 
     return () => {
@@ -371,6 +387,7 @@ const MainAppContent: React.FC = () => {
             <CbtExam
               exams={publishedExams}
               activeExamId={extraParams?.examId}
+              isLoading={isLoading}
               onFinishExam={(attemptId) => {
                 api.getAttempts().then(setRecentAttempts);
                 handleNavigate('results', { attemptId });
