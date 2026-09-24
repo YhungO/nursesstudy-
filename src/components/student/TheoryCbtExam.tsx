@@ -30,6 +30,20 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { THEORY_INTEGUMENTARY_QUESTIONS } from '../../data/theoryIntegumentaryQuestions';
+import {
+  checkSpeechSynthesisSupport,
+  loadSpeechSynthesisVoices,
+  getBestEnglishVoice,
+  stopSpeechSynthesis,
+  speakText,
+  checkMicrophoneSupport,
+  startAudioRecording,
+  cleanupMediaStreamTracks,
+  mapMicrophoneError,
+  checkSpeechRecognitionSupport,
+  getSpeechRecognitionConstructor,
+  AudioRecordingSession,
+} from '../../utils/mediaUtils';
 
 interface TheoryQuestionItem extends Question {
   category: string;
@@ -97,10 +111,12 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const activeUtteranceCancelRef = useRef<(() => void) | null>(null);
 
   const [isRecording, setIsRecording] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
+  const recordingSessionRef = useRef<AudioRecordingSession | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -119,51 +135,23 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
   // Storage key for session recovery
   const storageKey = `nursesstudy_theory_session_${exam.id}`;
 
-  // Check SpeechRecognition and initialize SpeechSynthesis voices on mount
+  // Check SpeechRecognition and initialize SpeechSynthesis voices on mount via mediaUtils
   useEffect(() => {
     // 1. Check SpeechRecognition support
-    if (typeof window !== 'undefined') {
-      const SpeechRecognitionAPI =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      setDictationSupported(Boolean(SpeechRecognitionAPI));
-    }
+    const recognitionCheck = checkSpeechRecognitionSupport();
+    setDictationSupported(recognitionCheck.isSupported);
 
-    // 2. Pre-load text-to-speech voices for mobile/Android
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis) {
-      const populateVoices = () => {
-        try {
-          const v = window.speechSynthesis.getVoices();
-          if (v && v.length > 0) {
-            setAvailableVoices(v);
-          }
-        } catch (err) {
-          console.warn('Voice preloading error:', err);
-        }
-      };
-
-      populateVoices();
-      if (typeof window.speechSynthesis.addEventListener === 'function') {
-        window.speechSynthesis.addEventListener('voiceschanged', populateVoices);
-      } else {
-        window.speechSynthesis.onvoiceschanged = populateVoices;
+    // 2. Pre-load text-to-speech voices with Android asynchronous voice loading support
+    let isCancelled = false;
+    loadSpeechSynthesisVoices(2500).then((voices) => {
+      if (!isCancelled && voices && voices.length > 0) {
+        setAvailableVoices(voices);
       }
+    });
 
-      // Retry voice fetch after brief delay (common Android Chrome behavior)
-      const t1 = setTimeout(populateVoices, 500);
-      const t2 = setTimeout(populateVoices, 1500);
-
-      return () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-        if (window.speechSynthesis) {
-          if (typeof window.speechSynthesis.removeEventListener === 'function') {
-            window.speechSynthesis.removeEventListener('voiceschanged', populateVoices);
-          } else {
-            window.speechSynthesis.onvoiceschanged = null;
-          }
-        }
-      };
-    }
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   // 1. Fetch Exam & Questions
@@ -272,13 +260,16 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
   // Clean up media and audio when switching questions or unmounting
   const stopAllMedia = useCallback(() => {
     // 1. Stop Speech Synthesis
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis) {
+    stopSpeechSynthesis();
+    if (activeUtteranceCancelRef.current) {
       try {
-        window.speechSynthesis.cancel();
+        activeUtteranceCancelRef.current();
       } catch {}
-      activeUtteranceRef.current = null;
-      setIsSpeaking(false);
+      activeUtteranceCancelRef.current = null;
     }
+    activeUtteranceRef.current = null;
+    setIsSpeaking(false);
+
     // 2. Stop Dictation
     if (recognitionRef.current) {
       try {
@@ -287,6 +278,7 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
       recognitionRef.current = null;
       setIsDictating(false);
     }
+
     // 3. Stop Audio playback
     if (audioPlayerRef.current) {
       try {
@@ -294,21 +286,24 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
       } catch {}
       setIsPlayingAudio(false);
     }
-    // 4. Stop Recording if active
+
+    // 4. Stop Recording if active and clean up audio session
+    if (recordingSessionRef.current) {
+      try {
+        recordingSessionRef.current.cancel();
+      } catch {}
+      recordingSessionRef.current = null;
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       try {
         mediaRecorderRef.current.stop();
       } catch {}
+      mediaRecorderRef.current = null;
     }
+
     // 5. Release all active microphone tracks immediately
     if (mediaStreamRef.current) {
-      try {
-        mediaStreamRef.current.getTracks().forEach((track) => {
-          try {
-            track.stop();
-          } catch {}
-        });
-      } catch {}
+      cleanupMediaStreamTracks(mediaStreamRef.current);
       mediaStreamRef.current = null;
     }
     if (recordIntervalRef.current) {
@@ -344,41 +339,32 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
     }));
   };
 
-  // Text-To-Speech: Read Question (Android & Mobile Browser Compatible)
+  // Text-To-Speech: Read Question (Android & Mobile Browser Compatible via mediaUtils)
   const handleReadQuestion = () => {
     const currentQ = questions[currentIndex];
     if (!currentQ) return;
 
-    // Check if speechSynthesis is genuinely available in this browser environment
-    const isSpeechSupported =
-      typeof window !== 'undefined' &&
-      'speechSynthesis' in window &&
-      Boolean(window.speechSynthesis) &&
-      typeof window.SpeechSynthesisUtterance !== 'undefined';
-
-    if (!isSpeechSupported) {
-      setSpeechError('Audio reading is not supported on this device/browser. You can read the question text directly.');
+    // Check if speechSynthesis is available in this browser environment
+    const ttsCheck = checkSpeechSynthesisSupport();
+    if (!ttsCheck.isSupported) {
+      setSpeechError(ttsCheck.reason || 'Audio reading is not supported on this device/browser. You can read the question text directly.');
       setTimeout(() => setSpeechError(null), 5000);
       return;
     }
 
     // Toggle stop if already speaking
     if (isSpeaking) {
-      try {
-        window.speechSynthesis.cancel();
-      } catch {}
+      stopSpeechSynthesis();
+      if (activeUtteranceCancelRef.current) {
+        try {
+          activeUtteranceCancelRef.current();
+        } catch {}
+        activeUtteranceCancelRef.current = null;
+      }
       activeUtteranceRef.current = null;
       setIsSpeaking(false);
       return;
     }
-
-    try {
-      window.speechSynthesis.cancel();
-      // Resume if previously paused (addresses Android Chrome background pause state)
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      }
-    } catch {}
 
     setSpeechError(null);
 
@@ -392,81 +378,46 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
       return;
     }
 
-    try {
-      const utterance = new SpeechSynthesisUtterance(cleanQuestion);
-      utterance.rate = 0.95;
-      utterance.pitch = 1.0;
+    // Determine voice using safe English voice selection from mediaUtils
+    const chosenVoice = getBestEnglishVoice(availableVoices);
 
-      // Select available voice: prioritize English, fallback automatically
-      let voicesList = availableVoices;
-      if (!voicesList || voicesList.length === 0) {
-        try {
-          voicesList = window.speechSynthesis.getVoices();
-        } catch {}
-      }
-
-      if (voicesList && voicesList.length > 0) {
-        const preferredVoice =
-          voicesList.find((v) => v.lang === 'en-US' || v.lang === 'en-GB') ||
-          voicesList.find((v) => v.lang && v.lang.toLowerCase().startsWith('en')) ||
-          voicesList.find((v) => v.default) ||
-          voicesList[0];
-
-        if (preferredVoice) {
-          utterance.voice = preferredVoice;
-          utterance.lang = preferredVoice.lang;
-        } else {
-          utterance.lang = 'en-US';
-        }
-      } else {
-        // Fallback: device native default voice engine for en-US
-        utterance.lang = 'en-US';
-      }
-
-      utterance.onstart = () => {
+    const { cancel, utterance } = speakText(cleanQuestion, {
+      voice: chosenVoice,
+      lang: chosenVoice?.lang || 'en-US',
+      rate: 0.95,
+      pitch: 1.0,
+      onStart: () => {
         setIsSpeaking(true);
         setSpeechError(null);
-      };
-
-      utterance.onend = () => {
+      },
+      onEnd: () => {
         activeUtteranceRef.current = null;
+        activeUtteranceCancelRef.current = null;
         setIsSpeaking(false);
-      };
-
-      utterance.onerror = (e: any) => {
+      },
+      onError: (e: any) => {
         activeUtteranceRef.current = null;
+        activeUtteranceCancelRef.current = null;
         setIsSpeaking(false);
         // Do not flag error if stopped intentionally
-        if (e.error === 'canceled' || e.error === 'interrupted') {
+        if (e?.error === 'canceled' || e?.error === 'interrupted') {
           return;
         }
-        console.warn('SpeechSynthesis error:', e.error);
-        setSpeechError(`Audio reading notice: ${e.error || 'Playback interrupted'}. You can read the question text directly.`);
+        console.warn('SpeechSynthesis error:', e?.error || e);
+        setSpeechError(`Audio reading notice: ${e?.error || 'Playback interrupted'}. You can read the question text directly.`);
         setTimeout(() => setSpeechError(null), 5000);
-      };
+      },
+    });
 
-      // Keep utterance in ref to avoid Android Chrome premature garbage collection
-      activeUtteranceRef.current = utterance;
-      setIsSpeaking(true);
-      window.speechSynthesis.speak(utterance);
-    } catch (speechErr: any) {
-      console.warn('SpeechSynthesis execution error:', speechErr);
-      activeUtteranceRef.current = null;
-      setIsSpeaking(false);
-      setSpeechError('Audio reading encountered an issue. You can read the question normally.');
-      setTimeout(() => setSpeechError(null), 5000);
-    }
+    activeUtteranceRef.current = utterance;
+    activeUtteranceCancelRef.current = cancel;
   };
 
-  // Voice Dictation (Speech to Text)
+  // Voice Dictation (Speech to Text via mediaUtils)
   const handleToggleDictation = () => {
-    if (typeof window === 'undefined') return;
-
-    const SpeechRecognitionAPI =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognitionAPI) {
-      setSpeechError('Speech recognition dictation is not available in this browser. You can type your answer directly.');
+    const dictCheck = checkSpeechRecognitionSupport();
+    if (!dictCheck.isSupported) {
+      setSpeechError(dictCheck.reason || 'Speech recognition dictation is not available in this browser. You can type your answer directly.');
       setTimeout(() => setSpeechError(null), 5000);
       return;
     }
@@ -480,9 +431,9 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
       return;
     }
 
-    // Detect insecure context
-    if (window.isSecureContext === false) {
-      setSpeechError('Voice dictation requires a secure connection (HTTPS). You can type your answer directly.');
+    const SpeechRecognitionAPI = getSpeechRecognitionConstructor();
+    if (!SpeechRecognitionAPI) {
+      setSpeechError('Speech recognition dictation is not supported in this browser. You can type your answer directly.');
       setTimeout(() => setSpeechError(null), 5000);
       return;
     }
@@ -563,189 +514,86 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
     }
   };
 
-  // MediaRecorder: Voice Answer Recording (Android & Mobile Browser Compatible)
+  // MediaRecorder: Voice Answer Recording (Android & Mobile Browser Compatible via mediaUtils)
   const handleStartRecording = async () => {
     setMicError(null);
 
-    // 1. Detect if running outside HTTPS / secure context
-    if (typeof window !== 'undefined' && window.isSecureContext === false) {
-      setMicError('Microphone access requires a secure connection (HTTPS). You can type your answer instead.');
+    // 1. Diagnostic check for microphone availability and secure context
+    const micCheck = checkMicrophoneSupport();
+    if (!micCheck.isSupported) {
+      setMicError(micCheck.reason || 'Microphone recording is not supported in this browser. You can type your answer instead.');
       return;
-    }
-
-    // 2. Check if embedded in an iframe that lacks microphone permissions policy
-    const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
-
-    // 3. Verify navigator.mediaDevices availability
-    if (!navigator || !navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
-      if (isInIframe) {
-        setMicError('Microphone access is restricted by embedding frame permissions. Please open the exam directly or type your answer.');
-      } else {
-        setMicError('Microphone API is not supported in this browser. You can type your answer instead.');
-      }
-      return;
-    }
-
-    // 4. Verify MediaRecorder support
-    if (typeof window.MediaRecorder === 'undefined') {
-      setMicError('Audio recording (MediaRecorder) is not supported in this browser. You can type your answer instead.');
-      return;
-    }
-
-    // 5. Select supported MIME type
-    const candidateMimeTypes = [
-      'audio/webm;codecs=opus',
-      'audio/webm',
-      'audio/mp4',
-      'audio/aac',
-      'audio/ogg;codecs=opus',
-      'audio/ogg',
-    ];
-    let selectedMimeType: string | undefined = undefined;
-    for (const mime of candidateMimeTypes) {
-      if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(mime)) {
-        selectedMimeType = mime;
-        break;
-      }
     }
 
     try {
-      // Request permission strictly upon user click
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaStreamRef.current = stream;
+      // 2. Request permission on-demand and start recording session via mediaUtils
+      const session = await startAudioRecording({ timeslice: 250 });
+      recordingSessionRef.current = session;
+      mediaStreamRef.current = session.stream;
+      mediaRecorderRef.current = session.mediaRecorder;
 
-      const recorderOptions: MediaRecorderOptions = selectedMimeType ? { mimeType: selectedMimeType } : {};
-      let mediaRecorder: MediaRecorder;
-      try {
-        mediaRecorder = new MediaRecorder(stream, recorderOptions);
-      } catch (mimeErr) {
-        console.warn('MediaRecorder with selected MIME failed, falling back to browser default:', mimeErr);
-        mediaRecorder = new MediaRecorder(stream);
-      }
-
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event: BlobEvent) => {
-        if (event.data && event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = () => {
-        const finalBlobType = mediaRecorder.mimeType || selectedMimeType || 'audio/webm';
-        const audioBlob = new Blob(audioChunksRef.current, { type: finalBlobType });
-        const audioUrl = URL.createObjectURL(audioBlob);
-
-        const currentQ = questions[currentIndex];
-        if (currentQ) {
-          const qId = String(currentQ.id);
-          setAnswers((prev) => ({
-            ...prev,
-            [qId]: {
-              ...(prev[qId] || { typedAnswer: '', recordingStatus: 'none' }),
-              voiceAudioUrl: audioUrl,
-              voiceBlob: audioBlob,
-              recordingStatus: 'recorded',
-            },
-          }));
-        }
-
-        // Clean up and release all microphone hardware tracks immediately
-        if (mediaStreamRef.current) {
-          mediaStreamRef.current.getTracks().forEach((track) => {
-            try {
-              track.stop();
-            } catch {}
-          });
-          mediaStreamRef.current = null;
-        }
-        setIsRecording(false);
-        setRecordDuration(0);
-        if (recordIntervalRef.current) {
-          clearInterval(recordIntervalRef.current);
-          recordIntervalRef.current = null;
-        }
-      };
-
-      mediaRecorder.onerror = (recErr: any) => {
-        console.warn('MediaRecorder error:', recErr);
-        if (mediaStreamRef.current) {
-          mediaStreamRef.current.getTracks().forEach((track) => {
-            try {
-              track.stop();
-            } catch {}
-          });
-          mediaStreamRef.current = null;
-        }
-        setIsRecording(false);
-        setMicError('Audio recording encountered an error. You can try again or type your answer.');
-      };
-
-      mediaRecorder.start(250);
       setIsRecording(true);
       setRecordDuration(0);
 
+      if (recordIntervalRef.current) {
+        clearInterval(recordIntervalRef.current);
+      }
       recordIntervalRef.current = setInterval(() => {
         setRecordDuration((prev) => prev + 1);
       }, 1000);
     } catch (err: any) {
-      console.warn('Microphone permission or hardware error:', err);
+      console.warn('Microphone permission or recording error:', err);
       setIsRecording(false);
-
-      // Immediately release tracks if obtained before failure
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((track) => {
-          try {
-            track.stop();
-          } catch {}
-        });
-        mediaStreamRef.current = null;
+      setRecordDuration(0);
+      if (recordIntervalRef.current) {
+        clearInterval(recordIntervalRef.current);
+        recordIntervalRef.current = null;
       }
-
-      const errorName = err?.name || '';
-      if (errorName === 'NotAllowedError' || errorName === 'PermissionDeniedError') {
-        if (isInIframe) {
-          setMicError('Microphone permission was denied or restricted by embedding permissions policy. You can type your answer instead.');
-        } else {
-          setMicError('Microphone permission was denied. Please allow microphone access in your browser site settings, or type your answer.');
-        }
-      } else if (errorName === 'NotFoundError' || errorName === 'DevicesNotFoundError') {
-        setMicError('No microphone hardware detected on this device. You can type your answer directly.');
-      } else if (errorName === 'NotReadableError' || errorName === 'TrackStartError') {
-        setMicError('Microphone is in use by another app or call. Please release it and retry, or type your answer.');
-      } else if (errorName === 'SecurityError') {
-        setMicError('Microphone access is blocked by browser security or iframe policy. You can type your answer instead.');
-      } else if (errorName === 'OverconstrainedError') {
-        setMicError('Audio format requested is not supported by your microphone. You can type your answer.');
-      } else {
-        setMicError(`Microphone notice: ${err?.message || errorName || 'Unable to access microphone'}. You can type your answer.`);
-      }
+      setMicError(err?.message || mapMicrophoneError(err));
     }
   };
 
-  const handleStopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      try {
-        mediaRecorderRef.current.stop();
-      } catch (err) {
-        console.warn('Error stopping MediaRecorder:', err);
-      }
-    }
-    // Also stop tracks if stream still exists
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => {
-        try {
-          track.stop();
-        } catch {}
-      });
-      mediaStreamRef.current = null;
-    }
+  const handleStopRecording = async () => {
     if (recordIntervalRef.current) {
       clearInterval(recordIntervalRef.current);
       recordIntervalRef.current = null;
     }
     setIsRecording(false);
+
+    const session = recordingSessionRef.current;
+    if (!session) {
+      if (mediaStreamRef.current) {
+        cleanupMediaStreamTracks(mediaStreamRef.current);
+        mediaStreamRef.current = null;
+      }
+      mediaRecorderRef.current = null;
+      return;
+    }
+
+    try {
+      const result = await session.stop();
+      const currentQ = questions[currentIndex];
+      if (currentQ) {
+        const qId = String(currentQ.id);
+        setAnswers((prev) => ({
+          ...prev,
+          [qId]: {
+            ...(prev[qId] || { typedAnswer: '', recordingStatus: 'none' }),
+            voiceAudioUrl: result.url,
+            voiceBlob: result.blob,
+            recordingStatus: 'recorded',
+          },
+        }));
+      }
+    } catch (err: any) {
+      console.warn('Error stopping audio recording session:', err);
+      setMicError(err?.message || 'Failed to complete audio recording. You can retry or type your answer.');
+    } finally {
+      recordingSessionRef.current = null;
+      mediaStreamRef.current = null;
+      mediaRecorderRef.current = null;
+      setRecordDuration(0);
+    }
   };
 
   const handleDeleteRecording = () => {

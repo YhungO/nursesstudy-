@@ -20,7 +20,27 @@ import {
   RefreshCw,
   Info,
   AlertCircle,
+  Volume2,
+  Volume1,
+  VolumeX,
+  Mic,
+  Square,
+  Play,
+  Pause,
+  Trash2,
 } from 'lucide-react';
+import {
+  checkSpeechSynthesisSupport,
+  loadSpeechSynthesisVoices,
+  getBestEnglishVoice,
+  stopSpeechSynthesis,
+  speakText,
+  checkMicrophoneSupport,
+  startAudioRecording,
+  cleanupMediaStreamTracks,
+  mapMicrophoneError,
+  AudioRecordingSession,
+} from '../../utils/mediaUtils';
 import { ExamTopBar } from './cbt/ExamTopBar';
 import { ExamContextBar } from './cbt/ExamContextBar';
 import { QuestionProgress } from './cbt/QuestionProgress';
@@ -124,6 +144,36 @@ export const CbtExam: React.FC<CbtExamProps> = ({
   const isSubmittingRef = useRef<boolean>(false);
   const hasSubmittedRef = useRef<boolean>(false);
 
+  // Media & Speech States via mediaUtils
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [speechVolume, setSpeechVolume] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('nursesstudy_cbt_speech_volume');
+      if (saved !== null) {
+        const parsed = parseFloat(saved);
+        if (!isNaN(parsed) && parsed >= 0 && parsed <= 1) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return 1;
+  });
+  const activeUtteranceCancelRef = useRef<(() => void) | null>(null);
+
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordDuration, setRecordDuration] = useState(0);
+  const [micError, setMicError] = useState<string | null>(null);
+  const recordingSessionRef = useRef<AudioRecordingSession | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const recordIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Per-question voice recordings (qId -> { voiceAudioUrl: string, voiceBlob?: Blob })
+  const [voiceRecordings, setVoiceRecordings] = useState<Record<string, { voiceAudioUrl: string; voiceBlob?: Blob }>>({});
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+
   // Format seconds to mm:ss or hh:mm:ss for visual countdown timer
   const formatTime = (totalSec: number) => {
     const safeSec = Math.max(0, totalSec);
@@ -147,8 +197,74 @@ export const CbtExam: React.FC<CbtExamProps> = ({
   }, [selectedAnswers]);
 
   // Central Submission Handler
+  // Preload text-to-speech voices with Android asynchronous voice loading support
+  useEffect(() => {
+    let isCancelled = false;
+    loadSpeechSynthesisVoices(2500).then((voices) => {
+      if (!isCancelled && voices && voices.length > 0) {
+        setAvailableVoices(voices);
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  // Clean up media and audio when switching questions, submitting, or unmounting
+  const stopAllMedia = useCallback(() => {
+    // 1. Stop Speech Synthesis
+    stopSpeechSynthesis();
+    if (activeUtteranceCancelRef.current) {
+      try {
+        activeUtteranceCancelRef.current();
+      } catch {}
+      activeUtteranceCancelRef.current = null;
+    }
+    setIsSpeaking(false);
+
+    // 2. Stop Audio playback
+    if (audioPlayerRef.current) {
+      try {
+        audioPlayerRef.current.pause();
+      } catch {}
+      setIsPlayingAudio(false);
+    }
+
+    // 3. Stop / Cancel Audio Recording session
+    if (recordingSessionRef.current) {
+      try {
+        recordingSessionRef.current.cancel();
+      } catch {}
+      recordingSessionRef.current = null;
+    }
+
+    // 4. Release all active microphone tracks immediately
+    if (mediaStreamRef.current) {
+      cleanupMediaStreamTracks(mediaStreamRef.current);
+      mediaStreamRef.current = null;
+    }
+
+    if (recordIntervalRef.current) {
+      clearInterval(recordIntervalRef.current);
+      recordIntervalRef.current = null;
+    }
+    setIsRecording(false);
+    setRecordDuration(0);
+  }, []);
+
+  // Stop media on unmount
+  useEffect(() => {
+    return () => {
+      stopAllMedia();
+    };
+  }, [stopAllMedia]);
+
   const submitCBT = useCallback(
     async (reason: 'manual' | 'timeout' | 'forced') => {
+      // Release any active speech or recording
+      stopAllMedia();
+
       // 1. Concurrency lock to prevent double submissions
       if (hasSubmittedRef.current || isSubmittingRef.current) {
         return;
@@ -200,8 +316,19 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           : Math.min(totalDurationSec, Math.max(1, elapsedSec));
 
       try {
+        // Collect any voice answers recorded by the student
+        const theoryAnswersPayload: Record<string, { voiceRecordingUrl?: string | null }> = {};
+        Object.entries(voiceRecordings).forEach(([qid, rec]) => {
+          if (rec.voiceAudioUrl) {
+            theoryAnswersPayload[qid] = {
+              voiceRecordingUrl: rec.voiceAudioUrl,
+            };
+          }
+        });
+
         const result = await api.submitExam(currentExam.id, {
           answers: finalAnswers,
+          theoryAnswers: Object.keys(theoryAnswersPayload).length > 0 ? (theoryAnswersPayload as any) : undefined,
           timeSpentSeconds,
           submissionReason: reason,
           shuffledOptions: shuffledQuestionsRef.current,
@@ -521,6 +648,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
 
   // Navigation handlers
   const handleNext = () => {
+    stopAllMedia();
     if (!examData) return;
     const nextIdx = Math.min(examData.questions.length - 1, currentIndex + 1);
     setCurrentIndex(nextIdx);
@@ -541,6 +669,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
   };
 
   const handlePrevious = () => {
+    stopAllMedia();
     if (!examData) return;
     const prevIdx = Math.max(0, currentIndex - 1);
     setCurrentIndex(prevIdx);
@@ -561,6 +690,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
   };
 
   const handleSelectQuestion = (idx: number) => {
+    stopAllMedia();
     if (!examData) return;
     setCurrentIndex(idx);
     setShowPaletteDrawer(false);
@@ -577,6 +707,227 @@ export const CbtExam: React.FC<CbtExamProps> = ({
         shuffledQuestions: shuffledQuestionsRef.current,
         lastUpdated: Date.now(),
       });
+    }
+  };
+
+  // Text-To-Speech: Read Question (Android & Mobile Browser Compatible via mediaUtils)
+  const handleReadQuestion = () => {
+    if (!examData || !examData.questions) return;
+    const currentQ = examData.questions[currentIndex];
+    if (!currentQ) return;
+
+    // Check if speechSynthesis is genuinely available in this browser
+    const ttsCheck = checkSpeechSynthesisSupport();
+    if (!ttsCheck.isSupported) {
+      setSpeechError(
+        ttsCheck.reason ||
+          'Audio reading is not supported on this device/browser. You can read the question text directly.'
+      );
+      setTimeout(() => setSpeechError(null), 5000);
+      return;
+    }
+
+    // Toggle stop if already speaking
+    if (isSpeaking) {
+      stopSpeechSynthesis();
+      if (activeUtteranceCancelRef.current) {
+        try {
+          activeUtteranceCancelRef.current();
+        } catch {}
+        activeUtteranceCancelRef.current = null;
+      }
+      setIsSpeaking(false);
+      return;
+    }
+
+    setSpeechError(null);
+
+    // Read question stem and if options exist, read options
+    const rawQuestion = currentQ.questionText || currentQ.question || '';
+    const cleanQuestion = rawQuestion.replace(/<[^>]*>?/gm, '').trim();
+
+    let fullSpeechText = cleanQuestion;
+    if (currentQ.scenario) {
+      fullSpeechText = `${currentQ.scenario.trim()}. ${cleanQuestion}`;
+    }
+
+    // Read options if present
+    if (Array.isArray(currentQ.options) && currentQ.options.length > 0) {
+      const optionsText = currentQ.options
+        .map((opt: any) => {
+          const letter = opt.id || opt.originalId || '';
+          const text = opt.text || (typeof opt === 'string' ? opt : '');
+          return `Option ${letter}: ${text}`;
+        })
+        .join('. ');
+      fullSpeechText = `${fullSpeechText}. ${optionsText}`;
+    }
+
+    if (!fullSpeechText.trim()) {
+      setSpeechError('No question text available to read.');
+      setTimeout(() => setSpeechError(null), 3000);
+      return;
+    }
+
+    const chosenVoice = getBestEnglishVoice(availableVoices);
+
+    const { cancel } = speakText(fullSpeechText, {
+      voice: chosenVoice,
+      lang: chosenVoice?.lang || 'en-US',
+      rate: 0.95,
+      pitch: 1.0,
+      volume: speechVolume,
+      onStart: () => {
+        setIsSpeaking(true);
+        setSpeechError(null);
+      },
+      onEnd: () => {
+        activeUtteranceCancelRef.current = null;
+        setIsSpeaking(false);
+      },
+      onError: (e: any) => {
+        activeUtteranceCancelRef.current = null;
+        setIsSpeaking(false);
+        if (e?.error === 'canceled' || e?.error === 'interrupted') {
+          return;
+        }
+        console.warn('SpeechSynthesis error:', e?.error || e);
+        setSpeechError(
+          `Audio reading notice: ${e?.error || 'Playback interrupted'}. You can read the question text directly.`
+        );
+        setTimeout(() => setSpeechError(null), 5000);
+      },
+    });
+
+    activeUtteranceCancelRef.current = cancel;
+  };
+
+  // MediaRecorder: Voice Answer Recording via mediaUtils
+  const handleStartRecording = async () => {
+    setMicError(null);
+
+    // 1. Diagnostic check for microphone availability and secure context
+    const micCheck = checkMicrophoneSupport();
+    if (!micCheck.isSupported) {
+      setMicError(
+        micCheck.reason ||
+          'Microphone recording is not supported in this browser. You can select your answer directly.'
+      );
+      return;
+    }
+
+    try {
+      // 2. Request permission on-demand and start recording session via mediaUtils
+      const session = await startAudioRecording({ timeslice: 250 });
+      recordingSessionRef.current = session;
+      mediaStreamRef.current = session.stream;
+
+      setIsRecording(true);
+      setRecordDuration(0);
+
+      if (recordIntervalRef.current) {
+        clearInterval(recordIntervalRef.current);
+      }
+      recordIntervalRef.current = setInterval(() => {
+        setRecordDuration((prev) => prev + 1);
+      }, 1000);
+    } catch (err: any) {
+      console.warn('Microphone permission or recording error:', err);
+      setIsRecording(false);
+      setRecordDuration(0);
+      if (recordIntervalRef.current) {
+        clearInterval(recordIntervalRef.current);
+        recordIntervalRef.current = null;
+      }
+      setMicError(err?.message || mapMicrophoneError(err));
+    }
+  };
+
+  const handleStopRecording = async () => {
+    if (recordIntervalRef.current) {
+      clearInterval(recordIntervalRef.current);
+      recordIntervalRef.current = null;
+    }
+    setIsRecording(false);
+
+    const session = recordingSessionRef.current;
+    if (!session) {
+      if (mediaStreamRef.current) {
+        cleanupMediaStreamTracks(mediaStreamRef.current);
+        mediaStreamRef.current = null;
+      }
+      return;
+    }
+
+    try {
+      const result = await session.stop();
+      if (examData && examData.questions) {
+        const currentQ = examData.questions[currentIndex];
+        if (currentQ) {
+          const qId = String(currentQ.id);
+          setVoiceRecordings((prev) => ({
+            ...prev,
+            [qId]: {
+              voiceAudioUrl: result.url,
+              voiceBlob: result.blob,
+            },
+          }));
+        }
+      }
+    } catch (err: any) {
+      console.warn('Error stopping audio recording session:', err);
+      setMicError(err?.message || 'Failed to complete audio recording. You can retry or select your answer.');
+    } finally {
+      recordingSessionRef.current = null;
+      mediaStreamRef.current = null;
+      setRecordDuration(0);
+    }
+  };
+
+  const handleDeleteRecording = () => {
+    if (!examData || !examData.questions) return;
+    const currentQ = examData.questions[currentIndex];
+    if (!currentQ) return;
+    const qId = String(currentQ.id);
+
+    if (audioPlayerRef.current) {
+      try {
+        audioPlayerRef.current.pause();
+      } catch {}
+      setIsPlayingAudio(false);
+    }
+
+    setVoiceRecordings((prev) => {
+      const next = { ...prev };
+      delete next[qId];
+      return next;
+    });
+  };
+
+  const togglePlayRecordedAudio = () => {
+    if (!examData || !examData.questions) return;
+    const currentQ = examData.questions[currentIndex];
+    if (!currentQ) return;
+    const qId = String(currentQ.id);
+    const recording = voiceRecordings[qId];
+    if (!recording?.voiceAudioUrl) return;
+
+    if (!audioPlayerRef.current) {
+      audioPlayerRef.current = new Audio(recording.voiceAudioUrl);
+      audioPlayerRef.current.onended = () => setIsPlayingAudio(false);
+    } else if (audioPlayerRef.current.src !== recording.voiceAudioUrl) {
+      audioPlayerRef.current.src = recording.voiceAudioUrl;
+      audioPlayerRef.current.onended = () => setIsPlayingAudio(false);
+    }
+
+    if (isPlayingAudio) {
+      audioPlayerRef.current.pause();
+      setIsPlayingAudio(false);
+    } else {
+      audioPlayerRef.current
+        .play()
+        .then(() => setIsPlayingAudio(true))
+        .catch(() => setIsPlayingAudio(false));
     }
   };
 
@@ -1144,6 +1495,158 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                 totalQuestions={totalQ}
               />
 
+              {/* CBT Audio Assist Toolbar: Read Question & Record Voice Answer via mediaUtils */}
+              <div className="w-full max-w-2xl mx-auto px-4">
+                <div className="flex flex-wrap items-center justify-between gap-2.5 p-3 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Read Question Button */}
+                    <button
+                      type="button"
+                      onClick={handleReadQuestion}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        isSpeaking
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse'
+                          : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80'
+                      }`}
+                      title={isSpeaking ? 'Stop reading question aloud' : 'Read question text aloud'}
+                    >
+                      {isSpeaking ? (
+                        <>
+                          <VolumeX className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Stop Reading</span>
+                        </>
+                      ) : (
+                        <>
+                          <Volume2 className="w-3.5 h-3.5 text-teal-400" />
+                          <span>Read Question</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Read Question Volume Slider */}
+                    <div
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 rounded-xl transition-all"
+                      title={`Read Question Volume: ${Math.round(speechVolume * 100)}%`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVol = speechVolume > 0 ? 0 : 1;
+                          setSpeechVolume(nextVol);
+                          try {
+                            localStorage.setItem('nursesstudy_cbt_speech_volume', String(nextVol));
+                          } catch {}
+                        }}
+                        className="text-slate-400 hover:text-teal-300 transition-colors p-0.5 cursor-pointer"
+                        title={speechVolume === 0 ? 'Unmute voice reading' : 'Mute voice reading'}
+                        aria-label="Toggle mute voice reading"
+                      >
+                        {speechVolume === 0 ? (
+                          <VolumeX className="w-3.5 h-3.5 text-rose-400" />
+                        ) : speechVolume < 0.5 ? (
+                          <Volume1 className="w-3.5 h-3.5 text-teal-400" />
+                        ) : (
+                          <Volume2 className="w-3.5 h-3.5 text-teal-400" />
+                        )}
+                      </button>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={speechVolume}
+                        onChange={(e) => {
+                          const newVol = parseFloat(e.target.value);
+                          setSpeechVolume(newVol);
+                          try {
+                            localStorage.setItem('nursesstudy_cbt_speech_volume', String(newVol));
+                          } catch {}
+                        }}
+                        className="w-14 sm:w-20 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-teal-400 focus:outline-none"
+                        aria-label="Read Question volume control"
+                      />
+                      <span className="text-[10px] font-mono text-slate-300 w-7 text-right select-none">
+                        {Math.round(speechVolume * 100)}%
+                      </span>
+                    </div>
+
+                    {/* Record Voice Answer Button */}
+                    {!isRecording ? (
+                      <button
+                        type="button"
+                        onClick={handleStartRecording}
+                        className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                          voiceRecordings[String(currentQ.id)]
+                            ? 'bg-purple-900/60 hover:bg-purple-800 text-purple-200 border border-purple-500/40'
+                            : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80'
+                        }`}
+                      >
+                        <Mic className="w-3.5 h-3.5 text-purple-400" />
+                        <span>{voiceRecordings[String(currentQ.id)] ? 'Re-record Voice Answer' : 'Record Voice Answer'}</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleStopRecording}
+                        className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold transition-all animate-pulse flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Square className="w-3.5 h-3.5 fill-current" />
+                        <span>Stop Recording ({recordDuration}s)</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Recorded Audio Controls for Current Question */}
+                  {voiceRecordings[String(currentQ.id)] && !isRecording && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={togglePlayRecordedAudio}
+                        className="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                        title="Listen to recorded voice answer"
+                      >
+                        {isPlayingAudio ? (
+                          <>
+                            <Pause className="w-3 h-3 fill-current" />
+                            <span>Pause</span>
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3 h-3 fill-current" />
+                            <span>Play</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleDeleteRecording}
+                        className="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                        title="Delete voice answer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Speech Error Banner */}
+                {speechError && (
+                  <div className="mt-2 p-2.5 bg-amber-950/40 border border-amber-800/40 rounded-xl text-[11px] text-amber-300 flex items-center gap-2">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>{speechError}</span>
+                  </div>
+                )}
+
+                {/* Microphone Error Banner */}
+                {micError && (
+                  <div className="mt-2 p-2.5 bg-slate-950 border border-amber-500/40 rounded-xl text-[11px] text-amber-300 flex items-center gap-2">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>{micError}</span>
+                  </div>
+                )}
+              </div>
+
               <AnswerOptions
                 questionId={currentQ.id}
                 options={currentQ.options || []}
@@ -1202,6 +1705,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           isOpen={showExitConfirm}
           onCancel={() => setShowExitConfirm(false)}
           onConfirm={() => {
+            stopAllMedia();
             setShowExitConfirm(false);
             if (timerRef.current) clearInterval(timerRef.current);
             if (examData) {
