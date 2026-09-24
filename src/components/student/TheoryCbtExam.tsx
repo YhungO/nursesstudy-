@@ -6,7 +6,6 @@ import {
   Volume2,
   VolumeX,
   Mic,
-  MicOff,
   Square,
   Play,
   Pause,
@@ -22,12 +21,9 @@ import {
   RefreshCw,
   BookOpen,
   FileText,
-  Radio,
   Award,
   ChevronRight,
   Info,
-  Eye,
-  EyeOff,
 } from 'lucide-react';
 import { THEORY_INTEGUMENTARY_QUESTIONS } from '../../data/theoryIntegumentaryQuestions';
 import {
@@ -40,8 +36,6 @@ import {
   startAudioRecording,
   cleanupMediaStreamTracks,
   mapMicrophoneError,
-  checkSpeechRecognitionSupport,
-  getSpeechRecognitionConstructor,
   AudioRecordingSession,
 } from '../../utils/mediaUtils';
 
@@ -93,9 +87,6 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
   const [showExitModal, setShowExitModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Model Answer reveal state during simulation / practice
-  const [revealedModelAnswers, setRevealedModelAnswers] = useState<Record<string, boolean>>({});
-
   // Completed results view
   const [completedResult, setCompletedResult] = useState<{
     attempt: ExamAttempt;
@@ -118,7 +109,6 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
   const [micError, setMicError] = useState<string | null>(null);
   const recordingSessionRef = useRef<AudioRecordingSession | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -126,22 +116,11 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
 
-  // Speech Recognition (Dictation) state
-  const [isDictating, setIsDictating] = useState(false);
-  const [dictationSupported, setDictationSupported] = useState(false);
-  const recognitionRef = useRef<any>(null);
-  const dictationBaseTextRef = useRef<string>('');
-
   // Storage key for session recovery
   const storageKey = `nursesstudy_theory_session_${exam.id}`;
 
-  // Check SpeechRecognition and initialize SpeechSynthesis voices on mount via mediaUtils
+  // Initialize SpeechSynthesis voices on mount via mediaUtils
   useEffect(() => {
-    // 1. Check SpeechRecognition support
-    const recognitionCheck = checkSpeechRecognitionSupport();
-    setDictationSupported(recognitionCheck.isSupported);
-
-    // 2. Pre-load text-to-speech voices with Android asynchronous voice loading support
     let isCancelled = false;
     loadSpeechSynthesisVoices(2500).then((voices) => {
       if (!isCancelled && voices && voices.length > 0) {
@@ -270,16 +249,7 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
     activeUtteranceRef.current = null;
     setIsSpeaking(false);
 
-    // 2. Stop Dictation
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {}
-      recognitionRef.current = null;
-      setIsDictating(false);
-    }
-
-    // 3. Stop Audio playback
+    // 2. Stop Audio playback
     if (audioPlayerRef.current) {
       try {
         audioPlayerRef.current.pause();
@@ -287,7 +257,7 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
       setIsPlayingAudio(false);
     }
 
-    // 4. Stop Recording if active and clean up audio session
+    // 3. Stop Recording if active and clean up audio session
     if (recordingSessionRef.current) {
       try {
         recordingSessionRef.current.cancel();
@@ -301,7 +271,7 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
       mediaRecorderRef.current = null;
     }
 
-    // 5. Release all active microphone tracks immediately
+    // 4. Release all active microphone tracks immediately
     if (mediaStreamRef.current) {
       cleanupMediaStreamTracks(mediaStreamRef.current);
       mediaStreamRef.current = null;
@@ -411,107 +381,6 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
 
     activeUtteranceRef.current = utterance;
     activeUtteranceCancelRef.current = cancel;
-  };
-
-  // Voice Dictation (Speech to Text via mediaUtils)
-  const handleToggleDictation = () => {
-    const dictCheck = checkSpeechRecognitionSupport();
-    if (!dictCheck.isSupported) {
-      setSpeechError(dictCheck.reason || 'Speech recognition dictation is not available in this browser. You can type your answer directly.');
-      setTimeout(() => setSpeechError(null), 5000);
-      return;
-    }
-
-    if (isDictating && recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {}
-      recognitionRef.current = null;
-      setIsDictating(false);
-      return;
-    }
-
-    const SpeechRecognitionAPI = getSpeechRecognitionConstructor();
-    if (!SpeechRecognitionAPI) {
-      setSpeechError('Speech recognition dictation is not supported in this browser. You can type your answer directly.');
-      setTimeout(() => setSpeechError(null), 5000);
-      return;
-    }
-
-    try {
-      const recognition = new SpeechRecognitionAPI();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-      recognition.maxAlternatives = 1;
-
-      // Remember the text already present so transcribed speech appends cleanly without overwriting
-      const currentQ = questions[currentIndex];
-      const qId = currentQ ? String(currentQ.id) : '';
-      dictationBaseTextRef.current = answersRef.current[qId]?.typedAnswer || '';
-
-      recognition.onstart = () => {
-        setIsDictating(true);
-        setSpeechError(null);
-      };
-
-      recognition.onresult = (event: any) => {
-        let finalTranscript = '';
-        let interimTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          const item = event.results[i];
-          if (item.isFinal) {
-            finalTranscript += item[0].transcript;
-          } else {
-            interimTranscript += item[0].transcript;
-          }
-        }
-
-        const base = dictationBaseTextRef.current.trim();
-        const spokenChunk = (finalTranscript || interimTranscript).trim();
-
-        if (spokenChunk) {
-          const newText = base ? `${base} ${spokenChunk}` : spokenChunk;
-          handleTypedAnswerChange(newText);
-          if (finalTranscript) {
-            dictationBaseTextRef.current = newText;
-          }
-        }
-      };
-
-      recognition.onerror = (event: any) => {
-        console.warn('SpeechRecognition error:', event.error);
-        setIsDictating(false);
-        if (event.error === 'no-speech') {
-          return;
-        }
-        if (event.error === 'not-allowed') {
-          setSpeechError('Microphone permission for dictation was denied. Please allow microphone or type your answer.');
-        } else if (event.error === 'network') {
-          setSpeechError('Voice dictation network service unavailable. You can type your answer directly.');
-        } else if (event.error === 'audio-capture') {
-          setSpeechError('No microphone detected for dictation. You can type your answer directly.');
-        } else {
-          setSpeechError(`Voice dictation note: ${event.error}. You can continue typing.`);
-        }
-        setTimeout(() => setSpeechError(null), 5000);
-      };
-
-      recognition.onend = () => {
-        setIsDictating(false);
-        recognitionRef.current = null;
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch (err: any) {
-      console.warn('SpeechRecognition failed:', err);
-      setIsDictating(false);
-      recognitionRef.current = null;
-      setSpeechError('Voice dictation could not be initialized. You can type your answer.');
-      setTimeout(() => setSpeechError(null), 5000);
-    }
   };
 
   // MediaRecorder: Voice Answer Recording (Android & Mobile Browser Compatible via mediaUtils)
@@ -1000,7 +869,7 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
                   {item.voiceRecordingUrl && (
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <Radio className="w-3.5 h-3.5 text-teal-400" />
+                        <Mic className="w-3.5 h-3.5 text-teal-400" />
                         <span>Your Spoken Voice Recording</span>
                       </label>
                       <div className="p-3 bg-slate-900/90 rounded-2xl border border-slate-800 flex items-center gap-3">
@@ -1094,166 +963,98 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
       </div>
 
       {/* Main Question Box */}
-      <main className="bg-[#111827] border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-xl space-y-6">
+      <main className="bg-[#111827] border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
         {/* Question Header & Category */}
-        <div className="space-y-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-md bg-teal-950 text-teal-300 border border-teal-800/80">
-              {currentQ?.category || 'General Characteristics'}
-            </span>
-
-            <span className="text-xs font-mono font-bold text-slate-400">
-              Q{currentIndex + 1} / {totalQuestionsCount}
-            </span>
-          </div>
-
-          <h2 className="text-base sm:text-lg font-semibold text-white leading-relaxed">
-            {currentQ?.questionText || currentQ?.question}
-          </h2>
-
-          {/* Read Question & Voice Dictation Audio Toolbar */}
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <button
-              type="button"
-              onClick={handleReadQuestion}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
-                isSpeaking
-                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 animate-pulse'
-                  : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
-              }`}
-            >
-              {isSpeaking ? (
-                <>
-                  <VolumeX className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Stop Reading</span>
-                </>
-              ) : (
-                <>
-                  <Volume2 className="w-3.5 h-3.5 text-teal-400" />
-                  <span>Read Question</span>
-                </>
-              )}
-            </button>
-
-            {dictationSupported && (
-              <button
-                type="button"
-                onClick={handleToggleDictation}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
-                  isDictating
-                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 animate-pulse'
-                    : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
-                }`}
-              >
-                <Mic className={`w-3.5 h-3.5 ${isDictating ? 'text-rose-400' : 'text-purple-400'}`} />
-                <span>{isDictating ? 'Stop Dictation' : 'Voice Dictation'}</span>
-              </button>
-            )}
-
-            {isDictating && (
-              <span className="text-[11px] text-rose-300 font-medium px-2 py-0.5 rounded bg-rose-950/60 border border-rose-500/40 flex items-center gap-1.5 animate-pulse">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping" />
-                Listening... Speak your response
-              </span>
-            )}
-
-            {speechError && (
-              <span className="text-[11px] text-amber-400/90 font-medium px-2 py-0.5 rounded bg-amber-950/40 border border-amber-800/40">
-                {speechError}
-              </span>
-            )}
-          </div>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-mono font-bold text-teal-400">
+            Question {currentIndex + 1} of {totalQuestionsCount}
+          </span>
+          <span className="text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-teal-950/80 text-teal-300 border border-teal-800/60">
+            {currentQ?.category || 'General'}
+          </span>
         </div>
 
-        {/* METHOD A: TYPED ANSWER */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-              <FileText className="w-4 h-4 text-teal-400" />
-              <span>Your Answer (Type or Dictate):</span>
-            </label>
-            <span className="text-[11px] text-slate-400">
-              {currentAnswerState.typedAnswer.trim().split(/\s+/).filter(Boolean).length} words • Auto-saved
-            </span>
-          </div>
+        {/* Question Text */}
+        <h2 className="text-lg sm:text-xl font-medium text-white leading-relaxed">
+          {currentQ?.questionText || currentQ?.question}
+        </h2>
 
+        {/* Read Question button directly below the question */}
+        <div>
+          <button
+            type="button"
+            onClick={handleReadQuestion}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
+              isSpeaking
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 animate-pulse'
+                : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
+            }`}
+            title={isSpeaking ? 'Stop reading' : 'Read question text aloud'}
+          >
+            {isSpeaking ? (
+              <>
+                <VolumeX className="w-3.5 h-3.5 text-amber-400" />
+                <span>Stop Reading</span>
+              </>
+            ) : (
+              <>
+                <Volume2 className="w-3.5 h-3.5 text-teal-400" />
+                <span>Read Question</span>
+              </>
+            )}
+          </button>
+          {speechError && (
+            <p className="mt-2 text-xs text-amber-400/90 font-medium">
+              {speechError}
+            </p>
+          )}
+        </div>
+
+        {/* One large answer text box */}
+        <div>
           <textarea
             value={currentAnswerState.typedAnswer}
             onChange={(e) => handleTypedAnswerChange(e.target.value)}
-            placeholder="Type your comprehensive theoretical explanation, anatomical structures, physiological pathways, and clinical nursing considerations here..."
-            className="w-full min-h-[180px] sm:min-h-[220px] p-4 rounded-2xl bg-slate-900/90 border border-slate-800 text-slate-100 placeholder-slate-500 text-sm leading-relaxed focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all resize-y font-sans"
+            placeholder="Type your answer here..."
+            rows={8}
+            className="w-full p-4 rounded-2xl bg-slate-900/90 border border-slate-800 text-slate-100 placeholder-slate-500 text-sm leading-relaxed focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all font-sans resize-y"
           />
         </div>
 
-        {/* METHOD B: VOICE RECORDING OPTION */}
-        <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/70 border border-slate-800/80 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5 uppercase tracking-wide">
-                <Radio className="w-4 h-4 text-teal-400" />
-                <span>Method B: Optional Spoken Voice Answer</span>
-              </h4>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                Record your voice using the microphone. Completely optional; you may also submit by typing alone.
-              </p>
-            </div>
+        {/* Simple "Record Voice Answer" controls */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <div className="flex items-center gap-2">
+            {!isRecording ? (
+              <button
+                type="button"
+                onClick={handleStartRecording}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-2 cursor-pointer ${
+                  currentAnswerState.voiceAudioUrl
+                    ? 'bg-purple-900/30 hover:bg-purple-900/50 text-purple-200 border-purple-500/40'
+                    : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
+                }`}
+              >
+                <Mic className="w-4 h-4 text-purple-400" />
+                <span>{currentAnswerState.voiceAudioUrl ? 'Re-record Voice Answer' : 'Record Voice Answer'}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleStopRecording}
+                className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all animate-pulse flex items-center gap-2 cursor-pointer shadow-sm"
+              >
+                <Square className="w-4 h-4 fill-current" />
+                <span>Stop Recording ({recordDuration}s)</span>
+              </button>
+            )}
 
-            {/* Recording Controls */}
-            <div className="flex items-center gap-2 self-start sm:self-auto">
-              {!isRecording ? (
-                <button
-                  type="button"
-                  onClick={handleStartRecording}
-                  className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
-                >
-                  <Mic className="w-3.5 h-3.5" />
-                  <span>{currentAnswerState.voiceAudioUrl ? 'Re-record Answer' : 'Record Voice Answer'}</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleStopRecording}
-                  className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all animate-pulse shadow-sm cursor-pointer flex items-center gap-1.5"
-                >
-                  <Square className="w-3.5 h-3.5 fill-current" />
-                  <span>Stop Recording ({recordDuration}s)</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Active Recording Indicator */}
-          {isRecording && (
-            <div className="p-3 bg-rose-950/40 border border-rose-500/40 rounded-xl flex items-center justify-between text-xs text-rose-200">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
-                <span className="font-semibold">Microphone active. Recording your response...</span>
-              </div>
-              <span className="font-mono font-bold">{recordDuration}s</span>
-            </div>
-          )}
-
-          {/* Microphone Error Note */}
-          {micError && (
-            <div className="p-3 bg-slate-950 border border-amber-500/40 rounded-xl text-xs text-amber-300 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>{micError}</span>
-            </div>
-          )}
-
-          {/* Recorded Audio Playback and Delete */}
-          {currentAnswerState.voiceAudioUrl && !isRecording && (
-            <div className="p-3 bg-slate-950 border border-teal-500/30 rounded-xl flex items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2.5 text-teal-300 font-medium">
-                <CheckCircle2 className="w-4 h-4 text-teal-400 shrink-0" />
-                <span>Spoken audio recording saved for Q{currentIndex + 1}</span>
-              </div>
-
-              <div className="flex items-center gap-2">
+            {currentAnswerState.voiceAudioUrl && !isRecording && (
+              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl p-1">
                 <button
                   type="button"
                   onClick={togglePlayRecordedAudio}
-                  className="px-3 py-1 bg-teal-700 hover:bg-teal-600 text-white rounded-lg font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                  className="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                  title="Listen to recorded answer"
                 >
                   {isPlayingAudio ? (
                     <>
@@ -1267,79 +1068,51 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
                     </>
                   )}
                 </button>
-
                 <button
                   type="button"
                   onClick={handleDeleteRecording}
-                  className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-rose-950/40 transition-colors cursor-pointer"
-                  title="Delete recording"
+                  className="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                  title="Delete recorded answer"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
-            </div>
+            )}
+          </div>
+
+          {currentAnswerState.voiceAudioUrl && !isRecording && (
+            <span className="text-xs text-teal-400 font-medium flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5 text-teal-400" />
+              Voice answer saved
+            </span>
           )}
         </div>
 
-        {/* Model Answer / Feedback Section (Revealed via toggle) */}
-        {revealedModelAnswers[currentQId] && (
-          <div className="p-4 sm:p-5 bg-emerald-950/25 border border-emerald-500/35 rounded-2xl animate-in fade-in space-y-2">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs sm:text-sm font-bold text-emerald-400 uppercase tracking-wide flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>Expert Model Answer / Key Points:</span>
-              </h3>
-              <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                Self-Review Mode
-              </span>
-            </div>
-            <p className="text-xs sm:text-sm text-emerald-100 leading-relaxed whitespace-pre-wrap font-sans">
-              {currentQ?.modelAnswer || currentQ?.explanation || 'Model answer available for clinical study.'}
-            </p>
+        {micError && (
+          <div className="p-3 bg-slate-900 border border-amber-500/40 rounded-xl text-xs text-amber-300 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>{micError}</span>
           </div>
         )}
 
-        {/* Bottom Navigation Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-800">
+        {/* Previous, Next & Submit navigation */}
+        <div className="flex items-center justify-between pt-4 border-t border-slate-800">
           <button
             type="button"
             disabled={currentIndex === 0}
             onClick={handleGoPrev}
-            className="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 hover:text-white hover:bg-slate-800 text-xs font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1.5"
+            className="px-5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 hover:text-white hover:bg-slate-800 text-xs font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Previous</span>
           </button>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setShowPalette(true)}
-              className="px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-            >
-              <LayoutGrid className="w-3.5 h-3.5 text-teal-400" />
-              <span>Jump to Q...</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setRevealedModelAnswers((prev) => ({
-                  ...prev,
-                  [currentQId]: !prev[currentQId],
-                }));
-              }}
-              className="px-3.5 py-2.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 hover:text-indigo-200 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-            >
-              <Eye className="w-3.5 h-3.5 text-indigo-400" />
-              <span>{revealedModelAnswers[currentQId] ? 'Hide Model Answer' : 'View Model Answer'}</span>
-            </button>
-
+          <div className="flex items-center gap-3">
             {currentIndex === totalQuestionsCount - 1 ? (
               <button
                 type="button"
                 onClick={() => setShowSubmitModal(true)}
-                className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold transition-all shadow-md shadow-teal-900/30 cursor-pointer flex items-center gap-1.5"
+                className="px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold transition-all shadow-md shadow-teal-900/30 cursor-pointer flex items-center gap-2"
               >
                 <span>Submit Theory Exam</span>
                 <Send className="w-4 h-4" />
@@ -1348,7 +1121,7 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
               <button
                 type="button"
                 onClick={handleGoNext}
-                className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold transition-all shadow-md shadow-teal-900/30 cursor-pointer flex items-center gap-1.5"
+                className="px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold transition-all shadow-md shadow-teal-900/30 cursor-pointer flex items-center gap-2"
               >
                 <span>Next Question</span>
                 <ArrowRight className="w-4 h-4" />
