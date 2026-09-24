@@ -95,6 +95,8 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
   // Media & Speech States
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speechError, setSpeechError] = useState<string | null>(null);
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   const [isRecording, setIsRecording] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
@@ -112,15 +114,56 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
   const [isDictating, setIsDictating] = useState(false);
   const [dictationSupported, setDictationSupported] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const dictationBaseTextRef = useRef<string>('');
 
   // Storage key for session recovery
   const storageKey = `nursesstudy_theory_session_${exam.id}`;
 
-  // Check SpeechRecognition support on mount
+  // Check SpeechRecognition and initialize SpeechSynthesis voices on mount
   useEffect(() => {
-    const SpeechRecognitionAPI =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    setDictationSupported(Boolean(SpeechRecognitionAPI));
+    // 1. Check SpeechRecognition support
+    if (typeof window !== 'undefined') {
+      const SpeechRecognitionAPI =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      setDictationSupported(Boolean(SpeechRecognitionAPI));
+    }
+
+    // 2. Pre-load text-to-speech voices for mobile/Android
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis) {
+      const populateVoices = () => {
+        try {
+          const v = window.speechSynthesis.getVoices();
+          if (v && v.length > 0) {
+            setAvailableVoices(v);
+          }
+        } catch (err) {
+          console.warn('Voice preloading error:', err);
+        }
+      };
+
+      populateVoices();
+      if (typeof window.speechSynthesis.addEventListener === 'function') {
+        window.speechSynthesis.addEventListener('voiceschanged', populateVoices);
+      } else {
+        window.speechSynthesis.onvoiceschanged = populateVoices;
+      }
+
+      // Retry voice fetch after brief delay (common Android Chrome behavior)
+      const t1 = setTimeout(populateVoices, 500);
+      const t2 = setTimeout(populateVoices, 1500);
+
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        if (window.speechSynthesis) {
+          if (typeof window.speechSynthesis.removeEventListener === 'function') {
+            window.speechSynthesis.removeEventListener('voiceschanged', populateVoices);
+          } else {
+            window.speechSynthesis.onvoiceschanged = null;
+          }
+        }
+      };
+    }
   }, []);
 
   // 1. Fetch Exam & Questions
@@ -228,31 +271,44 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
 
   // Clean up media and audio when switching questions or unmounting
   const stopAllMedia = useCallback(() => {
-    // Stop Speech
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+    // 1. Stop Speech Synthesis
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+      activeUtteranceRef.current = null;
       setIsSpeaking(false);
     }
-    // Stop Dictation
+    // 2. Stop Dictation
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
       } catch {}
+      recognitionRef.current = null;
       setIsDictating(false);
     }
-    // Stop Audio playback
+    // 3. Stop Audio playback
     if (audioPlayerRef.current) {
-      audioPlayerRef.current.pause();
+      try {
+        audioPlayerRef.current.pause();
+      } catch {}
       setIsPlayingAudio(false);
     }
-    // Stop Recording if active
+    // 4. Stop Recording if active
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       try {
         mediaRecorderRef.current.stop();
       } catch {}
     }
+    // 5. Release all active microphone tracks immediately
     if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      try {
+        mediaStreamRef.current.getTracks().forEach((track) => {
+          try {
+            track.stop();
+          } catch {}
+        });
+      } catch {}
       mediaStreamRef.current = null;
     }
     if (recordIntervalRef.current) {
@@ -288,44 +344,124 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
     }));
   };
 
-  // Text-To-Speech: Read Question
+  // Text-To-Speech: Read Question (Android & Mobile Browser Compatible)
   const handleReadQuestion = () => {
     const currentQ = questions[currentIndex];
     if (!currentQ) return;
 
-    if (!('speechSynthesis' in window)) {
-      setSpeechError('Audio reading is not supported on this device. You can read the question normally.');
+    // Check if speechSynthesis is genuinely available in this browser environment
+    const isSpeechSupported =
+      typeof window !== 'undefined' &&
+      'speechSynthesis' in window &&
+      Boolean(window.speechSynthesis) &&
+      typeof window.SpeechSynthesisUtterance !== 'undefined';
+
+    if (!isSpeechSupported) {
+      setSpeechError('Audio reading is not supported on this device/browser. You can read the question text directly.');
       setTimeout(() => setSpeechError(null), 5000);
       return;
     }
 
+    // Toggle stop if already speaking
     if (isSpeaking) {
-      window.speechSynthesis.cancel();
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+      activeUtteranceRef.current = null;
       setIsSpeaking(false);
       return;
     }
 
-    window.speechSynthesis.cancel();
+    try {
+      window.speechSynthesis.cancel();
+      // Resume if previously paused (addresses Android Chrome background pause state)
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+    } catch {}
+
     setSpeechError(null);
 
-    const questionTextToRead = `Question ${currentIndex + 1}. Category: ${currentQ.category}. ${currentQ.questionText || currentQ.question}`;
-    const utterance = new SpeechSynthesisUtterance(questionTextToRead);
-    utterance.rate = 0.95;
-    utterance.pitch = 1.0;
+    // Read the exact question displayed on screen
+    const rawQuestion = currentQ.questionText || currentQ.question || '';
+    const cleanQuestion = rawQuestion.replace(/<[^>]*>?/gm, '').trim();
 
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => {
+    if (!cleanQuestion) {
+      setSpeechError('No question text available to read.');
+      setTimeout(() => setSpeechError(null), 3000);
+      return;
+    }
+
+    try {
+      const utterance = new SpeechSynthesisUtterance(cleanQuestion);
+      utterance.rate = 0.95;
+      utterance.pitch = 1.0;
+
+      // Select available voice: prioritize English, fallback automatically
+      let voicesList = availableVoices;
+      if (!voicesList || voicesList.length === 0) {
+        try {
+          voicesList = window.speechSynthesis.getVoices();
+        } catch {}
+      }
+
+      if (voicesList && voicesList.length > 0) {
+        const preferredVoice =
+          voicesList.find((v) => v.lang === 'en-US' || v.lang === 'en-GB') ||
+          voicesList.find((v) => v.lang && v.lang.toLowerCase().startsWith('en')) ||
+          voicesList.find((v) => v.default) ||
+          voicesList[0];
+
+        if (preferredVoice) {
+          utterance.voice = preferredVoice;
+          utterance.lang = preferredVoice.lang;
+        } else {
+          utterance.lang = 'en-US';
+        }
+      } else {
+        // Fallback: device native default voice engine for en-US
+        utterance.lang = 'en-US';
+      }
+
+      utterance.onstart = () => {
+        setIsSpeaking(true);
+        setSpeechError(null);
+      };
+
+      utterance.onend = () => {
+        activeUtteranceRef.current = null;
+        setIsSpeaking(false);
+      };
+
+      utterance.onerror = (e: any) => {
+        activeUtteranceRef.current = null;
+        setIsSpeaking(false);
+        // Do not flag error if stopped intentionally
+        if (e.error === 'canceled' || e.error === 'interrupted') {
+          return;
+        }
+        console.warn('SpeechSynthesis error:', e.error);
+        setSpeechError(`Audio reading notice: ${e.error || 'Playback interrupted'}. You can read the question text directly.`);
+        setTimeout(() => setSpeechError(null), 5000);
+      };
+
+      // Keep utterance in ref to avoid Android Chrome premature garbage collection
+      activeUtteranceRef.current = utterance;
+      setIsSpeaking(true);
+      window.speechSynthesis.speak(utterance);
+    } catch (speechErr: any) {
+      console.warn('SpeechSynthesis execution error:', speechErr);
+      activeUtteranceRef.current = null;
       setIsSpeaking(false);
-      setSpeechError('Audio speech encountered an interruption. You can read the question normally.');
-      setTimeout(() => setSpeechError(null), 4000);
-    };
-
-    setIsSpeaking(true);
-    window.speechSynthesis.speak(utterance);
+      setSpeechError('Audio reading encountered an issue. You can read the question normally.');
+      setTimeout(() => setSpeechError(null), 5000);
+    }
   };
 
   // Voice Dictation (Speech to Text)
   const handleToggleDictation = () => {
+    if (typeof window === 'undefined') return;
+
     const SpeechRecognitionAPI =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
@@ -339,15 +475,29 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
       try {
         recognitionRef.current.stop();
       } catch {}
+      recognitionRef.current = null;
       setIsDictating(false);
+      return;
+    }
+
+    // Detect insecure context
+    if (window.isSecureContext === false) {
+      setSpeechError('Voice dictation requires a secure connection (HTTPS). You can type your answer directly.');
+      setTimeout(() => setSpeechError(null), 5000);
       return;
     }
 
     try {
       const recognition = new SpeechRecognitionAPI();
       recognition.continuous = true;
-      recognition.interimResults = false;
+      recognition.interimResults = true;
       recognition.lang = 'en-US';
+      recognition.maxAlternatives = 1;
+
+      // Remember the text already present so transcribed speech appends cleanly without overwriting
+      const currentQ = questions[currentIndex];
+      const qId = currentQ ? String(currentQ.id) : '';
+      dictationBaseTextRef.current = answersRef.current[qId]?.typedAnswer || '';
 
       recognition.onstart = () => {
         setIsDictating(true);
@@ -355,33 +505,51 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
       };
 
       recognition.onresult = (event: any) => {
-        let transcript = '';
+        let finalTranscript = '';
+        let interimTranscript = '';
+
         for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            transcript += event.results[i][0].transcript;
+          const item = event.results[i];
+          if (item.isFinal) {
+            finalTranscript += item[0].transcript;
+          } else {
+            interimTranscript += item[0].transcript;
           }
         }
-        if (transcript) {
-          const currentQ = questions[currentIndex];
-          if (!currentQ) return;
-          const qId = String(currentQ.id);
-          const currentAnswer = answersRef.current[qId]?.typedAnswer || '';
-          const updated = currentAnswer ? `${currentAnswer.trim()} ${transcript.trim()}` : transcript.trim();
-          handleTypedAnswerChange(updated);
+
+        const base = dictationBaseTextRef.current.trim();
+        const spokenChunk = (finalTranscript || interimTranscript).trim();
+
+        if (spokenChunk) {
+          const newText = base ? `${base} ${spokenChunk}` : spokenChunk;
+          handleTypedAnswerChange(newText);
+          if (finalTranscript) {
+            dictationBaseTextRef.current = newText;
+          }
         }
       };
 
       recognition.onerror = (event: any) => {
-        console.warn('Dictation error:', event.error);
+        console.warn('SpeechRecognition error:', event.error);
         setIsDictating(false);
-        if (event.error !== 'no-speech') {
-          setSpeechError(`Voice dictation note: ${event.error}. You can continue typing.`);
-          setTimeout(() => setSpeechError(null), 4000);
+        if (event.error === 'no-speech') {
+          return;
         }
+        if (event.error === 'not-allowed') {
+          setSpeechError('Microphone permission for dictation was denied. Please allow microphone or type your answer.');
+        } else if (event.error === 'network') {
+          setSpeechError('Voice dictation network service unavailable. You can type your answer directly.');
+        } else if (event.error === 'audio-capture') {
+          setSpeechError('No microphone detected for dictation. You can type your answer directly.');
+        } else {
+          setSpeechError(`Voice dictation note: ${event.error}. You can continue typing.`);
+        }
+        setTimeout(() => setSpeechError(null), 5000);
       };
 
       recognition.onend = () => {
         setIsDictating(false);
+        recognitionRef.current = null;
       };
 
       recognitionRef.current = recognition;
@@ -389,36 +557,84 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
     } catch (err: any) {
       console.warn('SpeechRecognition failed:', err);
       setIsDictating(false);
-      setSpeechError('Microphone dictation could not be initialized. You can type your answer.');
-      setTimeout(() => setSpeechError(null), 4000);
+      recognitionRef.current = null;
+      setSpeechError('Voice dictation could not be initialized. You can type your answer.');
+      setTimeout(() => setSpeechError(null), 5000);
     }
   };
 
-  // MediaRecorder: Voice Answer Recording
+  // MediaRecorder: Voice Answer Recording (Android & Mobile Browser Compatible)
   const handleStartRecording = async () => {
     setMicError(null);
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setMicError('Microphone access is unavailable on this device/browser. You can type your answer instead.');
+
+    // 1. Detect if running outside HTTPS / secure context
+    if (typeof window !== 'undefined' && window.isSecureContext === false) {
+      setMicError('Microphone access requires a secure connection (HTTPS). You can type your answer instead.');
       return;
     }
 
+    // 2. Check if embedded in an iframe that lacks microphone permissions policy
+    const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
+
+    // 3. Verify navigator.mediaDevices availability
+    if (!navigator || !navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+      if (isInIframe) {
+        setMicError('Microphone access is restricted by embedding frame permissions. Please open the exam directly or type your answer.');
+      } else {
+        setMicError('Microphone API is not supported in this browser. You can type your answer instead.');
+      }
+      return;
+    }
+
+    // 4. Verify MediaRecorder support
+    if (typeof window.MediaRecorder === 'undefined') {
+      setMicError('Audio recording (MediaRecorder) is not supported in this browser. You can type your answer instead.');
+      return;
+    }
+
+    // 5. Select supported MIME type
+    const candidateMimeTypes = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/mp4',
+      'audio/aac',
+      'audio/ogg;codecs=opus',
+      'audio/ogg',
+    ];
+    let selectedMimeType: string | undefined = undefined;
+    for (const mime of candidateMimeTypes) {
+      if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(mime)) {
+        selectedMimeType = mime;
+        break;
+      }
+    }
+
     try {
-      // Request mic permission ONLY on button click
+      // Request permission strictly upon user click
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
 
-      const mediaRecorder = new MediaRecorder(stream);
+      const recorderOptions: MediaRecorderOptions = selectedMimeType ? { mimeType: selectedMimeType } : {};
+      let mediaRecorder: MediaRecorder;
+      try {
+        mediaRecorder = new MediaRecorder(stream, recorderOptions);
+      } catch (mimeErr) {
+        console.warn('MediaRecorder with selected MIME failed, falling back to browser default:', mimeErr);
+        mediaRecorder = new MediaRecorder(stream);
+      }
+
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
-      mediaRecorder.ondataavailable = (event) => {
+      mediaRecorder.ondataavailable = (event: BlobEvent) => {
         if (event.data && event.data.size > 0) {
           audioChunksRef.current.push(event.data);
         }
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm;codecs=opus' });
+        const finalBlobType = mediaRecorder.mimeType || selectedMimeType || 'audio/webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: finalBlobType });
         const audioUrl = URL.createObjectURL(audioBlob);
 
         const currentQ = questions[currentIndex];
@@ -435,9 +651,13 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
           }));
         }
 
-        // Clean up tracks
+        // Clean up and release all microphone hardware tracks immediately
         if (mediaStreamRef.current) {
-          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+          mediaStreamRef.current.getTracks().forEach((track) => {
+            try {
+              track.stop();
+            } catch {}
+          });
           mediaStreamRef.current = null;
         }
         setIsRecording(false);
@@ -446,6 +666,20 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
           clearInterval(recordIntervalRef.current);
           recordIntervalRef.current = null;
         }
+      };
+
+      mediaRecorder.onerror = (recErr: any) => {
+        console.warn('MediaRecorder error:', recErr);
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach((track) => {
+            try {
+              track.stop();
+            } catch {}
+          });
+          mediaStreamRef.current = null;
+        }
+        setIsRecording(false);
+        setMicError('Audio recording encountered an error. You can try again or type your answer.');
       };
 
       mediaRecorder.start(250);
@@ -458,7 +692,35 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
     } catch (err: any) {
       console.warn('Microphone permission or hardware error:', err);
       setIsRecording(false);
-      setMicError('Microphone access is unavailable. You can type your answer instead.');
+
+      // Immediately release tracks if obtained before failure
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => {
+          try {
+            track.stop();
+          } catch {}
+        });
+        mediaStreamRef.current = null;
+      }
+
+      const errorName = err?.name || '';
+      if (errorName === 'NotAllowedError' || errorName === 'PermissionDeniedError') {
+        if (isInIframe) {
+          setMicError('Microphone permission was denied or restricted by embedding permissions policy. You can type your answer instead.');
+        } else {
+          setMicError('Microphone permission was denied. Please allow microphone access in your browser site settings, or type your answer.');
+        }
+      } else if (errorName === 'NotFoundError' || errorName === 'DevicesNotFoundError') {
+        setMicError('No microphone hardware detected on this device. You can type your answer directly.');
+      } else if (errorName === 'NotReadableError' || errorName === 'TrackStartError') {
+        setMicError('Microphone is in use by another app or call. Please release it and retry, or type your answer.');
+      } else if (errorName === 'SecurityError') {
+        setMicError('Microphone access is blocked by browser security or iframe policy. You can type your answer instead.');
+      } else if (errorName === 'OverconstrainedError') {
+        setMicError('Audio format requested is not supported by your microphone. You can type your answer.');
+      } else {
+        setMicError(`Microphone notice: ${err?.message || errorName || 'Unable to access microphone'}. You can type your answer.`);
+      }
     }
   };
 
@@ -470,6 +732,20 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
         console.warn('Error stopping MediaRecorder:', err);
       }
     }
+    // Also stop tracks if stream still exists
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {}
+      });
+      mediaStreamRef.current = null;
+    }
+    if (recordIntervalRef.current) {
+      clearInterval(recordIntervalRef.current);
+      recordIntervalRef.current = null;
+    }
+    setIsRecording(false);
   };
 
   const handleDeleteRecording = () => {
@@ -478,7 +754,9 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
     const qId = String(currentQ.id);
 
     if (audioPlayerRef.current) {
-      audioPlayerRef.current.pause();
+      try {
+        audioPlayerRef.current.pause();
+      } catch {}
       setIsPlayingAudio(false);
     }
 
@@ -1020,8 +1298,15 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
                 }`}
               >
                 <Mic className={`w-3.5 h-3.5 ${isDictating ? 'text-rose-400' : 'text-purple-400'}`} />
-                <span>{isDictating ? 'Listening (Dictating...)' : 'Voice Dictation'}</span>
+                <span>{isDictating ? 'Stop Dictation' : 'Voice Dictation'}</span>
               </button>
+            )}
+
+            {isDictating && (
+              <span className="text-[11px] text-rose-300 font-medium px-2 py-0.5 rounded bg-rose-950/60 border border-rose-500/40 flex items-center gap-1.5 animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping" />
+                Listening... Speak your response
+              </span>
             )}
 
             {speechError && (
