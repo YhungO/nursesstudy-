@@ -233,6 +233,7 @@ export const api = {
       answers: Record<string, 'A' | 'B' | 'C' | 'D' | null>;
       timeSpentSeconds: number;
       submissionReason?: 'manual' | 'timeout' | 'forced';
+      shuffledOptions?: Record<string, any[]>;
     }
   ) =>
     request<{ attempt: ExamAttempt; detailedAnswers: any[] }>(`/api/exams/${id}/submit`, {

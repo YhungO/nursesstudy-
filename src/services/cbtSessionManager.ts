@@ -16,6 +16,7 @@ export interface CbtActiveSession {
   currentIndex: number;
   answers: Record<string, 'A' | 'B' | 'C' | 'D' | null>;
   flaggedQuestions: Record<string, boolean>;
+  shuffledQuestions?: Record<string, any[]>;
   lastUpdated: number;
 }
 
@@ -25,6 +26,7 @@ export interface PendingCbtSubmission {
   timeSpentSeconds: number;
   submissionReason: 'manual' | 'timeout' | 'forced';
   timestamp: number;
+  shuffledOptions?: Record<string, any[]>;
 }
 
 const SESSION_PREFIX = 'nursesstudy_cbt_session_';

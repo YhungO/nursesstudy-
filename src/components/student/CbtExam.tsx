@@ -39,6 +39,42 @@ interface CbtExamProps {
   onNavigateHome: () => void;
 }
 
+const OPTION_LETTERS: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
+
+/**
+ * Randomize the display positions of answer choices for a single question.
+ * Preserves original question text, all option texts, and original option identifiers
+ * while assigning display labels A, B, C, D to the newly permuted positions.
+ */
+function randomizeQuestionOptions(options: any[]): any[] {
+  if (!Array.isArray(options) || options.length <= 1) return options;
+
+  // 1. Normalize options with original identifiers preserved
+  const normalized = options.map((opt, idx) => {
+    const defaultLetter = OPTION_LETTERS[idx] || 'A';
+    if (typeof opt === 'string') {
+      return { id: defaultLetter, originalId: defaultLetter, text: opt };
+    }
+    const origId = (opt as any).originalId || (opt as any).id || defaultLetter;
+    const text = (opt as any).text || (opt as any).label || (opt as any).value || '';
+    return { id: defaultLetter, originalId: origId as 'A' | 'B' | 'C' | 'D', text };
+  });
+
+  // 2. Fisher-Yates unbiased shuffle
+  const shuffled = [...normalized];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  // 3. Re-assign display labels A, B, C, D to the newly permuted positions
+  return shuffled.map((item, idx) => ({
+    id: OPTION_LETTERS[idx] || 'A',
+    originalId: item.originalId,
+    text: item.text,
+  }));
+}
+
 export const CbtExam: React.FC<CbtExamProps> = ({
   exams = [],
   activeExamId = null,
@@ -76,6 +112,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
   // CRITICAL REFS: Bypasses React state stale closures during async callbacks and setInterval ticks
   const answersRef = useRef<Record<string, 'A' | 'B' | 'C' | 'D' | null>>({});
   const examDataRef = useRef<(CBTExam & { questions: Question[] }) | null>(null);
+  const shuffledQuestionsRef = useRef<Record<string, any[]>>({});
   const examStartTimeRef = useRef<number>(Date.now());
   const examEndTimeRef = useRef<number>(0);
   const timerRef = useRef<any>(null);
@@ -162,6 +199,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           answers: finalAnswers,
           timeSpentSeconds,
           submissionReason: reason,
+          shuffledOptions: shuffledQuestionsRef.current,
         });
 
         // Clear active session upon verified submission
@@ -185,6 +223,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           answers: finalAnswers,
           timeSpentSeconds,
           submissionReason: reason,
+          shuffledOptions: shuffledQuestionsRef.current,
           timestamp: Date.now(),
         });
 
@@ -216,9 +255,6 @@ export const CbtExam: React.FC<CbtExamProps> = ({
 
     try {
       const data = await api.getExamDetails(examId);
-      examDataRef.current = data;
-      setExamData(data);
-      setSelectedExam(data);
 
       // Check for active preserved session in localStorage
       const existingSession = cbtSessionManager.getSession(examId);
@@ -239,6 +275,24 @@ export const CbtExam: React.FC<CbtExamProps> = ({
               Math.max(0, existingSession.currentIndex || 0)
             )
           );
+
+          // Restore previously shuffled options to keep option positions identical
+          if (existingSession.shuffledQuestions && Object.keys(existingSession.shuffledQuestions).length > 0) {
+            shuffledQuestionsRef.current = existingSession.shuffledQuestions;
+            data.questions = (data.questions || []).map((q) => {
+              const saved =
+                existingSession.shuffledQuestions![String(q.id)] ||
+                existingSession.shuffledQuestions![(q.id as any)];
+              if (saved && Array.isArray(saved) && saved.length > 0) {
+                return { ...q, options: saved };
+              }
+              return q;
+            });
+          }
+
+          examDataRef.current = data;
+          setExamData(data);
+          setSelectedExam(data);
 
           examStartTimeRef.current = existingSession.startTime;
           examEndTimeRef.current = existingSession.endTime;
@@ -262,10 +316,27 @@ export const CbtExam: React.FC<CbtExamProps> = ({
         }
       }
 
-      // INITIALIZE BRAND NEW SESSION
+      // INITIALIZE BRAND NEW SESSION WITH RANDOMIZED OPTION POSITIONS
       const now = Date.now();
       const durationSec = (data.durationMinutes || 30) * 60;
       const deadline = now + durationSec * 1000;
+
+      // Randomize answer options independently for each question in this session
+      const shuffledMap: Record<string, any[]> = {};
+      const randomizedQuestions = (data.questions || []).map((q) => {
+        const randomizedOpts = randomizeQuestionOptions(q.options || []);
+        shuffledMap[String(q.id)] = randomizedOpts;
+        return {
+          ...q,
+          options: randomizedOpts,
+        };
+      });
+
+      data.questions = randomizedQuestions;
+      shuffledQuestionsRef.current = shuffledMap;
+      examDataRef.current = data;
+      setExamData(data);
+      setSelectedExam(data);
 
       examStartTimeRef.current = now;
       examEndTimeRef.current = deadline;
@@ -276,7 +347,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
       setSecondsRemaining(durationSec);
       setExamResult(null);
 
-      // Persist fresh session immediately
+      // Persist fresh session immediately with shuffled options mapping
       cbtSessionManager.saveSession({
         examId: data.id,
         examTitle: data.title,
@@ -286,6 +357,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
         currentIndex: 0,
         answers: {},
         flaggedQuestions: {},
+        shuffledQuestions: shuffledMap,
         lastUpdated: now,
       });
     } catch (err: any) {
@@ -358,6 +430,9 @@ export const CbtExam: React.FC<CbtExamProps> = ({
       if (pendingList.length > 0 && examData) {
         const matching = pendingList.find((p) => p.examId === examData.id);
         if (matching && !examResult && !isSubmittingRef.current) {
+          if (matching.shuffledOptions) {
+            shuffledQuestionsRef.current = matching.shuffledOptions;
+          }
           submitCBT(matching.submissionReason);
         }
       }
@@ -390,6 +465,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           currentIndex,
           answers: next,
           flaggedQuestions,
+          shuffledQuestions: shuffledQuestionsRef.current,
           lastUpdated: Date.now(),
         });
       }
@@ -416,6 +492,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           currentIndex,
           answers: answersRef.current,
           flaggedQuestions: next,
+          shuffledQuestions: shuffledQuestionsRef.current,
           lastUpdated: Date.now(),
         });
       }
@@ -439,6 +516,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
         currentIndex: nextIdx,
         answers: answersRef.current,
         flaggedQuestions,
+        shuffledQuestions: shuffledQuestionsRef.current,
         lastUpdated: Date.now(),
       });
     }
@@ -458,6 +536,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
         currentIndex: prevIdx,
         answers: answersRef.current,
         flaggedQuestions,
+        shuffledQuestions: shuffledQuestionsRef.current,
         lastUpdated: Date.now(),
       });
     }
@@ -477,6 +556,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
         currentIndex: idx,
         answers: answersRef.current,
         flaggedQuestions,
+        shuffledQuestions: shuffledQuestionsRef.current,
         lastUpdated: Date.now(),
       });
     }

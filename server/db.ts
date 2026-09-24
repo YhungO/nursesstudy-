@@ -117,6 +117,11 @@ export interface ExamAttempt {
     selectedOption: 'A' | 'B' | 'C' | 'D' | null;
     correctOption: 'A' | 'B' | 'C' | 'D';
     isCorrect: boolean;
+    scenario?: string;
+    questionText?: string;
+    options?: any[];
+    explanation?: string;
+    difficulty?: string;
   }[];
   createdAt: string;
 }

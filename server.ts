@@ -954,7 +954,7 @@ app.delete('/api/exams/:id', requireAdmin, (req, res) => {
 app.post('/api/exams/:id/submit', requireAuth, (req, res) => {
   const { id } = req.params;
   const user = (req as any).user as User;
-  const { answers, timeSpentSeconds, submissionReason } = req.body; // answers: Record<string, 'A'|'B'|'C'|'D'|null>
+  const { answers, timeSpentSeconds, submissionReason, shuffledOptions } = req.body; // answers: Record<string, 'A'|'B'|'C'|'D'|null>
   const database = db.get();
   const exam = database.exams.find(e => e.id === id);
   if (!exam) return res.status(404).json({ error: 'Exam not found' });
@@ -986,29 +986,73 @@ app.post('/api/exams/:id/submit', requireAuth, (req, res) => {
   const OPTION_KEYS: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
   let correctCount = 0;
   const detailedAnswers = targetQuestions.map(q => {
-    const rawVal = answers ? (answers[q.id] ?? answers[String(q.id)] ?? null) : null;
+    const qKey = String(q.id);
+    const rawVal = answers ? (answers[q.id] ?? answers[qKey] ?? null) : null;
     const selectedOption: 'A' | 'B' | 'C' | 'D' | null =
       rawVal === 'A' || rawVal === 'B' || rawVal === 'C' || rawVal === 'D' ? rawVal : null;
     
-    // Normalize correct option
-    let expectedOption: string = q.correctOption || '';
-    if (!expectedOption && typeof q.correct === 'number') {
-      expectedOption = OPTION_KEYS[q.correct] || 'A';
+    // Normalize original correct option from database
+    let originalExpectedOption: string = q.correctOption || (q as any).correctAnswer || '';
+    if (!originalExpectedOption && typeof q.correct === 'number') {
+      originalExpectedOption = OPTION_KEYS[q.correct] || 'A';
+    }
+    const originalCorrectOption = originalExpectedOption;
+
+    // Default formatted options (unshuffled original)
+    const originalFormattedOptions = (q.options || []).map((opt, idx) => {
+      const defaultId = OPTION_KEYS[idx] || 'A';
+      if (typeof opt === 'string') {
+        return { id: defaultId, text: opt, originalId: defaultId };
+      }
+      return {
+        id: (opt as any).id || defaultId,
+        text: (opt as any).text || (opt as any).label || (opt as any).value || '',
+        originalId: (opt as any).originalId || (opt as any).id || defaultId,
+      };
+    });
+
+    let finalOptions = originalFormattedOptions;
+    let expectedDisplayedOption = originalExpectedOption;
+
+    // Check if client supplied the randomized options for this CBT session
+    const clientShuffled = shuffledOptions ? (shuffledOptions[q.id] ?? shuffledOptions[qKey]) : null;
+
+    if (Array.isArray(clientShuffled) && clientShuffled.length > 0) {
+      finalOptions = clientShuffled.map((opt: any, idx: number) => ({
+        id: OPTION_KEYS[idx] || 'A',
+        text: typeof opt === 'string' ? opt : (opt.text || opt.label || opt.value || ''),
+        originalId: (opt as any).originalId || (opt as any).id || OPTION_KEYS[idx] || 'A',
+      }));
+
+      // Find which shuffled option corresponds to the original correct answer
+      const matchingShuffled = finalOptions.find((opt: any) => {
+        // 1. Match by originalId ('A', 'B', 'C', 'D')
+        if (opt.originalId && String(opt.originalId).toUpperCase() === String(originalExpectedOption).toUpperCase()) {
+          return true;
+        }
+        // 2. Fallback: match by option text against original options
+        const originalOpt = originalFormattedOptions.find(
+          (o: any) => String(o.id).toUpperCase() === String(originalExpectedOption).toUpperCase()
+        );
+        if (
+          originalOpt &&
+          originalOpt.text &&
+          opt.text &&
+          originalOpt.text.trim().toLowerCase() === opt.text.trim().toLowerCase()
+        ) {
+          return true;
+        }
+        return false;
+      });
+
+      if (matchingShuffled) {
+        expectedDisplayedOption = matchingShuffled.id;
+      }
     }
 
-    const isCorrect = selectedOption !== null && (
-      selectedOption === expectedOption ||
-      (typeof q.correct === 'number' && selectedOption === OPTION_KEYS[q.correct])
-    );
+    const isCorrect = selectedOption !== null && selectedOption === expectedDisplayedOption;
 
     if (isCorrect) correctCount++;
-
-    const formattedOptions = (q.options || []).map((opt, idx) => {
-      if (typeof opt === 'string') {
-        return { id: OPTION_KEYS[idx] || 'A', text: opt };
-      }
-      return opt;
-    });
 
     return {
       questionId: q.id,
@@ -1016,13 +1060,14 @@ app.post('/api/exams/:id/submit', requireAuth, (req, res) => {
       question: q.question || q.questionText,
       questionText: q.questionText || q.question,
       selectedOption,
-      correctOption: expectedOption,
+      correctOption: expectedDisplayedOption,
+      originalCorrectOption,
       correct: q.correct,
       isCorrect,
       explanation: q.explanation || q.rationale || '',
       rationale: q.rationale || q.explanation || '',
       scenario: q.scenario,
-      options: formattedOptions,
+      options: finalOptions,
     };
   });
 
@@ -1052,6 +1097,10 @@ app.post('/api/exams/:id/submit', requireAuth, (req, res) => {
       selectedOption: a.selectedOption,
       correctOption: (a.correctOption || 'A') as 'A' | 'B' | 'C' | 'D',
       isCorrect: a.isCorrect,
+      scenario: a.scenario,
+      questionText: a.questionText || a.question,
+      options: a.options,
+      explanation: a.explanation || a.rationale,
     })),
     createdAt: new Date().toISOString(),
   };
@@ -1177,14 +1226,14 @@ app.get('/api/attempts/:id', requireAuth, (req, res) => {
 
   // Hydrate question details
   const hydratedAnswers = attempt.answers.map(ans => {
-    const q = database.questions.find(item => item.id === ans.questionId);
+    const q = database.questions.find(item => String(item.id) === String(ans.questionId));
     return {
       ...ans,
-      scenario: q?.scenario,
-      questionText: q?.questionText || 'Question item',
-      options: q?.options || [],
-      explanation: q?.explanation || 'No rationale available',
-      difficulty: q?.difficulty,
+      scenario: ans.scenario || q?.scenario,
+      questionText: ans.questionText || q?.questionText || (q as any)?.question || 'Question item',
+      options: (ans as any).options && (ans as any).options.length > 0 ? (ans as any).options : (q?.options || []),
+      explanation: ans.explanation || q?.explanation || (q as any)?.rationale || 'No rationale available',
+      difficulty: (ans as any).difficulty || q?.difficulty,
     };
   });
 
