@@ -230,13 +230,32 @@ export const api = {
   submitExam: (
     id: string,
     payload: {
-      answers: Record<string, 'A' | 'B' | 'C' | 'D' | null>;
+      answers?: Record<string, 'A' | 'B' | 'C' | 'D' | null>;
+      theoryAnswers?: Record<string, { typedAnswer?: string; voiceRecordingUrl?: string | null }>;
       timeSpentSeconds: number;
       submissionReason?: 'manual' | 'timeout' | 'forced';
       shuffledOptions?: Record<string, any[]>;
     }
   ) =>
     request<{ attempt: ExamAttempt; detailedAnswers: any[] }>(`/api/exams/${id}/submit`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  submitTheoryExam: (
+    id: string,
+    payload: {
+      theoryAnswers: Record<string, { typedAnswer?: string; voiceRecordingUrl?: string | null }>;
+      timeSpentSeconds: number;
+      submissionReason?: 'manual' | 'timeout' | 'forced';
+    }
+  ) =>
+    request<{
+      attempt: ExamAttempt;
+      detailedAnswers: any[];
+      attemptedCount: number;
+      unansweredCount: number;
+      totalQuestions: number;
+    }>(`/api/exams/${id}/submit`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),

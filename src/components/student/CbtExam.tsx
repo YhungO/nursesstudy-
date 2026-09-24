@@ -30,6 +30,7 @@ import { BottomActionBar } from './cbt/BottomActionBar';
 import { QuestionPaletteDrawer } from './cbt/QuestionPaletteDrawer';
 import { ExamSubmitDialog } from './cbt/ExamSubmitDialog';
 import { ExamExitDialog } from './cbt/ExamExitDialog';
+import { TheoryCbtExam } from './TheoryCbtExam';
 
 interface CbtExamProps {
   exams: CBTExam[];
@@ -86,6 +87,10 @@ export const CbtExam: React.FC<CbtExamProps> = ({
   const [examData, setExamData] = useState<(CBTExam & { questions: Question[] }) | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // CBT Category: Objective CBT vs Theory CBT
+  const [cbtCategoryTab, setCbtCategoryTab] = useState<'objective' | 'theory'>('objective');
+  const [activeTheoryExam, setActiveTheoryExam] = useState<CBTExam | null>(null);
 
   // Active testing state
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -244,6 +249,13 @@ export const CbtExam: React.FC<CbtExamProps> = ({
 
   // Start or resume an examination
   const startExam = async (examId: string) => {
+    // Check if target is a theory examination
+    const targetExam = exams.find((e) => e.id === examId);
+    if (targetExam && targetExam.examType === 'theory') {
+      setActiveTheoryExam(targetExam);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setSubmissionError(null);
@@ -370,9 +382,15 @@ export const CbtExam: React.FC<CbtExamProps> = ({
   // Auto-start if activeExamId was provided
   useEffect(() => {
     if (activeExamId) {
-      startExam(activeExamId);
+      const match = exams.find((e) => e.id === activeExamId);
+      if (match && match.examType === 'theory') {
+        setCbtCategoryTab('theory');
+        setActiveTheoryExam(match);
+      } else {
+        startExam(activeExamId);
+      }
     }
-  }, [activeExamId]);
+  }, [activeExamId, exams]);
 
   // Wall-Clock Timer Loop & Mobile Tab Visibility Listener
   useEffect(() => {
@@ -561,6 +579,20 @@ export const CbtExam: React.FC<CbtExamProps> = ({
       });
     }
   };
+
+  // ==================== VIEW 0: ACTIVE THEORY CBT EXAMINATION ==================== //
+  if (activeTheoryExam) {
+    return (
+      <TheoryCbtExam
+        exam={activeTheoryExam}
+        onFinishExam={(attemptId) => {
+          setActiveTheoryExam(null);
+          onFinishExam(attemptId);
+        }}
+        onExit={() => setActiveTheoryExam(null)}
+      />
+    );
+  }
 
   // ==================== VIEW 1: COMPLETED RESULT DISPLAY ==================== //
   if (examResult) {
@@ -1222,16 +1254,57 @@ export const CbtExam: React.FC<CbtExamProps> = ({
   }
 
   // ==================== VIEW 3: EXAMINATION LOBBY ==================== //
+  const objectiveExams = exams.filter((e) => e.examType !== 'theory');
+  const theoryExams = exams.filter((e) => e.examType === 'theory');
+  const displayedExams = cbtCategoryTab === 'theory' ? theoryExams : objectiveExams;
+
   return (
     <div className="space-y-6 pb-16">
-      <div>
-        <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
-          <Clock className="w-6 h-6 text-purple-400" />
-          <span>Timed Computer-Based Testing (CBT) Hall</span>
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-400 mt-1">
-          Simulate nursing council examination conditions with active wall-clock countdown timers, auto-save state recovery, and automated grading.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
+            <Clock className="w-6 h-6 text-purple-400" />
+            <span>CBT EXAM HALL</span>
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+            Simulate nursing council examination conditions with active wall-clock countdown timers, auto-save state recovery, and automated grading.
+          </p>
+        </div>
+      </div>
+
+      {/* CBT Hall Category Selector: Objective CBT vs Theory CBT */}
+      <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+        <button
+          type="button"
+          onClick={() => setCbtCategoryTab('objective')}
+          className={`px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${
+            cbtCategoryTab === 'objective'
+              ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40'
+              : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+          }`}
+        >
+          <Clock className="w-4 h-4" />
+          <span>Objective CBT</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] bg-purple-950 text-purple-200 border border-purple-500/30">
+            {objectiveExams.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setCbtCategoryTab('theory')}
+          className={`px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${
+            cbtCategoryTab === 'theory'
+              ? 'bg-teal-600 text-white shadow-lg shadow-teal-900/40'
+              : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+          }`}
+        >
+          <BookOpen className="w-4 h-4" />
+          <span>Theory CBT</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] bg-teal-950 text-teal-200 border border-teal-500/30">
+            {theoryExams.length}
+          </span>
+        </button>
       </div>
 
       {isLoading && exams.length === 0 ? (
@@ -1259,17 +1332,80 @@ export const CbtExam: React.FC<CbtExamProps> = ({
             <span>Retry Connection</span>
           </button>
         </div>
-      ) : exams.length === 0 ? (
+      ) : displayedExams.length === 0 ? (
         <div className="bg-[#111827] rounded-3xl p-12 text-center border border-slate-800">
           <Clock className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-white">No CBT examinations are currently available.</h3>
+          <h3 className="text-base font-bold text-white">
+            {cbtCategoryTab === 'theory'
+              ? 'No Theory CBT examinations are currently available.'
+              : 'No Objective CBT examinations are currently available.'}
+          </h3>
           <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
             The examination hall is currently clear. Examinations created by administrators for the ND 1 curriculum will appear here once published.
           </p>
         </div>
-      ) : (
+      ) : cbtCategoryTab === 'theory' ? (
+        /* THEORY CBT EXAM CARDS */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {exams.map((exam) => (
+          {displayedExams.map((exam) => (
+            <div
+              key={exam.id}
+              className="bg-[#111827] rounded-3xl border border-slate-800 p-6 shadow-md flex flex-col justify-between hover:border-teal-500/60 hover:shadow-xl transition-all group"
+            >
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-teal-500/15 text-teal-300 border border-teal-500/30">
+                      THEORY CBT
+                    </span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700">
+                      {exam.subjectName}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs font-semibold text-teal-300">
+                    <Clock className="w-3.5 h-3.5 text-teal-400" />
+                    <span>{exam.durationMinutes} mins</span>
+                  </div>
+                </div>
+
+                <h3 className="font-bold text-base text-white leading-snug group-hover:text-teal-300 transition-colors">
+                  {exam.title}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1.5 leading-relaxed line-clamp-2">
+                  {exam.description}
+                </p>
+
+                <div className="mt-4 pt-3 border-t border-slate-800 grid grid-cols-2 gap-2 text-xs text-slate-300">
+                  <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
+                    <span className="text-slate-500 block text-[10px]">Questions</span>
+                    <strong className="text-white text-xs">
+                      {exam.actualQuestionCount || exam.totalQuestions} Questions
+                    </strong>
+                  </div>
+                  <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
+                    <span className="text-slate-500 block text-[10px]">Type</span>
+                    <strong className="text-teal-300 text-xs">Theory Examination</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <button
+                  disabled={loading}
+                  onClick={() => setActiveTheoryExam(exam)}
+                  className="w-full py-2.5 px-4 bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-900/30 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  <span>Start Exam</span>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* OBJECTIVE CBT EXAM CARDS */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {displayedExams.map((exam) => (
             <div
               key={exam.id}
               className="bg-[#111827] rounded-3xl border border-slate-800 p-6 shadow-md flex flex-col justify-between hover:border-purple-500/60 hover:shadow-xl transition-all group"

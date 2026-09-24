@@ -60,12 +60,14 @@ export const ResultsProgress: React.FC<ResultsProgressProps> = ({
 
   // Single Attempt Drill-Down View
   if (selectedAttempt) {
+    const isTheoryAttempt = selectedAttempt.examType === 'theory' || selectedAttempt.type === 'theory_exam';
+
     return (
       <div className="max-w-4xl mx-auto space-y-6 pb-16 animate-in fade-in">
         <div className="flex items-center justify-between">
           <button
             onClick={() => setSelectedAttempt(null)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#111827] border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#111827] border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors shadow-sm cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4 text-slate-400" />
             <span>Back to All Results</span>
@@ -73,12 +75,14 @@ export const ResultsProgress: React.FC<ResultsProgressProps> = ({
 
           <span
             className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
-              selectedAttempt.passed
+              isTheoryAttempt
+                ? 'bg-teal-500/20 text-teal-300 border-teal-500/40'
+                : selectedAttempt.passed
                 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                 : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
             }`}
           >
-            {selectedAttempt.passed ? 'PASSED' : 'NOT PASSED'}
+            {isTheoryAttempt ? 'THEORY CBT' : selectedAttempt.passed ? 'PASSED' : 'NOT PASSED'}
           </span>
         </div>
 
@@ -91,20 +95,28 @@ export const ResultsProgress: React.FC<ResultsProgressProps> = ({
             <h1 className="text-xl sm:text-2xl font-bold text-white mt-2.5">{selectedAttempt.examTitle}</h1>
             <p className="text-xs text-slate-400 mt-1">
               Attempted on {new Date(selectedAttempt.createdAt).toLocaleString()} • Completed in{' '}
-              {Math.round(selectedAttempt.timeSpentSeconds / 60)} minutes
+              {Math.max(1, Math.round(selectedAttempt.timeSpentSeconds / 60))} minutes
             </p>
             <div className="mt-3 flex items-center justify-center sm:justify-start gap-2">
               <span
                 className={`text-[11px] font-bold uppercase tracking-wider px-3 py-0.5 rounded-full border ${
-                  selectedAttempt.passed
+                  isTheoryAttempt
+                    ? 'bg-teal-500/20 text-teal-300 border-teal-500/40'
+                    : selectedAttempt.passed
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                     : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
                 }`}
               >
-                {selectedAttempt.passed ? 'Status: Passed' : 'Status: Retake Needed'}
+                {isTheoryAttempt
+                  ? 'Theory Examination Completed'
+                  : selectedAttempt.passed
+                  ? 'Status: Passed'
+                  : 'Status: Retake Needed'}
               </span>
               <span className="text-xs text-slate-400">
-                {selectedAttempt.correctCount} of {selectedAttempt.totalQuestions} Questions Correct
+                {isTheoryAttempt
+                  ? `${selectedAttempt.correctCount} of ${selectedAttempt.totalQuestions} Questions Attempted`
+                  : `${selectedAttempt.correctCount} of ${selectedAttempt.totalQuestions} Questions Correct`}
               </span>
             </div>
           </div>
@@ -132,12 +144,14 @@ export const ResultsProgress: React.FC<ResultsProgressProps> = ({
                   strokeDasharray={2 * Math.PI * 40}
                   strokeDashoffset={2 * Math.PI * 40 - (selectedAttempt.score / 100) * (2 * Math.PI * 40)}
                   strokeLinecap="round"
-                  className={selectedAttempt.passed ? 'text-emerald-400' : 'text-rose-400'}
+                  className={isTheoryAttempt ? 'text-teal-400' : selectedAttempt.passed ? 'text-emerald-400' : 'text-rose-400'}
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-xl font-extrabold text-white">{selectedAttempt.score}%</span>
-                <span className="text-[9px] text-slate-400 font-semibold uppercase">Score</span>
+                <span className="text-[9px] text-slate-400 font-semibold uppercase">
+                  {isTheoryAttempt ? 'Attempted' : 'Score'}
+                </span>
               </div>
             </div>
           </div>
@@ -146,84 +160,169 @@ export const ResultsProgress: React.FC<ResultsProgressProps> = ({
         {/* Answers List */}
         <div className="space-y-4">
           <h2 className="text-base font-bold text-white tracking-tight">Attempt Question Review</h2>
-          {selectedAttempt.answers.map((ans, idx) => (
-            <div
-              key={idx}
-              className={`bg-[#111827] rounded-2xl border p-5 shadow-sm ${
-                ans.isCorrect ? 'border-emerald-500/40' : 'border-rose-500/40'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="text-xs font-bold text-slate-400">Question {idx + 1}</span>
-                <span
-                  className={`text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full border ${
-                    ans.isCorrect
-                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                      : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                  }`}
+          {selectedAttempt.answers.map((ans, idx) => {
+            const isTheoryQuestion = isTheoryAttempt || Boolean(ans.typedAnswer || ans.voiceRecordingUrl || ans.modelAnswer);
+
+            if (isTheoryQuestion) {
+              const isAttempted = Boolean((ans.typedAnswer && ans.typedAnswer.trim().length > 0) || ans.voiceRecordingUrl);
+
+              return (
+                <div
+                  key={idx}
+                  className="bg-[#111827] rounded-3xl border border-slate-800 p-5 sm:p-6 space-y-4 shadow-sm"
                 >
-                  {ans.isCorrect ? 'Correct' : 'Incorrect'}
-                </span>
-              </div>
+                  <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-bold text-slate-300 px-2 py-0.5 rounded bg-slate-800">
+                        Question {idx + 1}
+                      </span>
+                      {ans.category && (
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-teal-500/10 text-teal-300 border border-teal-500/20">
+                          {ans.category}
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      className={`text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full border ${
+                        isAttempted
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                      }`}
+                    >
+                      {isAttempted ? 'Answered' : 'Unanswered'}
+                    </span>
+                  </div>
 
-              {ans.scenario && (
-                <p className="text-xs text-slate-300 bg-slate-900/80 p-3 rounded-xl border border-slate-800 mb-2 leading-relaxed">
-                  {ans.scenario}
-                </p>
-              )}
+                  {ans.scenario && (
+                    <p className="text-xs text-slate-300 bg-slate-900/80 p-3 rounded-xl border border-slate-800 mb-2 leading-relaxed">
+                      {ans.scenario}
+                    </p>
+                  )}
 
-              <h4 className="font-bold text-sm text-white mb-3 leading-snug">
-                {ans.questionText || (ans as any).question || 'Clinical Question'}
-              </h4>
+                  <h4 className="font-semibold text-sm sm:text-base text-white leading-relaxed">
+                    {ans.questionText || (ans as any).question || 'Clinical Question'}
+                  </h4>
 
-              {ans.options && (
-                <div className="space-y-1.5 mb-3">
-                  {ans.options.map((opt) => {
-                    const isCorrectKey = opt.id === ans.correctOption;
-                    const isSelectedKey = opt.id === ans.selectedOption;
+                  {/* Student's Written Response */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      Your Written Response:
+                    </label>
+                    <div className="p-3.5 bg-slate-900 rounded-xl border border-slate-800 text-xs text-slate-200 whitespace-pre-wrap leading-relaxed">
+                      {ans.typedAnswer && ans.typedAnswer.trim().length > 0 ? (
+                        ans.typedAnswer
+                      ) : (
+                        <span className="text-slate-500 italic">No written response provided.</span>
+                      )}
+                    </div>
+                  </div>
 
-                    let optStyle = 'bg-slate-900/60 border-slate-800 text-slate-300';
-                    if (isCorrectKey) {
-                      optStyle = 'bg-emerald-950/60 border-emerald-500 text-emerald-200 font-bold ring-1 ring-emerald-500/40';
-                    } else if (isSelectedKey && !isCorrectKey) {
-                      optStyle = 'bg-rose-950/60 border-rose-500 text-rose-200 ring-1 ring-rose-500/40';
-                    }
-
-                    return (
-                      <div
-                        key={opt.id}
-                        className={`p-2.5 rounded-xl border text-xs flex items-center justify-between ${optStyle}`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded bg-slate-800 text-slate-300 font-bold text-[10px] flex items-center justify-center">
-                            {opt.id}
-                          </span>
-                          <span>{opt.text}</span>
-                        </div>
-                        {isCorrectKey && (
-                          <span className="text-[10px] font-bold text-emerald-400 uppercase">
-                            Correct Answer
-                          </span>
-                        )}
-                        {isSelectedKey && !isCorrectKey && (
-                          <span className="text-[10px] font-bold text-rose-400 uppercase">
-                            Your Choice
-                          </span>
-                        )}
+                  {/* Voice recording if available */}
+                  {ans.voiceRecordingUrl && (
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        Your Voice Recording:
+                      </label>
+                      <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 flex items-center">
+                        <audio controls src={ans.voiceRecordingUrl} className="w-full h-8" />
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                    </div>
+                  )}
 
-              {ans.explanation && (
-                <div className="p-3 bg-teal-950/40 border border-teal-500/30 rounded-xl text-xs text-slate-200">
-                  <span className="font-bold text-teal-300 block mb-0.5">Clinical Rationale:</span>
-                  {ans.explanation}
+                  {/* Standard Model Answer */}
+                  {(ans.modelAnswer || ans.explanation) && (
+                    <div className="p-3.5 bg-emerald-950/20 border border-emerald-500/30 rounded-xl text-xs text-emerald-100 leading-relaxed">
+                      <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1">
+                        Standard Model Answer:
+                      </div>
+                      <div className="whitespace-pre-wrap">{ans.modelAnswer || ans.explanation}</div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          ))}
+              );
+            }
+
+            return (
+              <div
+                key={idx}
+                className={`bg-[#111827] rounded-2xl border p-5 shadow-sm ${
+                  ans.isCorrect ? 'border-emerald-500/40' : 'border-rose-500/40'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="text-xs font-bold text-slate-400">Question {idx + 1}</span>
+                  <span
+                    className={`text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full border ${
+                      ans.isCorrect
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                    }`}
+                  >
+                    {ans.isCorrect ? 'Correct' : 'Incorrect'}
+                  </span>
+                </div>
+
+                {ans.scenario && (
+                  <p className="text-xs text-slate-300 bg-slate-900/80 p-3 rounded-xl border border-slate-800 mb-2 leading-relaxed">
+                    {ans.scenario}
+                  </p>
+                )}
+
+                <h4 className="font-bold text-sm text-white mb-3 leading-snug">
+                  {ans.questionText || (ans as any).question || 'Clinical Question'}
+                </h4>
+
+                {ans.options && (
+                  <div className="space-y-1.5 mb-3">
+                    {ans.options.map((opt) => {
+                      const isCorrectKey = opt.id === ans.correctOption;
+                      const isSelectedKey = opt.id === ans.selectedOption;
+
+                      let optStyle = 'bg-slate-900/60 border-slate-800 text-slate-300';
+                      if (isCorrectKey) {
+                        optStyle = 'bg-emerald-950/60 border-emerald-500 text-emerald-200 font-bold ring-1 ring-emerald-500/40';
+                      } else if (isSelectedKey && !isCorrectKey) {
+                        optStyle = 'bg-rose-950/60 border-rose-500 text-rose-200 ring-1 ring-rose-500/40';
+                      }
+
+                      return (
+                        <div
+                          key={opt.id}
+                          className={`p-2.5 rounded-xl border text-xs flex items-center justify-between ${optStyle}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded bg-slate-800 text-slate-300 font-bold text-[10px] flex items-center justify-center">
+                              {opt.id}
+                            </span>
+                            <span>{opt.text}</span>
+                          </div>
+                          {isCorrectKey && (
+                            <span className="text-[10px] font-bold text-emerald-400 uppercase">
+                              Correct Answer
+                            </span>
+                          )}
+                          {isSelectedKey && !isCorrectKey && (
+                            <span className="text-[10px] font-bold text-rose-400 uppercase">
+                              Your Choice
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {ans.explanation && (
+                  <div className="p-3 bg-teal-950/40 border border-teal-500/30 rounded-xl text-xs text-slate-200">
+                    <span className="font-bold text-teal-300 block mb-1 text-[11px] uppercase tracking-wider">
+                      Clinical Rationale
+                    </span>
+                    <p className="leading-relaxed">{ans.explanation}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     );

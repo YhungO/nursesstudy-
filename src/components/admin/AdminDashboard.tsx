@@ -37,6 +37,7 @@ import {
   updateStudentStatusInFirestore,
   subscribeToAuditLogs,
   FIREBASE_CONFIG,
+  importIntegumentaryTheoryExamToFirestore,
 } from '../../services/firestoreService';
 import {
   BarChart3,
@@ -148,6 +149,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [localQuestions, setLocalQuestions] = useState<Question[]>(questions);
   const [localExams, setLocalExams] = useState<CBTExam[]>(exams);
   const [localAnnouncements, setLocalAnnouncements] = useState<Announcement[]>(announcements);
+  const [isSyncingIntegumentary, setIsSyncingIntegumentary] = useState(false);
+  const [integumentarySyncFeedback, setIntegumentarySyncFeedback] = useState<string | null>(null);
+
+  const handleSyncIntegumentaryExam = async () => {
+    setIsSyncingIntegumentary(true);
+    setIntegumentarySyncFeedback('Upserting Integumentary System Theory CBT (50 questions) to Cloud Firestore...');
+    try {
+      const res = await importIntegumentaryTheoryExamToFirestore({
+        adminActor: user ? { uid: user.id, email: user.email, name: user.name } : undefined,
+      });
+      if (res.success) {
+        setIntegumentarySyncFeedback(`✓ ${res.message}`);
+        onDataChanged();
+        setTimeout(() => setIntegumentarySyncFeedback(null), 8000);
+      } else {
+        setIntegumentarySyncFeedback(`❌ Error: ${res.error || res.message}`);
+      }
+    } catch (err: any) {
+      setIntegumentarySyncFeedback(`❌ Error: ${err.message || 'Import failed'}`);
+    } finally {
+      setIsSyncingIntegumentary(false);
+    }
+  };
 
   // Keep local states synchronized with props from parent App, while preserving locally deleted items
   useEffect(() => {
@@ -1518,33 +1542,63 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* ================= 6. CBT EXAMS CMS TAB ================= */}
       {activeTab === 'exams' && (
         <div className="space-y-4 animate-in fade-in">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="font-bold text-base text-white">CBT Examination Management</h3>
               <p className="text-xs text-slate-400">
                 Configure timed computer-based tests, duration, question pools & passing scores
               </p>
             </div>
-            <button
-              id="admin-create-cbt-exam-btn"
-              onClick={() =>
-                setEditingExam({
-                  title: '',
-                  description: '',
-                  subjectId: 'all',
-                  levelId: 'lvl-nd1',
-                  durationMinutes: 30,
-                  totalQuestions: 15,
-                  passingScore: 70,
-                  isPublished: true,
-                })
-              }
-              className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create CBT Exam</span>
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                id="admin-sync-theory-cbt-btn"
+                onClick={handleSyncIntegumentaryExam}
+                disabled={isSyncingIntegumentary}
+                title="Perform one-time or re-sync upsert of 'Integumentary System – Theory CBT' (50 questions) to Cloud Firestore with zero duplicates"
+                className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+              >
+                <Cloud className={`w-4 h-4 ${isSyncingIntegumentary ? 'animate-spin' : ''}`} />
+                <span>{isSyncingIntegumentary ? 'Upserting to Firestore...' : 'Sync Integumentary Theory to Firestore'}</span>
+              </button>
+
+              <button
+                id="admin-create-cbt-exam-btn"
+                onClick={() =>
+                  setEditingExam({
+                    title: '',
+                    description: '',
+                    subjectId: 'all',
+                    levelId: 'lvl-nd1',
+                    durationMinutes: 30,
+                    totalQuestions: 15,
+                    passingScore: 70,
+                    isPublished: true,
+                  })
+                }
+                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create CBT Exam</span>
+              </button>
+            </div>
           </div>
+
+          {integumentarySyncFeedback && (
+            <div className="p-3 bg-teal-950/40 border border-teal-500/40 rounded-xl flex items-center justify-between text-xs text-teal-200 animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-teal-400 shrink-0" />
+                <span>{integumentarySyncFeedback}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIntegumentarySyncFeedback(null)}
+                className="text-teal-400 hover:text-white font-bold ml-2 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           <div className="bg-[#111827] rounded-2xl border border-slate-800 divide-y divide-slate-800 overflow-hidden shadow-md">
             {localExams.length === 0 ? (
@@ -1562,6 +1616,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div>
                       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                         <span className="font-bold text-sm text-white">{exam.title}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                          exam.examType === 'theory'
+                            ? 'bg-teal-500/20 text-teal-300 border-teal-500/40'
+                            : 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                        }`}>
+                          {exam.examType === 'theory' ? 'Theory' : 'Objective'}
+                        </span>
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${lvl.badgeClass}`}>
                           {lvl.badge}
                         </span>

@@ -61,9 +61,12 @@ export interface QuestionOption {
 
 export interface Question {
   id: string | number;
+  questionType?: 'objective' | 'theory';
+  category?: string;
+  modelAnswer?: string;
   question?: string;
   questionText?: string;
-  options: (QuestionOption | string)[];
+  options?: (QuestionOption | string)[];
   correct?: number;
   correctOption?: 'A' | 'B' | 'C' | 'D';
   rationale?: string;
@@ -82,6 +85,7 @@ export interface CBTExam {
   id: string;
   title: string;
   description: string;
+  examType?: 'objective' | 'theory';
   subjectId: string; // 'all' or specific
   subjectName?: string;
   levelId: string;
@@ -105,7 +109,8 @@ export interface ExamAttempt {
   examId: string;
   examTitle: string;
   subjectName: string;
-  type: 'cbt_exam' | 'practice_drill';
+  type: 'cbt_exam' | 'practice_drill' | 'theory_exam';
+  examType?: 'objective' | 'theory';
   score: number;
   correctCount: number;
   totalQuestions: number;
@@ -114,9 +119,14 @@ export interface ExamAttempt {
   submissionReason?: 'manual' | 'timeout' | 'forced';
   answers: {
     questionId: string;
-    selectedOption: 'A' | 'B' | 'C' | 'D' | null;
-    correctOption: 'A' | 'B' | 'C' | 'D';
-    isCorrect: boolean;
+    selectedOption?: 'A' | 'B' | 'C' | 'D' | null;
+    correctOption?: 'A' | 'B' | 'C' | 'D' | null;
+    originalCorrectOption?: string;
+    isCorrect?: boolean;
+    typedAnswer?: string;
+    voiceRecordingUrl?: string | null;
+    modelAnswer?: string;
+    category?: string;
     scenario?: string;
     questionText?: string;
     options?: any[];

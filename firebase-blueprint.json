@@ -114,13 +114,17 @@
             }
           }
         },
-        "correctOption": { "type": "string", "enum": ["A", "B", "C", "D"] },
+        "correctOption": { "type": "string" },
         "explanation": { "type": "string" },
+        "modelAnswer": { "type": "string" },
+        "category": { "type": "string" },
+        "questionType": { "type": "string", "enum": ["objective", "theory"] },
+        "course": { "type": "string" },
         "difficulty": { "type": "string", "enum": ["Easy", "Medium", "Hard"] },
         "tags": { "type": "array", "items": { "type": "string" } },
         "createdAt": { "type": "string" }
       },
-      "required": ["id", "subjectId", "questionText", "options", "correctOption"]
+      "required": ["id", "subjectId", "questionText"]
     },
     "CBTExam": {
       "title": "CBTExam",
@@ -130,10 +134,13 @@
         "id": { "type": "string" },
         "title": { "type": "string" },
         "description": { "type": "string" },
+        "examType": { "type": "string", "enum": ["objective", "theory"] },
         "subjectId": { "type": "string" },
+        "subjectName": { "type": "string" },
         "levelId": { "type": "string" },
         "durationMinutes": { "type": "number" },
         "totalQuestions": { "type": "number" },
+        "actualQuestionCount": { "type": "number" },
         "passingScore": { "type": "number" },
         "questionIds": { "type": "array", "items": { "type": "string" } },
         "isPublished": { "type": "boolean" },

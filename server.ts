@@ -831,9 +831,10 @@ app.get('/api/exams/:id', (req, res) => {
   // Resolve questions
   let examQuestions: Question[] = [];
   if (exam.questionIds && exam.questionIds.length > 0) {
-    examQuestions = database.questions.filter(q =>
-      exam.questionIds!.some(qid => String(qid) === String(q.id))
-    );
+    const qMap = new Map(database.questions.map(q => [String(q.id), q]));
+    examQuestions = exam.questionIds
+      .map(qid => qMap.get(String(qid)))
+      .filter(Boolean) as Question[];
   } else {
     // If no specific IDs set, sample from subject or general questions
     let candidates = database.questions;
@@ -864,15 +865,19 @@ app.get('/api/exams/:id', (req, res) => {
       return opt;
     });
 
+    const isTheory = q.questionType === 'theory' || Boolean((q as any).modelAnswer);
     return {
       id: q.id,
+      questionType: isTheory ? 'theory' : 'objective',
+      category: q.category || q.topic || 'General Characteristics',
       question: q.question || q.questionText,
       questionText: q.questionText || q.question,
+      modelAnswer: isTheory ? ((q as any).modelAnswer || (q as any).explanation) : undefined,
       options: formattedOptions,
       rawOptions: q.options,
       subjectId: q.subjectId,
       course: q.course || 'Anatomy',
-      topic: q.topic,
+      topic: q.topic || q.category || 'General',
       scenario: q.scenario,
       difficulty: q.difficulty || 'Medium',
     };
@@ -962,9 +967,10 @@ app.post('/api/exams/:id/submit', requireAuth, (req, res) => {
   // Fetch actual questions
   let targetQuestions: Question[] = [];
   if (exam.questionIds && exam.questionIds.length > 0) {
-    targetQuestions = database.questions.filter(q =>
-      exam.questionIds!.some(qid => String(qid) === String(q.id))
-    );
+    const qMap = new Map(database.questions.map(q => [String(q.id), q]));
+    targetQuestions = exam.questionIds
+      .map(qid => qMap.get(String(qid)))
+      .filter(Boolean) as Question[];
   } else {
     let candidates = database.questions;
     if (exam.subjectId && exam.subjectId !== 'all') {
@@ -981,6 +987,82 @@ app.post('/api/exams/:id/submit', requireAuth, (req, res) => {
       if (levelMatches.length > 0) candidates = levelMatches;
     }
     targetQuestions = candidates.slice(0, exam.totalQuestions);
+  }
+
+  // ==================== THEORY CBT SUBMISSION ==================== //
+  if (exam.examType === 'theory') {
+    const theoryAnswers = req.body.theoryAnswers || req.body.answers || {};
+    let attemptedCount = 0;
+
+    const detailedAnswers = targetQuestions.map(q => {
+      const qKey = String(q.id);
+      const studentAns = theoryAnswers[q.id] || theoryAnswers[qKey] || {};
+      const typed = typeof studentAns === 'string' ? studentAns : (studentAns.typedAnswer || '');
+      const voice = typeof studentAns === 'object' ? (studentAns.voiceRecordingUrl || studentAns.voiceUrl || null) : null;
+
+      const isAttempted = Boolean((typed && typed.trim().length > 0) || voice);
+      if (isAttempted) attemptedCount++;
+
+      const modelAns = q.modelAnswer || q.explanation || q.rationale || '';
+
+      return {
+        questionId: q.id,
+        id: q.id,
+        question: q.question || q.questionText,
+        questionText: q.questionText || q.question,
+        category: q.category || q.topic || 'General Characteristics',
+        typedAnswer: typed,
+        voiceRecordingUrl: voice,
+        modelAnswer: modelAns,
+        explanation: modelAns,
+        isCorrect: isAttempted,
+        scenario: q.scenario,
+      };
+    });
+
+    const totalQuestions = targetQuestions.length || 1;
+    const completionPercent = Math.round((attemptedCount / totalQuestions) * 100);
+    const subj = database.subjects.find(s => s.id === exam.subjectId);
+
+    const attempt: ExamAttempt = {
+      id: `att-${Date.now()}`,
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      examId: exam.id,
+      examTitle: exam.title,
+      subjectName: exam.subjectName || (subj?.name || 'Anatomy & Physiology'),
+      type: 'theory_exam',
+      examType: 'theory',
+      score: completionPercent,
+      correctCount: attemptedCount,
+      totalQuestions,
+      timeSpentSeconds: Number(timeSpentSeconds) || 0,
+      passed: true,
+      submissionReason: submissionReason === 'timeout' ? 'timeout' : submissionReason === 'forced' ? 'forced' : 'manual',
+      answers: detailedAnswers.map(a => ({
+        questionId: String(a.questionId),
+        typedAnswer: a.typedAnswer,
+        voiceRecordingUrl: a.voiceRecordingUrl,
+        modelAnswer: a.modelAnswer,
+        category: a.category,
+        explanation: a.modelAnswer,
+        questionText: a.questionText || a.question,
+        isCorrect: Boolean((a.typedAnswer && a.typedAnswer.trim().length > 0) || a.voiceRecordingUrl),
+      })),
+      createdAt: new Date().toISOString(),
+    };
+
+    database.attempts.unshift(attempt);
+    db.save();
+
+    return res.json({
+      attempt,
+      detailedAnswers,
+      attemptedCount,
+      unansweredCount: totalQuestions - attemptedCount,
+      totalQuestions,
+    });
   }
 
   const OPTION_KEYS: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
@@ -1232,7 +1314,9 @@ app.get('/api/attempts/:id', requireAuth, (req, res) => {
       scenario: ans.scenario || q?.scenario,
       questionText: ans.questionText || q?.questionText || (q as any)?.question || 'Question item',
       options: (ans as any).options && (ans as any).options.length > 0 ? (ans as any).options : (q?.options || []),
-      explanation: ans.explanation || q?.explanation || (q as any)?.rationale || 'No rationale available',
+      explanation: ans.explanation || (q as any)?.modelAnswer || q?.explanation || (q as any)?.rationale || 'No rationale available',
+      modelAnswer: (ans as any).modelAnswer || (q as any)?.modelAnswer || q?.explanation || '',
+      category: (ans as any).category || q?.category || (q as any)?.topic || 'General Characteristics',
       difficulty: (ans as any).difficulty || q?.difficulty,
     };
   });

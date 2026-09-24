@@ -18,6 +18,16 @@ import {
 } from '../firebase';
 
 export { FIREBASE_CONFIG };
+export {
+  INTEGUMENTARY_THEORY_EXAM_ID,
+  INTEGUMENTARY_THEORY_EXAM_TITLE,
+  importIntegumentaryTheoryExamToFirestore,
+  getIntegumentaryTheoryExamImportStatus,
+} from './theoryExamImportService';
+export type {
+  ImportIntegumentaryTheoryResult,
+  IntegumentaryTheoryStatus,
+} from './theoryExamImportService';
 import {
   NursingLevel,
   Subject,
