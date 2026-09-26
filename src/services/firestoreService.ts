@@ -40,6 +40,7 @@ import {
   User,
   AuditLog,
   ContentStatus,
+  AiSettings,
 } from '../types';
 
 export const COLLECTIONS = {
@@ -1454,5 +1455,80 @@ export async function getUsersFromFirestore(): Promise<User[]> {
   } catch (err) {
     console.warn('[Firestore] Failed to get users list:', err);
     return [];
+  }
+}
+
+// ==================== AI SETTINGS PERSISTENCE ==================== //
+export const DEFAULT_AI_SETTINGS: AiSettings = {
+  aiFeaturesEnabled: true,
+  aiTutorEnabled: true,
+  aiExplanationEnabled: true,
+  updatedAt: new Date().toISOString(),
+  updatedBy: 'System Administrator',
+};
+
+export async function saveAiSettingsToFirestore(
+  settings: AiSettings,
+  adminActor?: { uid: string; email?: string; name?: string }
+): Promise<void> {
+  try {
+    const payload = {
+      ...settings,
+      id: 'ai_settings',
+      updatedAt: new Date().toISOString(),
+      updatedBy: adminActor?.name || adminActor?.email || 'Administrator',
+    };
+    await setDoc(doc(db, COLLECTIONS.SETTINGS, 'ai_settings'), payload, { merge: true });
+
+    if (adminActor) {
+      await recordAuditLog({
+        adminUid: adminActor.uid,
+        adminEmail: adminActor.email || 'admin@nursesstudy.com',
+        adminName: adminActor.name || 'Administrator',
+        action: 'UPDATE_AI_SETTINGS',
+        targetType: 'settings',
+        targetId: 'ai_settings',
+        targetTitle: `AI Features: ${settings.aiFeaturesEnabled ? 'Enabled' : 'Disabled'} (Tutor: ${settings.aiTutorEnabled ? 'ON' : 'OFF'}, Explanations: ${settings.aiExplanationEnabled ? 'ON' : 'OFF'})`,
+        newStatus: settings.aiFeaturesEnabled ? 'enabled' : 'disabled',
+        details: settings as any,
+      });
+    }
+  } catch (err) {
+    console.warn('[Firestore] Failed to save AI settings:', err);
+  }
+}
+
+export async function getAiSettingsFromFirestore(): Promise<AiSettings | null> {
+  try {
+    const snap = await getDoc(doc(db, COLLECTIONS.SETTINGS, 'ai_settings'));
+    if (snap.exists()) {
+      return snap.data() as AiSettings;
+    }
+    return null;
+  } catch (err) {
+    console.warn('[Firestore] Failed to get AI settings:', err);
+    return null;
+  }
+}
+
+export function subscribeToAiSettings(callback: (settings: AiSettings | null) => void): () => void {
+  try {
+    const unsubscribe = onSnapshot(
+      doc(db, COLLECTIONS.SETTINGS, 'ai_settings'),
+      (snap) => {
+        if (snap.exists()) {
+          callback(snap.data() as AiSettings);
+        } else {
+          callback(null);
+        }
+      },
+      (err) => {
+        console.warn('[Firestore] AI settings subscription notice:', err);
+      }
+    );
+    return unsubscribe;
+  } catch (err) {
+    console.warn('[Firestore] Failed to subscribe to AI settings:', err);
+    return () => {};
   }
 }

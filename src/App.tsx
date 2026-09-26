@@ -14,6 +14,7 @@ import { AdminLogin } from './components/admin/AdminLogin';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { AuthGate } from './components/auth/AuthGate';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { AiTutorDrawer } from './components/student/AiTutorDrawer';
 import { api } from './services/api';
 import {
   subscribeToLevels,
@@ -26,6 +27,8 @@ import {
   subscribeToUserBookmarks,
   toggleBookmarkInFirestore,
   seedFirestoreIfEmpty,
+  subscribeToAiSettings,
+  getAiSettingsFromFirestore,
 } from './services/firestoreService';
 import {
   NursingLevel,
@@ -35,6 +38,7 @@ import {
   CBTExam,
   Announcement,
   ExamAttempt,
+  AiSettings,
 } from './types';
 import { Search, Loader2, Sparkles, AlertCircle, X, Shield, Lock, ArrowLeft } from 'lucide-react';
 
@@ -58,6 +62,15 @@ const MainAppContent: React.FC = () => {
   // Auth Modal State
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'admin_login' | 'forgot_password'>('login');
+
+  // AI Tutor State
+  const [aiTutorOpen, setAiTutorOpen] = useState(false);
+  const [aiTutorTopic, setAiTutorTopic] = useState('');
+  const [aiSettings, setAiSettings] = useState<AiSettings>({
+    aiFeaturesEnabled: true,
+    aiTutorEnabled: true,
+    aiExplanationEnabled: true,
+  });
 
   // Loading & Global Search
   const [isLoading, setIsLoading] = useState(true);
@@ -216,6 +229,31 @@ const MainAppContent: React.FC = () => {
     };
   }, [user]);
 
+  // Synchronize AI settings across the application
+  useEffect(() => {
+    getAiSettingsFromFirestore()
+      .then((res) => {
+        if (res) setAiSettings(res);
+        else {
+          api
+            .getAiSettings()
+            .then((s) => {
+              if (s) setAiSettings(s);
+            })
+            .catch(() => {});
+        }
+      })
+      .catch(() => {});
+
+    const unsubAi = subscribeToAiSettings((settings) => {
+      if (settings) {
+        setAiSettings(settings);
+      }
+    });
+
+    return () => unsubAi();
+  }, []);
+
   // Bookmark Toggle
   const handleToggleBookmark = async (type: 'note' | 'question', itemId: string) => {
     if (!user) {
@@ -333,9 +371,14 @@ const MainAppContent: React.FC = () => {
         onNavigate={handleNavigate}
         levels={levels}
         unreadAnnouncementsCount={announcements.length}
+        aiTutorEnabled={aiSettings.aiFeaturesEnabled && aiSettings.aiTutorEnabled}
         onOpenAuth={(mode) => {
           setAuthMode(mode);
           setShowAuthModal(true);
+        }}
+        onOpenAiTutor={(topic) => {
+          setAiTutorTopic(topic || '');
+          setAiTutorOpen(true);
         }}
       />
 
@@ -620,6 +663,31 @@ const MainAppContent: React.FC = () => {
         initialMode={authMode}
         levels={levels}
       />
+
+      {/* AI Study Tutor Drawer */}
+      <AiTutorDrawer
+        isOpen={aiTutorOpen}
+        onClose={() => setAiTutorOpen(false)}
+        initialTopic={aiTutorTopic}
+        isEnabled={aiSettings.aiFeaturesEnabled && aiSettings.aiTutorEnabled}
+      />
+
+      {/* Floating Ask AI Tutor Button */}
+      {currentView !== 'admin' && aiSettings.aiFeaturesEnabled && aiSettings.aiTutorEnabled && (
+        <button
+          type="button"
+          onClick={() => {
+            setAiTutorTopic('');
+            setAiTutorOpen(true);
+          }}
+          className="fixed bottom-20 md:bottom-6 right-5 z-40 flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-gradient-to-r from-teal-600 via-teal-500 to-sky-600 hover:from-teal-500 hover:to-sky-500 text-white font-bold text-xs shadow-xl shadow-teal-900/40 border border-teal-300/40 hover:scale-105 active:scale-95 transition-all cursor-pointer ring-1 ring-white/20"
+          title="Ask AI Study Tutor"
+        >
+          <Sparkles className="w-4 h-4 text-teal-100 animate-pulse" />
+          <span className="hidden sm:inline">Ask AI Tutor</span>
+          <span className="sm:hidden">Tutor</span>
+        </button>
+      )}
     </div>
   );
 };

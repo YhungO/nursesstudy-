@@ -25,6 +25,8 @@ interface NavbarProps {
   levels?: NursingLevel[];
   onOpenAuth: (mode?: 'login' | 'register' | 'admin_login') => void;
   unreadAnnouncementsCount?: number;
+  onOpenAiTutor?: (topic?: string) => void;
+  aiTutorEnabled?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -33,6 +35,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   levels = [],
   onOpenAuth,
   unreadAnnouncementsCount = 0,
+  onOpenAiTutor,
+  aiTutorEnabled = true,
 }) => {
   const { user, logout } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -108,6 +112,20 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* Right Action Area */}
             <div className="flex items-center gap-2 sm:gap-3">
+              {/* Ask AI Tutor Button */}
+              {onOpenAiTutor && aiTutorEnabled && (
+                <button
+                  type="button"
+                  onClick={() => onOpenAiTutor()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-teal-500/20 via-sky-500/15 to-indigo-500/20 hover:from-teal-500/30 hover:to-indigo-500/30 text-teal-300 hover:text-white border border-teal-500/40 text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-98"
+                  title="Ask AI Study Tutor"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-teal-400 animate-pulse" />
+                  <span className="hidden sm:inline">Ask AI Tutor</span>
+                  <span className="sm:hidden">AI Tutor</span>
+                </button>
+              )}
+
               {/* Cloud Firestore Live Status Pill */}
               <div
                 className="hidden xl:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900/80 text-slate-300 border border-slate-800 text-[11px] font-medium shadow-inner"
@@ -360,6 +378,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <UserIcon className="w-4 h-4 text-slate-400" />
                 Student Academic Profile
               </button>
+
+              {/* Ask AI Tutor Mobile Button */}
+              {onOpenAiTutor && aiTutorEnabled && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenAiTutor();
+                  }}
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-teal-500/15 text-teal-300 border border-teal-500/30 mt-2 cursor-pointer shadow-xs"
+                >
+                  <Sparkles className="w-4 h-4 text-teal-400 animate-pulse" />
+                  <span>Ask AI Study Tutor</span>
+                </button>
+              )}
 
               {user?.role === 'admin' ? (
                 <button

@@ -1,8 +1,20 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { db, User, NursingLevel, Subject, StudyNote, Question, CBTExam, ExamAttempt, Announcement } from './server/db.ts';
 import { validateEmail, hashPassword, verifyPassword, generateResetCode } from './server/authUtils.ts';
+import {
+  askAiTutor,
+  explainMcqQuestion,
+  markTheoryAnswer,
+  checkRateLimit,
+  getAiServiceStatus,
+  getAiSettingsState,
+  updateAiSettingsState,
+  isAiTutorEnabled,
+  isAiExplanationEnabled,
+} from './server/aiService.ts';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -82,6 +94,202 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
 // Health Check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
+// ==================== AI LEARNING FEATURES ==================== //
+
+// Feature 1: AI Study Tutor ("Ask AI Tutor")
+app.post('/api/ai/tutor', async (req, res) => {
+  const user = getAuthUser(req);
+  const clientKey = user?.id || (req.headers['x-forwarded-for'] as string) || req.ip || 'anonymous';
+
+  // Cost & Free-tier protection: Rate limit requests
+  const rateCheck = checkRateLimit(`tutor_${clientKey}`, 15, 60000);
+  if (!rateCheck.allowed) {
+    return res.status(429).json({
+      error: `AI assistance is temporarily rate limited. Please wait ${rateCheck.retryAfterSec || 30} seconds before asking another question.`,
+    });
+  }
+
+  const { prompt, context } = req.body;
+  if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+    return res.status(400).json({ error: 'Please enter a question for the AI Tutor.' });
+  }
+
+  try {
+    const result = await askAiTutor(prompt, context);
+    res.json(result);
+  } catch (error: any) {
+    console.warn('[AI Tutor handler notice]:', error?.message || error);
+    res.json({
+      reply: 'AI assistance is temporarily unavailable. You can continue using the normal CBT features.',
+    });
+  }
+});
+
+// Feature 2: AI Explanation for MCQ Answers ("Explain with AI")
+app.post('/api/ai/explain-mcq', async (req, res) => {
+  const user = getAuthUser(req);
+  const clientKey = user?.id || (req.headers['x-forwarded-for'] as string) || req.ip || 'anonymous';
+
+  const rateCheck = checkRateLimit(`mcq_${clientKey}`, 25, 60000);
+  if (!rateCheck.allowed) {
+    return res.status(429).json({
+      error: `AI explanations are rate-limited. Please wait ${rateCheck.retryAfterSec || 20} seconds before requesting another explanation.`,
+    });
+  }
+
+  const { question, options, correctOption, selectedOption, scenario, rationale } = req.body;
+  if (!question || !correctOption) {
+    return res.status(400).json({ error: 'Question stem and correctOption are required.' });
+  }
+
+  try {
+    const explanation = await explainMcqQuestion({
+      question: String(question),
+      options: Array.isArray(options) ? options : [],
+      correctOption: String(correctOption),
+      selectedOption: selectedOption ? String(selectedOption) : null,
+      scenario: scenario ? String(scenario) : undefined,
+      rationale: rationale ? String(rationale) : undefined,
+    });
+
+    res.json(explanation);
+  } catch (error: any) {
+    console.warn('[AI Explain MCQ notice]:', error?.message || error);
+    // Graceful fallback to provided rationale or standard message
+    res.json({
+      whyCorrect: rationale || `Option ${correctOption} is the verified clinical answer.`,
+      whyStudentChoice: selectedOption === correctOption
+        ? 'Your selection was correct!'
+        : selectedOption
+        ? `Option ${selectedOption} did not meet clinical criteria.`
+        : 'No option was selected.',
+      keyTakeaway: rationale || 'Review foundational nursing assessment and clinical priorities.',
+      summary: rationale || 'Verified answer.',
+    });
+  }
+});
+
+// Feature 3: AI Theory Answer Marking ("AI Marking")
+app.post('/api/ai/mark-theory', async (req, res) => {
+  const user = getAuthUser(req);
+  const clientKey = user?.id || (req.headers['x-forwarded-for'] as string) || req.ip || 'anonymous';
+
+  const rateCheck = checkRateLimit(`theory_${clientKey}`, 15, 60000);
+  if (!rateCheck.allowed) {
+    return res.status(429).json({
+      error: `AI marking is rate-limited. Please wait ${rateCheck.retryAfterSec || 30} seconds before requesting another assessment.`,
+    });
+  }
+
+  const { question, expectedAnswer, studentAnswer, maxMarks, category } = req.body;
+  if (!question) {
+    return res.status(400).json({ error: 'Question text is required for theory marking.' });
+  }
+
+  try {
+    const evaluation = await markTheoryAnswer({
+      question: String(question),
+      expectedAnswer: String(expectedAnswer || ''),
+      studentAnswer: String(studentAnswer || ''),
+      maxMarks: Number(maxMarks) || 10,
+      category: category ? String(category) : undefined,
+    });
+
+    res.json(evaluation);
+  } catch (error: any) {
+    console.warn('[AI Theory Mark notice]:', error?.message || error);
+    const safeMax = Number(maxMarks) || 10;
+    res.json({
+      score: Math.round(safeMax * 0.5),
+      maxMarks: safeMax,
+      pointsCorrect: ['Answer recorded for curriculum review.'],
+      pointsMissed: ['AI assessment is temporarily offline.'],
+      pointsPartial: [],
+      feedback: 'AI theory assessment is temporarily unavailable. Standard model answers remain accessible.',
+      isAiEvaluated: false,
+    });
+  }
+});
+
+// Feature 4: AI Service Availability Status (Real-time availability check)
+app.get('/api/ai/status', async (req, res) => {
+  try {
+    const status = await getAiServiceStatus();
+    const settings = getAiSettingsState();
+    res.json({
+      ...status,
+      settings,
+    });
+  } catch (error: any) {
+    console.warn('[AI Status check error]:', error?.message || error);
+    res.json({
+      available: false,
+      status: 'Degraded',
+      model: 'gemini-3.8-flash',
+      provider: 'Google Gemini AI',
+      latencyMs: 0,
+      checkedAt: new Date().toISOString(),
+      statusText: 'AI Status check encountered an issue',
+      details: error?.message || 'Check failed',
+      settings: getAiSettingsState(),
+    });
+  }
+});
+
+// Feature 5: AI Settings (Public / Student view of current enablement)
+app.get('/api/ai/settings', (req, res) => {
+  res.json(getAiSettingsState());
+});
+
+// Feature 6: Admin AI Settings (Read full settings and status)
+app.get('/api/admin/ai-settings', async (req, res) => {
+  try {
+    const settings = getAiSettingsState();
+    const status = await getAiServiceStatus();
+    res.json({
+      settings,
+      status,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to retrieve AI settings and status' });
+  }
+});
+
+// Feature 7: Admin AI Settings (Update AI tutor and explanation toggles)
+app.put('/api/admin/ai-settings', (req, res) => {
+  const { aiFeaturesEnabled, aiTutorEnabled, aiExplanationEnabled, updatedBy } = req.body;
+  const updates: any = {};
+  if (typeof aiFeaturesEnabled === 'boolean') updates.aiFeaturesEnabled = aiFeaturesEnabled;
+  if (typeof aiTutorEnabled === 'boolean') updates.aiTutorEnabled = aiTutorEnabled;
+  if (typeof aiExplanationEnabled === 'boolean') updates.aiExplanationEnabled = aiExplanationEnabled;
+  if (updatedBy && typeof updatedBy === 'string') updates.updatedBy = updatedBy;
+
+  const updatedSettings = updateAiSettingsState(updates);
+  console.log('[Admin] AI Settings updated:', updatedSettings);
+  res.json({
+    success: true,
+    message: 'AI settings updated successfully.',
+    settings: updatedSettings,
+  });
+});
+
+app.post('/api/admin/ai-settings', (req, res) => {
+  const { aiFeaturesEnabled, aiTutorEnabled, aiExplanationEnabled, updatedBy } = req.body;
+  const updates: any = {};
+  if (typeof aiFeaturesEnabled === 'boolean') updates.aiFeaturesEnabled = aiFeaturesEnabled;
+  if (typeof aiTutorEnabled === 'boolean') updates.aiTutorEnabled = aiTutorEnabled;
+  if (typeof aiExplanationEnabled === 'boolean') updates.aiExplanationEnabled = aiExplanationEnabled;
+  if (updatedBy && typeof updatedBy === 'string') updates.updatedBy = updatedBy;
+
+  const updatedSettings = updateAiSettingsState(updates);
+  console.log('[Admin] AI Settings updated:', updatedSettings);
+  res.json({
+    success: true,
+    message: 'AI settings updated successfully.',
+    settings: updatedSettings,
+  });
 });
 
 // Auth: Login

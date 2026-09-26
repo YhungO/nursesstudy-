@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ExamAttempt } from '../../types';
 import { api } from '../../services/api';
+import { AiMcqExplanation } from './AiMcqExplanation';
+import { AiTheoryMarking } from './AiTheoryMarking';
 import {
   Award,
   TrendingUp,
@@ -238,6 +240,17 @@ export const ResultsProgress: React.FC<ResultsProgressProps> = ({
                       <div className="whitespace-pre-wrap">{ans.modelAnswer || ans.explanation}</div>
                     </div>
                   )}
+
+                  {/* AI Theory Marking Assessment */}
+                  {ans.typedAnswer && ans.typedAnswer.trim().length > 0 && (
+                    <AiTheoryMarking
+                      question={ans.questionText || (ans as any).question || 'Theory Question'}
+                      expectedAnswer={ans.modelAnswer || ans.explanation || ''}
+                      studentAnswer={ans.typedAnswer}
+                      category={ans.category}
+                      maxMarks={10}
+                    />
+                  )}
                 </div>
               );
             }
@@ -320,6 +333,16 @@ export const ResultsProgress: React.FC<ResultsProgressProps> = ({
                     <p className="leading-relaxed">{ans.explanation}</p>
                   </div>
                 )}
+
+                {/* AI MCQ Pedagogical Explanation */}
+                <AiMcqExplanation
+                  question={ans.questionText || (ans as any).question || 'Question'}
+                  options={ans.options || []}
+                  correctOption={ans.correctOption || 'A'}
+                  selectedOption={ans.selectedOption || null}
+                  scenario={ans.scenario}
+                  rationale={ans.explanation}
+                />
               </div>
             );
           })}

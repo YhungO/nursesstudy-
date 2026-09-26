@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { CBTExam, Question, ExamAttempt } from '../../types';
 import { api } from '../../services/api';
+import { AiTheoryMarking } from './AiTheoryMarking';
 import {
   Clock,
   Volume2,
@@ -888,6 +889,17 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
                       {item.modelAnswer || item.explanation || 'Consult standard nursing anatomy syllabus.'}
                     </div>
                   </div>
+
+                  {/* AI Assisted Theory Marking Assessment */}
+                  {item.typedAnswer && item.typedAnswer.trim().length > 0 && (
+                    <AiTheoryMarking
+                      question={item.questionText || item.question || ''}
+                      expectedAnswer={item.modelAnswer || item.explanation || ''}
+                      studentAnswer={item.typedAnswer}
+                      category={item.category}
+                      maxMarks={10}
+                    />
+                  )}
                 </div>
               );
             })}

@@ -8,6 +8,12 @@ import {
   ExamAttempt,
   Announcement,
   AdminStats,
+  McqExplanationRequest,
+  McqExplanationResponse,
+  TheoryMarkingRequest,
+  TheoryMarkingResponse,
+  AiSettings,
+  AiServiceStatus,
 } from '../types';
 
 let authToken: string | null = localStorage.getItem('nursesstudy_token');
@@ -324,4 +330,34 @@ export const api = {
   },
   resetDatabase: () =>
     request<{ success: boolean; message: string }>('/api/admin/reset-data', { method: 'POST' }),
+
+  // AI Learning Features
+  askAiTutor: (prompt: string, context?: string) =>
+    request<{ reply: string }>('/api/ai/tutor', {
+      method: 'POST',
+      body: JSON.stringify({ prompt, context }),
+    }),
+
+  explainMcq: (data: McqExplanationRequest) =>
+    request<McqExplanationResponse>('/api/ai/explain-mcq', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  markTheory: (data: TheoryMarkingRequest) =>
+    request<TheoryMarkingResponse>('/api/ai/mark-theory', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // AI Settings & Service Availability Status
+  getAiStatus: () => request<AiServiceStatus & { settings: AiSettings }>('/api/ai/status'),
+  getAiSettings: () => request<AiSettings>('/api/ai/settings'),
+  getAdminAiSettings: () =>
+    request<{ settings: AiSettings; status: AiServiceStatus }>('/api/admin/ai-settings'),
+  updateAdminAiSettings: (settings: Partial<AiSettings>) =>
+    request<{ success: boolean; message: string; settings: AiSettings }>('/api/admin/ai-settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    }),
 };

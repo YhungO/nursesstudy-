@@ -3,6 +3,7 @@ import { CBTExam, Question, ExamAttempt } from '../../types';
 import { api } from '../../services/api';
 import { saveAttemptToFirestore } from '../../services/firestoreService';
 import { cbtSessionManager, CbtActiveSession } from '../../services/cbtSessionManager';
+import { AiMcqExplanation } from './AiMcqExplanation';
 import {
   Clock,
   AlertTriangle,
@@ -115,6 +116,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
   // Active testing state
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, 'A' | 'B' | 'C' | 'D' | null>>({});
+  const [theoryAnswers, setTheoryAnswers] = useState<Record<string, string>>({});
   const [flaggedQuestions, setFlaggedQuestions] = useState<Record<string, boolean>>({});
   const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -136,6 +138,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
 
   // CRITICAL REFS: Bypasses React state stale closures during async callbacks and setInterval ticks
   const answersRef = useRef<Record<string, 'A' | 'B' | 'C' | 'D' | null>>({});
+  const theoryAnswersRef = useRef<Record<string, string>>({});
   const examDataRef = useRef<(CBTExam & { questions: Question[] }) | null>(null);
   const shuffledQuestionsRef = useRef<Record<string, any[]>>({});
   const examStartTimeRef = useRef<number>(Date.now());
@@ -195,6 +198,11 @@ export const CbtExam: React.FC<CbtExamProps> = ({
   useEffect(() => {
     answersRef.current = { ...selectedAnswers };
   }, [selectedAnswers]);
+
+  // Sync theoryAnswers to ref continuously
+  useEffect(() => {
+    theoryAnswersRef.current = { ...theoryAnswers };
+  }, [theoryAnswers]);
 
   // Central Submission Handler
   // Preload text-to-speech voices with Android asynchronous voice loading support
@@ -316,11 +324,22 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           : Math.min(totalDurationSec, Math.max(1, elapsedSec));
 
       try {
-        // Collect any voice answers recorded by the student
-        const theoryAnswersPayload: Record<string, { voiceRecordingUrl?: string | null }> = {};
+        // Collect any typed theory answers and voice answers recorded by the student
+        const theoryAnswersPayload: Record<string, { typedAnswer?: string; voiceRecordingUrl?: string | null }> = {};
+        
+        Object.entries(theoryAnswersRef.current).forEach(([qid, text]) => {
+          if (text && text.trim()) {
+            theoryAnswersPayload[qid] = {
+              ...(theoryAnswersPayload[qid] || {}),
+              typedAnswer: text.trim(),
+            };
+          }
+        });
+
         Object.entries(voiceRecordings).forEach(([qid, rec]) => {
           if (rec.voiceAudioUrl) {
             theoryAnswersPayload[qid] = {
+              ...(theoryAnswersPayload[qid] || {}),
               voiceRecordingUrl: rec.voiceAudioUrl,
             };
           }
@@ -407,6 +426,9 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           const restoredAnswers = existingSession.answers || {};
           answersRef.current = { ...restoredAnswers };
           setSelectedAnswers({ ...restoredAnswers });
+          const restoredTheory = (existingSession as any)?.theoryAnswers || {};
+          theoryAnswersRef.current = { ...restoredTheory };
+          setTheoryAnswers({ ...restoredTheory });
           setFlaggedQuestions(existingSession.flaggedQuestions || {});
           setCurrentIndex(
             Math.min(
@@ -480,7 +502,9 @@ export const CbtExam: React.FC<CbtExamProps> = ({
       examStartTimeRef.current = now;
       examEndTimeRef.current = deadline;
       answersRef.current = {};
+      theoryAnswersRef.current = {};
       setSelectedAnswers({});
+      setTheoryAnswers({});
       setFlaggedQuestions({});
       setCurrentIndex(0);
       setSecondsRemaining(durationSec);
@@ -613,6 +637,35 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           shuffledQuestions: shuffledQuestionsRef.current,
           lastUpdated: Date.now(),
         });
+      }
+
+      return next;
+    });
+  };
+
+  // Theory answer typed input with immediate ref update and persistent auto-save
+  const handleTypedTheoryAnswerChange = (questionId: string | number, text: string) => {
+    if (isSubmittingRef.current || hasSubmittedRef.current) return;
+    const qKey = String(questionId);
+
+    theoryAnswersRef.current[qKey] = text;
+    setTheoryAnswers((prev) => {
+      const next = { ...prev, [qKey]: text };
+
+      if (examDataRef.current) {
+        cbtSessionManager.saveSession({
+          examId: examDataRef.current.id,
+          examTitle: examDataRef.current.title,
+          startTime: examStartTimeRef.current,
+          endTime: examEndTimeRef.current,
+          durationMinutes: examDataRef.current.durationMinutes || 30,
+          currentIndex,
+          answers: answersRef.current,
+          flaggedQuestions,
+          shuffledQuestions: shuffledQuestionsRef.current,
+          lastUpdated: Date.now(),
+          theoryAnswers: next,
+        } as any);
       }
 
       return next;
@@ -1233,6 +1286,22 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                     {item.explanation || item.rationale || 'No rationale available.'}
                   </p>
                 </div>
+
+                {/* AI Explanation for MCQ Answers */}
+                <AiMcqExplanation
+                  question={item.questionText || item.question || ''}
+                  options={(item.options || []).map((o: any, idx: number) => {
+                    const letters = ['A', 'B', 'C', 'D'];
+                    if (typeof o === 'string') {
+                      return { id: letters[idx] || 'A', text: o };
+                    }
+                    return { id: o.id || letters[idx] || 'A', text: o.text || '' };
+                  })}
+                  correctOption={item.correctOption || 'A'}
+                  selectedOption={item.selectedOption || null}
+                  scenario={item.scenario}
+                  rationale={item.explanation || item.rationale}
+                />
               </div>
             );
           })}
@@ -1345,7 +1414,22 @@ export const CbtExam: React.FC<CbtExamProps> = ({
     const currentQ = questions[safeIndex] || null;
     const isFlagged = currentQ ? !!flaggedQuestions[currentQ.id] : false;
     const currentAnswer = currentQ ? selectedAnswers[currentQ.id] : null;
-    const answeredCount = Object.values(selectedAnswers).filter(Boolean).length;
+    const isTheoryQuestion = currentQ
+      ? currentQ.questionType === 'theory' ||
+        examData.examType === 'theory' ||
+        !Array.isArray(currentQ.options) ||
+        currentQ.options.length === 0
+      : false;
+
+    // Answered count includes multiple choice selections, typed theory answers, and voice recordings
+    const answeredCount = questions.filter((q) => {
+      const qKey = String(q.id);
+      return (
+        !!selectedAnswers[qKey] ||
+        (theoryAnswers[qKey] && theoryAnswers[qKey].trim().length > 0) ||
+        !!voiceRecordings[qKey]?.voiceAudioUrl
+      );
+    }).length;
     const flaggedCount = Object.values(flaggedQuestions).filter(Boolean).length;
 
     return (
@@ -1482,178 +1566,370 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           />
         </div>
 
-        {/* QUESTION CONTENT & MULTIPLE-CHOICE OPTIONS */}
+        {/* QUESTION CONTENT & MULTIPLE-CHOICE OPTIONS OR CONSOLIDATED THEORY CBT WORKSPACE */}
         <div className="flex-1 flex flex-col justify-center py-2 sm:py-4">
           {currentQ ? (
-            <div className="space-y-4">
-              <QuestionContent
-                question={currentQ}
-                questionId={currentQ.id}
-                scenario={currentQ.scenario}
-                questionText={currentQ.questionText || currentQ.question || ''}
-                currentIndex={safeIndex}
-                totalQuestions={totalQ}
-              />
+            isTheoryQuestion ? (
+              /* ==================== THE THEORY CBT QUESTION WORKSPACE (CONSOLIDATED SINGLE-COLUMN) ==================== */
+              <div className="bg-[#111827] border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-xl space-y-5">
+                {/* Question Header & Category */}
+                <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                  <span className="text-xs font-mono font-bold text-teal-400">
+                    Question {safeIndex + 1} of {totalQ}
+                  </span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-teal-950/80 text-teal-300 border border-teal-800/60">
+                    {currentQ.category || currentQ.topic || examData.subjectName || 'Theory Question'}
+                  </span>
+                </div>
 
-              {/* CBT Audio Assist Toolbar: Read Question & Record Voice Answer via mediaUtils */}
-              <div className="w-full max-w-2xl mx-auto px-4">
-                <div className="flex flex-wrap items-center justify-between gap-2.5 p-3 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* Read Question Button */}
+                {/* Scenario if available */}
+                {currentQ.scenario && (
+                  <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 text-xs sm:text-sm text-slate-300 leading-relaxed">
+                    {currentQ.scenario}
+                  </div>
+                )}
+
+                {/* Question Stem */}
+                <h2 className="text-base sm:text-lg font-medium text-white leading-relaxed">
+                  {currentQ.questionText || currentQ.question}
+                </h2>
+
+                {/* "Read Question" button directly below the question */}
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleReadQuestion}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
+                      isSpeaking
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 animate-pulse'
+                        : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
+                    }`}
+                    title={isSpeaking ? 'Stop reading' : 'Read question text aloud'}
+                  >
+                    {isSpeaking ? (
+                      <>
+                        <VolumeX className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Stop Reading</span>
+                      </>
+                    ) : (
+                      <>
+                        <Volume2 className="w-3.5 h-3.5 text-teal-400" />
+                        <span>Read Question</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Compact Read Question Volume Slider */}
+                  <div
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs"
+                    title={`Volume: ${Math.round(speechVolume * 100)}%`}
+                  >
                     <button
                       type="button"
-                      onClick={handleReadQuestion}
-                      className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                        isSpeaking
-                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse'
-                          : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80'
-                      }`}
-                      title={isSpeaking ? 'Stop reading question aloud' : 'Read question text aloud'}
+                      onClick={() => {
+                        const nextVol = speechVolume > 0 ? 0 : 1;
+                        setSpeechVolume(nextVol);
+                        try {
+                          localStorage.setItem('nursesstudy_cbt_speech_volume', String(nextVol));
+                        } catch {}
+                      }}
+                      className="text-slate-400 hover:text-teal-300 transition-colors p-0.5 cursor-pointer"
+                      title={speechVolume === 0 ? 'Unmute voice reading' : 'Mute voice reading'}
+                      aria-label="Toggle mute voice reading"
                     >
-                      {isSpeaking ? (
-                        <>
-                          <VolumeX className="w-3.5 h-3.5 text-amber-400" />
-                          <span>Stop Reading</span>
-                        </>
+                      {speechVolume === 0 ? (
+                        <VolumeX className="w-3.5 h-3.5 text-rose-400" />
+                      ) : speechVolume < 0.5 ? (
+                        <Volume1 className="w-3.5 h-3.5 text-teal-400" />
                       ) : (
-                        <>
-                          <Volume2 className="w-3.5 h-3.5 text-teal-400" />
-                          <span>Read Question</span>
-                        </>
+                        <Volume2 className="w-3.5 h-3.5 text-teal-400" />
                       )}
                     </button>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={speechVolume}
+                      onChange={(e) => {
+                        const newVol = parseFloat(e.target.value);
+                        setSpeechVolume(newVol);
+                        try {
+                          localStorage.setItem('nursesstudy_cbt_speech_volume', String(newVol));
+                        } catch {}
+                      }}
+                      className="w-14 sm:w-20 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-teal-400 focus:outline-none"
+                      aria-label="Read Question volume control"
+                    />
+                    <span className="text-[10px] font-mono text-slate-400 w-7 text-right select-none">
+                      {Math.round(speechVolume * 100)}%
+                    </span>
+                  </div>
 
-                    {/* Read Question Volume Slider */}
-                    <div
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 rounded-xl transition-all"
-                      title={`Read Question Volume: ${Math.round(speechVolume * 100)}%`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextVol = speechVolume > 0 ? 0 : 1;
-                          setSpeechVolume(nextVol);
-                          try {
-                            localStorage.setItem('nursesstudy_cbt_speech_volume', String(nextVol));
-                          } catch {}
-                        }}
-                        className="text-slate-400 hover:text-teal-300 transition-colors p-0.5 cursor-pointer"
-                        title={speechVolume === 0 ? 'Unmute voice reading' : 'Mute voice reading'}
-                        aria-label="Toggle mute voice reading"
-                      >
-                        {speechVolume === 0 ? (
-                          <VolumeX className="w-3.5 h-3.5 text-rose-400" />
-                        ) : speechVolume < 0.5 ? (
-                          <Volume1 className="w-3.5 h-3.5 text-teal-400" />
-                        ) : (
-                          <Volume2 className="w-3.5 h-3.5 text-teal-400" />
-                        )}
-                      </button>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.05"
-                        value={speechVolume}
-                        onChange={(e) => {
-                          const newVol = parseFloat(e.target.value);
-                          setSpeechVolume(newVol);
-                          try {
-                            localStorage.setItem('nursesstudy_cbt_speech_volume', String(newVol));
-                          } catch {}
-                        }}
-                        className="w-14 sm:w-20 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-teal-400 focus:outline-none"
-                        aria-label="Read Question volume control"
-                      />
-                      <span className="text-[10px] font-mono text-slate-300 w-7 text-right select-none">
-                        {Math.round(speechVolume * 100)}%
-                      </span>
-                    </div>
+                  {speechError && (
+                    <span className="text-xs text-amber-400/90 font-medium">
+                      {speechError}
+                    </span>
+                  )}
+                </div>
 
-                    {/* Record Voice Answer Button */}
+                {/* One large answer text box */}
+                <div>
+                  <textarea
+                    value={theoryAnswers[String(currentQ.id)] || ''}
+                    onChange={(e) => handleTypedTheoryAnswerChange(currentQ.id, e.target.value)}
+                    placeholder="Type your answer here..."
+                    rows={8}
+                    className="w-full p-4 rounded-2xl bg-slate-900/90 border border-slate-800 text-slate-100 placeholder-slate-500 text-sm leading-relaxed focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all font-sans resize-y"
+                  />
+                </div>
+
+                {/* One simple "Record Voice Answer" button & controls */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                  <div className="flex items-center gap-2">
                     {!isRecording ? (
                       <button
                         type="button"
                         onClick={handleStartRecording}
-                        className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-2 cursor-pointer ${
                           voiceRecordings[String(currentQ.id)]
-                            ? 'bg-purple-900/60 hover:bg-purple-800 text-purple-200 border border-purple-500/40'
-                            : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80'
+                            ? 'bg-purple-900/30 hover:bg-purple-900/50 text-purple-200 border-purple-500/40'
+                            : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
                         }`}
                       >
-                        <Mic className="w-3.5 h-3.5 text-purple-400" />
+                        <Mic className="w-4 h-4 text-purple-400" />
                         <span>{voiceRecordings[String(currentQ.id)] ? 'Re-record Voice Answer' : 'Record Voice Answer'}</span>
                       </button>
                     ) : (
                       <button
                         type="button"
                         onClick={handleStopRecording}
-                        className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold transition-all animate-pulse flex items-center gap-1.5 cursor-pointer"
+                        className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all animate-pulse flex items-center gap-2 cursor-pointer shadow-sm"
                       >
-                        <Square className="w-3.5 h-3.5 fill-current" />
+                        <Square className="w-4 h-4 fill-current" />
                         <span>Stop Recording ({recordDuration}s)</span>
                       </button>
                     )}
+
+                    {voiceRecordings[String(currentQ.id)] && !isRecording && (
+                      <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl p-1">
+                        <button
+                          type="button"
+                          onClick={togglePlayRecordedAudio}
+                          className="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                          title="Listen to recorded answer"
+                        >
+                          {isPlayingAudio ? (
+                            <>
+                              <Pause className="w-3 h-3 fill-current" />
+                              <span>Pause</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3 h-3 fill-current" />
+                              <span>Play</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDeleteRecording}
+                          className="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                          title="Delete recorded answer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Recorded Audio Controls for Current Question */}
                   {voiceRecordings[String(currentQ.id)] && !isRecording && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={togglePlayRecordedAudio}
-                        className="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg font-semibold flex items-center gap-1 transition-all cursor-pointer"
-                        title="Listen to recorded voice answer"
-                      >
-                        {isPlayingAudio ? (
-                          <>
-                            <Pause className="w-3 h-3 fill-current" />
-                            <span>Pause</span>
-                          </>
-                        ) : (
-                          <>
-                            <Play className="w-3 h-3 fill-current" />
-                            <span>Play</span>
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleDeleteRecording}
-                        className="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
-                        title="Delete voice answer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <span className="text-xs text-teal-400 font-medium flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-teal-400" />
+                      Voice answer saved
+                    </span>
                   )}
                 </div>
 
-                {/* Speech Error Banner */}
-                {speechError && (
-                  <div className="mt-2 p-2.5 bg-amber-950/40 border border-amber-800/40 rounded-xl text-[11px] text-amber-300 flex items-center gap-2">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    <span>{speechError}</span>
-                  </div>
-                )}
-
-                {/* Microphone Error Banner */}
                 {micError && (
-                  <div className="mt-2 p-2.5 bg-slate-950 border border-amber-500/40 rounded-xl text-[11px] text-amber-300 flex items-center gap-2">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <div className="p-3 bg-slate-900 border border-amber-500/40 rounded-xl text-xs text-amber-300 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
                     <span>{micError}</span>
                   </div>
                 )}
               </div>
+            ) : (
+              /* ==================== MULTIPLE-CHOICE CBT QUESTION WORKSPACE ==================== */
+              <div className="space-y-4">
+                <QuestionContent
+                  question={currentQ}
+                  questionId={currentQ.id}
+                  scenario={currentQ.scenario}
+                  questionText={currentQ.questionText || currentQ.question || ''}
+                  currentIndex={safeIndex}
+                  totalQuestions={totalQ}
+                />
 
-              <AnswerOptions
-                questionId={currentQ.id}
-                options={currentQ.options || []}
-                selectedAnswer={currentAnswer}
-                onSelectOption={(opt) => handleSelectOption(currentQ.id, opt)}
-              />
-            </div>
+                {/* CBT Audio Assist Toolbar: Read Question & Record Voice Answer via mediaUtils */}
+                <div className="w-full max-w-2xl mx-auto px-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2.5 p-3 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Read Question Button */}
+                      <button
+                        type="button"
+                        onClick={handleReadQuestion}
+                        className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                          isSpeaking
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse'
+                            : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80'
+                        }`}
+                        title={isSpeaking ? 'Stop reading question aloud' : 'Read question text aloud'}
+                      >
+                        {isSpeaking ? (
+                          <>
+                            <VolumeX className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Stop Reading</span>
+                          </>
+                        ) : (
+                          <>
+                            <Volume2 className="w-3.5 h-3.5 text-teal-400" />
+                            <span>Read Question</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Read Question Volume Slider */}
+                      <div
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 rounded-xl transition-all"
+                        title={`Read Question Volume: ${Math.round(speechVolume * 100)}%`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextVol = speechVolume > 0 ? 0 : 1;
+                            setSpeechVolume(nextVol);
+                            try {
+                              localStorage.setItem('nursesstudy_cbt_speech_volume', String(nextVol));
+                            } catch {}
+                          }}
+                          className="text-slate-400 hover:text-teal-300 transition-colors p-0.5 cursor-pointer"
+                          title={speechVolume === 0 ? 'Unmute voice reading' : 'Mute voice reading'}
+                          aria-label="Toggle mute voice reading"
+                        >
+                          {speechVolume === 0 ? (
+                            <VolumeX className="w-3.5 h-3.5 text-rose-400" />
+                          ) : speechVolume < 0.5 ? (
+                            <Volume1 className="w-3.5 h-3.5 text-teal-400" />
+                          ) : (
+                            <Volume2 className="w-3.5 h-3.5 text-teal-400" />
+                          )}
+                        </button>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={speechVolume}
+                          onChange={(e) => {
+                            const newVol = parseFloat(e.target.value);
+                            setSpeechVolume(newVol);
+                            try {
+                              localStorage.setItem('nursesstudy_cbt_speech_volume', String(newVol));
+                            } catch {}
+                          }}
+                          className="w-14 sm:w-20 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-teal-400 focus:outline-none"
+                          aria-label="Read Question volume control"
+                        />
+                        <span className="text-[10px] font-mono text-slate-300 w-7 text-right select-none">
+                          {Math.round(speechVolume * 100)}%
+                        </span>
+                      </div>
+
+                      {/* Record Voice Answer Button */}
+                      {!isRecording ? (
+                        <button
+                          type="button"
+                          onClick={handleStartRecording}
+                          className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                            voiceRecordings[String(currentQ.id)]
+                              ? 'bg-purple-900/60 hover:bg-purple-800 text-purple-200 border border-purple-500/40'
+                              : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80'
+                          }`}
+                        >
+                          <Mic className="w-3.5 h-3.5 text-purple-400" />
+                          <span>{voiceRecordings[String(currentQ.id)] ? 'Re-record Voice Answer' : 'Record Voice Answer'}</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleStopRecording}
+                          className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold transition-all animate-pulse flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Square className="w-3.5 h-3.5 fill-current" />
+                          <span>Stop Recording ({recordDuration}s)</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Recorded Audio Controls for Current Question */}
+                    {voiceRecordings[String(currentQ.id)] && !isRecording && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={togglePlayRecordedAudio}
+                          className="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                          title="Listen to recorded voice answer"
+                        >
+                          {isPlayingAudio ? (
+                            <>
+                              <Pause className="w-3 h-3 fill-current" />
+                              <span>Pause</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3 h-3 fill-current" />
+                              <span>Play</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleDeleteRecording}
+                          className="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                          title="Delete voice answer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Speech Error Banner */}
+                  {speechError && (
+                    <div className="mt-2 p-2.5 bg-amber-950/40 border border-amber-800/40 rounded-xl text-[11px] text-amber-300 flex items-center gap-2">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>{speechError}</span>
+                    </div>
+                  )}
+
+                  {/* Microphone Error Banner */}
+                  {micError && (
+                    <div className="mt-2 p-2.5 bg-slate-950 border border-amber-500/40 rounded-xl text-[11px] text-amber-300 flex items-center gap-2">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>{micError}</span>
+                    </div>
+                  )}
+                </div>
+
+                <AnswerOptions
+                  questionId={currentQ.id}
+                  options={currentQ.options || []}
+                  selectedAnswer={currentAnswer}
+                  onSelectOption={(opt) => handleSelectOption(currentQ.id, opt)}
+                />
+              </div>
+            )
           ) : (
             <div className="text-center p-8 text-slate-400 text-xs">
               <HelpCircle className="w-8 h-8 mx-auto mb-2 text-slate-600" />
@@ -1678,7 +1954,19 @@ export const CbtExam: React.FC<CbtExamProps> = ({
           onClose={() => setShowPaletteDrawer(false)}
           questions={questions}
           currentIndex={safeIndex}
-          selectedAnswers={selectedAnswers}
+          selectedAnswers={{
+            ...selectedAnswers,
+            ...Object.fromEntries(
+              Object.entries(theoryAnswers)
+                .filter(([_, val]) => val && val.trim().length > 0)
+                .map(([k]) => [k, 'A' as const])
+            ),
+            ...Object.fromEntries(
+              Object.entries(voiceRecordings)
+                .filter(([_, val]) => val?.voiceAudioUrl)
+                .map(([k]) => [k, 'A' as const])
+            ),
+          }}
           flaggedQuestions={flaggedQuestions}
           onSelectQuestion={handleSelectQuestion}
           onSubmitClick={() => {

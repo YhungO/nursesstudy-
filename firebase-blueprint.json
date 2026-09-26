@@ -217,6 +217,20 @@
         "timestamp": { "type": "string" }
       },
       "required": ["id", "adminUid", "adminEmail", "action", "targetType", "targetId", "timestamp"]
+    },
+    "SystemSettings": {
+      "title": "SystemSettings",
+      "description": "Platform settings including AI Tutor and explanation availability toggles",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "aiFeaturesEnabled": { "type": "boolean" },
+        "aiTutorEnabled": { "type": "boolean" },
+        "aiExplanationEnabled": { "type": "boolean" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["id", "aiFeaturesEnabled", "aiTutorEnabled", "aiExplanationEnabled"]
     }
   },
   "firestore": {
@@ -230,6 +244,7 @@
     "attempts": { "schema": "ExamAttempt", "description": "Student exam attempts and results" },
     "announcements": { "schema": "Announcement", "description": "Platform broadcast notices" },
     "bookmarks": { "schema": "Bookmark", "description": "Student bookmarked items" },
-    "audit_logs": { "schema": "AuditLog", "description": "Admin action audit logs" }
+    "audit_logs": { "schema": "AuditLog", "description": "Admin action audit logs" },
+    "settings": { "schema": "SystemSettings", "description": "Platform system configurations and AI settings" }
   }
 }

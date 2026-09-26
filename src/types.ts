@@ -186,7 +186,7 @@ export interface AuditLog {
   adminEmail: string;
   adminName?: string;
   action: string;
-  targetType: 'question' | 'exam' | 'note' | 'subject' | 'level' | 'announcement' | 'student' | 'attempt';
+  targetType: 'question' | 'exam' | 'note' | 'subject' | 'level' | 'announcement' | 'student' | 'attempt' | 'settings';
   targetId: string;
   targetTitle?: string;
   previousStatus?: ContentStatus | string;
@@ -215,3 +215,66 @@ export interface AdminStats {
   averageScore: number;
   passRate: number;
 }
+
+// ==================== AI LEARNING TYPES ==================== //
+
+export interface AiTutorMessage {
+  id: string;
+  sender: 'user' | 'tutor';
+  text: string;
+  timestamp: string;
+}
+
+export interface McqExplanationRequest {
+  question: string;
+  options: { id: string; text: string }[];
+  correctOption: string;
+  selectedOption: string | null;
+  scenario?: string;
+  rationale?: string;
+}
+
+export interface McqExplanationResponse {
+  whyCorrect: string;
+  whyStudentChoice: string;
+  keyTakeaway: string;
+  summary?: string;
+}
+
+export interface TheoryMarkingRequest {
+  question: string;
+  expectedAnswer: string;
+  studentAnswer: string;
+  maxMarks?: number;
+  category?: string;
+}
+
+export interface TheoryMarkingResponse {
+  score: number;
+  maxMarks: number;
+  pointsCorrect: string[];
+  pointsMissed: string[];
+  pointsPartial: string[];
+  feedback: string;
+  isAiEvaluated?: boolean;
+}
+
+export interface AiSettings {
+  aiFeaturesEnabled: boolean;
+  aiTutorEnabled: boolean;
+  aiExplanationEnabled: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface AiServiceStatus {
+  available: boolean;
+  status: 'Operational' | 'Degraded' | 'Offline' | string;
+  model: string;
+  provider: string;
+  latencyMs?: number;
+  checkedAt: string;
+  statusText: string;
+  details?: string;
+}
+

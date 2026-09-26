@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Question, Subject } from '../../types';
+import { AiMcqExplanation } from './AiMcqExplanation';
 import {
   HelpCircle,
   CheckCircle2,
@@ -397,6 +398,26 @@ export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
                 <p className="text-xs sm:text-sm leading-relaxed text-slate-200">
                   {currentQuestion.explanation || currentQuestion.rationale || 'No rationale available.'}
                 </p>
+
+                {/* AI MCQ Pedagogical Explanation */}
+                <AiMcqExplanation
+                  question={currentQuestion.questionText || currentQuestion.question || ''}
+                  options={(currentQuestion.options || []).map((o: any, idx: number) => {
+                    if (typeof o === 'string') {
+                      return { id: (['A', 'B', 'C', 'D'][idx] || 'A') as 'A' | 'B' | 'C' | 'D', text: o };
+                    }
+                    return o;
+                  })}
+                  correctOption={
+                    currentQuestion.correctOption ||
+                    (typeof currentQuestion.correct === 'number'
+                      ? ['A', 'B', 'C', 'D'][currentQuestion.correct]
+                      : 'A')
+                  }
+                  selectedOption={selectedOption}
+                  scenario={currentQuestion.scenario}
+                  rationale={currentQuestion.explanation || currentQuestion.rationale}
+                />
               </div>
             )}
 
