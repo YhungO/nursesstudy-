@@ -59,6 +59,44 @@ export interface SpeakOptions {
 // 1. TEXT-TO-SPEECH (speechSynthesis) CAPABILITY & UTILITIES
 // ============================================================================
 
+// Prevent Garbage Collection of active utterances in Chromium & Android WebView
+const activeUtterances = new Set<SpeechSynthesisUtterance>();
+if (typeof window !== 'undefined') {
+  (window as any).__activeSpeechUtterances = activeUtterances;
+}
+
+/**
+ * Splits text into natural sentence/clause chunks to prevent Android TTS buffer timeouts.
+ */
+function splitIntoSpokenChunks(text: string, maxChunkLength: number = 200): string[] {
+  const clean = text.replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim();
+  if (!clean) return [];
+  if (clean.length <= maxChunkLength) return [clean];
+
+  // Match sentences or natural clauses (. ? ! ; : or newline)
+  const rawSegments = clean.match(/[^.!?;\n:]+[.!?;\n:]*|\S+/g) || [clean];
+  const chunks: string[] = [];
+  let current = '';
+
+  for (const seg of rawSegments) {
+    const trimmed = seg.trim();
+    if (!trimmed) continue;
+
+    if (current && (current.length + trimmed.length + 1 > maxChunkLength)) {
+      chunks.push(current);
+      current = trimmed;
+    } else {
+      current = current ? `${current} ${trimmed}` : trimmed;
+    }
+  }
+
+  if (current) {
+    chunks.push(current);
+  }
+
+  return chunks.length > 0 ? chunks : [clean];
+}
+
 /**
  * Checks if the current browser environment supports the SpeechSynthesis API.
  */
@@ -87,7 +125,7 @@ export function checkSpeechSynthesisSupport(): SpeechSynthesisSupport {
 /**
  * Safely loads available SpeechSynthesis voices, handling Android's asynchronous voice loading.
  */
-export function loadSpeechSynthesisVoices(timeoutMs: number = 2000): Promise<SpeechSynthesisVoice[]> {
+export function loadSpeechSynthesisVoices(timeoutMs: number = 2500): Promise<SpeechSynthesisVoice[]> {
   const support = checkSpeechSynthesisSupport();
   if (!support.isSupported) {
     return Promise.resolve([]);
@@ -149,7 +187,7 @@ export function loadSpeechSynthesisVoices(timeoutMs: number = 2000): Promise<Spe
 }
 
 /**
- * Selects the best available English voice, prioritizing native English voices
+ * Selects the best available English voice, prioritizing local offline voices
  * and falling back gracefully without declaring the device unsupported.
  */
 export function getBestEnglishVoice(voices?: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
@@ -161,23 +199,30 @@ export function getBestEnglishVoice(voices?: SpeechSynthesisVoice[]): SpeechSynt
     return null;
   }
 
-  // 1. Priority: US English with natural/enhanced/Google voice
-  const usNatural = voiceList.find(
-    (v) =>
-      v.lang === 'en-US' &&
-      (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Premium'))
+  // 1. Priority: Local offline English voice (guaranteed to work on Android without network)
+  const localEnglish = voiceList.find(
+    (v) => v.lang && v.lang.toLowerCase().startsWith('en') && (v as any).localService === true
   );
-  if (usNatural) return usNatural;
+  if (localEnglish) return localEnglish;
 
-  // 2. Priority: Standard en-US or en-GB
+  // 2. Priority: Natural/Enhanced English voice from Google or Samsung
+  const enhancedEnglish = voiceList.find(
+    (v) =>
+      v.lang &&
+      v.lang.toLowerCase().startsWith('en') &&
+      (v.name.includes('Google') || v.name.includes('Samsung') || v.name.includes('Natural') || v.name.includes('Premium'))
+  );
+  if (enhancedEnglish) return enhancedEnglish;
+
+  // 3. Priority: Standard en-US or en-GB
   const standardEn = voiceList.find((v) => v.lang === 'en-US' || v.lang === 'en-GB');
   if (standardEn) return standardEn;
 
-  // 3. Priority: Any English language prefix
+  // 4. Priority: Any English language prefix
   const anyEnglish = voiceList.find((v) => v.lang && v.lang.toLowerCase().startsWith('en'));
   if (anyEnglish) return anyEnglish;
 
-  // 4. Fallback: Default voice or first available
+  // 5. Fallback: Default voice or first available
   const defaultVoice = voiceList.find((v) => v.default);
   return defaultVoice || voiceList[0] || null;
 }
@@ -188,7 +233,16 @@ export function getBestEnglishVoice(voices?: SpeechSynthesisVoice[]): SpeechSynt
 export function stopSpeechSynthesis(): void {
   if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis) {
     try {
+      activeUtterances.forEach((u) => {
+        u.onstart = null;
+        u.onend = null;
+        u.onerror = null;
+      });
+      activeUtterances.clear();
       window.speechSynthesis.cancel();
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
     } catch (err) {
       console.warn('stopSpeechSynthesis error:', err);
     }
@@ -196,7 +250,8 @@ export function stopSpeechSynthesis(): void {
 }
 
 /**
- * Reads text aloud using window.speechSynthesis with Android compatibility guards.
+ * Reads text aloud using window.speechSynthesis with Android compatibility guards,
+ * sentence chunking (to prevent Android 15-second buffer stalls), and voice fallbacks.
  */
 export function speakText(
   text: string,
@@ -209,65 +264,125 @@ export function speakText(
   }
 
   // Clean text and strip any stray HTML formatting
-  const clean = text.replace(/<[^>]*>?/gm, '').trim();
+  const clean = text.replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim();
   if (!clean) {
     options?.onError?.(new Error('No text provided to read aloud.'));
     return { cancel: () => {}, utterance: null };
   }
 
-  // Cancel prior speech and resume if paused by Android background process
-  try {
-    window.speechSynthesis.cancel();
-    if (window.speechSynthesis.paused) {
-      window.speechSynthesis.resume();
-    }
-  } catch {}
+  // Stop previous speech session cleanly
+  stopSpeechSynthesis();
 
-  const utterance = new SpeechSynthesisUtterance(clean);
-  utterance.rate = options?.rate ?? 0.95;
-  utterance.pitch = options?.pitch ?? 1.0;
-  if (typeof options?.volume === 'number') {
-    utterance.volume = Math.max(0, Math.min(1, options.volume));
+  // Split into manageable sentence chunks for Android TTS stability
+  const chunks = splitIntoSpokenChunks(clean, 180);
+  if (chunks.length === 0) {
+    options?.onError?.(new Error('No readable text content.'));
+    return { cancel: () => {}, utterance: null };
   }
 
-  // Determine voice
-  const voiceToUse = options?.voice || getBestEnglishVoice();
-  if (voiceToUse) {
-    utterance.voice = voiceToUse;
-    utterance.lang = voiceToUse.lang || options?.lang || 'en-US';
-  } else {
-    utterance.lang = options?.lang || 'en-US';
-  }
+  let isCancelled = false;
+  let activeVoice = options?.voice !== undefined ? options.voice : getBestEnglishVoice();
+  let currentChunkUtterance: SpeechSynthesisUtterance | null = null;
 
-  utterance.onstart = () => {
-    options?.onStart?.();
-  };
-
-  utterance.onend = () => {
-    options?.onEnd?.();
-  };
-
-  utterance.onerror = (event: any) => {
-    // Normal interruption / cancelation is not an operational failure
-    if (event.error === 'canceled' || event.error === 'interrupted') {
+  const playChunk = (index: number) => {
+    if (isCancelled || index >= chunks.length) {
+      if (!isCancelled && index >= chunks.length) {
+        options?.onEnd?.();
+      }
       return;
     }
-    options?.onError?.(event);
+
+    try {
+      const chunkText = chunks[index];
+      const utterance = new SpeechSynthesisUtterance(chunkText);
+      currentChunkUtterance = utterance;
+
+      utterance.rate = options?.rate ?? 0.95;
+      utterance.pitch = options?.pitch ?? 1.0;
+      if (typeof options?.volume === 'number') {
+        utterance.volume = Math.max(0, Math.min(1, options.volume));
+      }
+
+      // Configure voice and language
+      if (activeVoice) {
+        utterance.voice = activeVoice;
+        utterance.lang = activeVoice.lang || options?.lang || 'en-US';
+      } else {
+        utterance.lang = options?.lang || 'en-US';
+      }
+
+      // Keep strong reference to prevent Chromium / Android WebView GC
+      activeUtterances.add(utterance);
+
+      utterance.onstart = () => {
+        if (isCancelled) return;
+        if (index === 0) {
+          options?.onStart?.();
+        }
+      };
+
+      utterance.onend = () => {
+        activeUtterances.delete(utterance);
+        if (isCancelled) return;
+        playChunk(index + 1);
+      };
+
+      utterance.onerror = (event: any) => {
+        activeUtterances.delete(utterance);
+        if (isCancelled) return;
+
+        // Normal cancellation or interruption should not trigger user errors
+        if (event?.error === 'canceled' || event?.error === 'interrupted') {
+          return;
+        }
+
+        // Voice/language unavailable on Android: retry this chunk with system default voice
+        if (
+          activeVoice &&
+          (event?.error === 'voice-unavailable' ||
+            event?.error === 'language-unavailable' ||
+            event?.error === 'audio-busy')
+        ) {
+          console.warn(`[SpeechSynthesis] Selected voice failed (${event.error}), falling back to Android default.`);
+          activeVoice = null;
+          playChunk(index);
+          return;
+        }
+
+        options?.onError?.(event);
+      };
+
+      // On Android, calling speak() immediately after cancel() can be cancelled by IPC queue.
+      // A small timeout on chunk 0 ensures the Android TTS engine clears its cancelation queue.
+      if (index === 0) {
+        setTimeout(() => {
+          if (!isCancelled) {
+            try {
+              window.speechSynthesis.speak(utterance);
+            } catch (speakErr) {
+              activeUtterances.delete(utterance);
+              options?.onError?.(speakErr);
+            }
+          }
+        }, 35);
+      } else {
+        window.speechSynthesis.speak(utterance);
+      }
+    } catch (chunkErr) {
+      if (!isCancelled) {
+        options?.onError?.(chunkErr);
+      }
+    }
   };
 
-  try {
-    window.speechSynthesis.speak(utterance);
-  } catch (err) {
-    options?.onError?.(err);
-  }
+  playChunk(0);
 
   return {
     cancel: () => {
-      try {
-        window.speechSynthesis.cancel();
-      } catch {}
+      isCancelled = true;
+      stopSpeechSynthesis();
     },
-    utterance,
+    utterance: currentChunkUtterance,
   };
 }
 
@@ -360,6 +475,7 @@ export function getSupportedAudioMimeType(): string | undefined {
     'audio/aac',
     'audio/ogg;codecs=opus',
     'audio/ogg',
+    'audio/wav',
   ];
 
   for (const type of candidates) {
@@ -404,7 +520,7 @@ export function mapMicrophoneError(err: any): string {
     if (isInIframe) {
       return 'Microphone access was denied or restricted by embedding frame permissions policy. You can type your answer instead.';
     }
-    return 'Microphone permission was denied. Please allow microphone access in your browser site settings, or type your answer.';
+    return 'Microphone permission was denied. Please allow microphone access in your browser or Android device settings, or type your answer.';
   }
 
   if (errorName === 'NotFoundError' || errorName === 'DevicesNotFoundError') {
@@ -440,9 +556,21 @@ export async function startAudioRecording(options?: {
 
   let stream: MediaStream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  } catch (err) {
-    throw new Error(mapMicrophoneError(err));
+    // Attempt standard speech optimization constraints first
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+  } catch {
+    // Fall back to simple audio capture if device does not support extended audio constraints
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      throw new Error(mapMicrophoneError(err));
+    }
   }
 
   const selectedMime = options?.mimeType || getSupportedAudioMimeType();
@@ -469,7 +597,8 @@ export async function startAudioRecording(options?: {
     }
   };
 
-  mediaRecorder.start(options?.timeslice ?? 250);
+  // 1000ms timeslice provides reliable chunking across Android mobile devices
+  mediaRecorder.start(options?.timeslice ?? 1000);
 
   return {
     mediaRecorder,
@@ -478,10 +607,18 @@ export async function startAudioRecording(options?: {
       new Promise<AudioRecordingResult>((resolve, reject) => {
         mediaRecorder.onstop = () => {
           try {
+            cleanupMediaStreamTracks(stream);
+            if (audioChunks.length === 0) {
+              reject(new Error('No audio was captured. Please speak into the microphone and try again.'));
+              return;
+            }
             const finalMime = mediaRecorder.mimeType || selectedMime || 'audio/webm';
             const audioBlob = new Blob(audioChunks, { type: finalMime });
+            if (audioBlob.size === 0) {
+              reject(new Error('Audio recording was empty. Please try recording again.'));
+              return;
+            }
             const audioUrl = URL.createObjectURL(audioBlob);
-            cleanupMediaStreamTracks(stream);
             resolve({ blob: audioBlob, url: audioUrl, mimeType: finalMime });
           } catch (stopErr) {
             cleanupMediaStreamTracks(stream);
@@ -496,14 +633,22 @@ export async function startAudioRecording(options?: {
 
         try {
           if (mediaRecorder.state === 'recording') {
+            try {
+              if (typeof mediaRecorder.requestData === 'function') {
+                mediaRecorder.requestData();
+              }
+            } catch {}
             mediaRecorder.stop();
           } else {
             cleanupMediaStreamTracks(stream);
-            resolve({
-              blob: new Blob(audioChunks, { type: selectedMime || 'audio/webm' }),
-              url: '',
-              mimeType: selectedMime || 'audio/webm',
-            });
+            if (audioChunks.length > 0) {
+              const finalMime = mediaRecorder.mimeType || selectedMime || 'audio/webm';
+              const audioBlob = new Blob(audioChunks, { type: finalMime });
+              const audioUrl = URL.createObjectURL(audioBlob);
+              resolve({ blob: audioBlob, url: audioUrl, mimeType: finalMime });
+            } else {
+              reject(new Error('Recording was stopped before audio was captured.'));
+            }
           }
         } catch (err) {
           cleanupMediaStreamTracks(stream);

@@ -1,11 +1,15 @@
 package com.yhung.nursesstudy;
 
+import android.Manifest;
 import android.app.Activity;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.Gravity;
 import android.view.View;
+import android.webkit.PermissionRequest;
+import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
@@ -16,9 +20,12 @@ import android.widget.TextView;
 
 public class MainActivity extends Activity {
 
+    private static final int REQUEST_RECORD_AUDIO_PERMISSION = 1001;
+
     private WebView webView;
     private View splashView;
     private Handler handler = new Handler();
+    private PermissionRequest pendingPermissionRequest;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,10 +48,53 @@ public class MainActivity extends Activity {
 
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
+        webView.getSettings().setDatabaseEnabled(true);
+        webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
         webView.getSettings().setLoadWithOverviewMode(true);
         webView.getSettings().setUseWideViewPort(true);
 
         webView.setWebViewClient(new WebViewClient());
+
+        // Configure WebChromeClient to handle WebRTC audio permissions securely
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        boolean audioRequested = false;
+                        for (String resource : request.getResources()) {
+                            if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) {
+                                audioRequested = true;
+                                break;
+                            }
+                        }
+
+                        if (!audioRequested) {
+                            request.deny();
+                            return;
+                        }
+
+                        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                            request.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+                        } else {
+                            pendingPermissionRequest = request;
+                            requestPermissions(
+                                    new String[]{Manifest.permission.RECORD_AUDIO},
+                                    REQUEST_RECORD_AUDIO_PERMISSION
+                            );
+                        }
+                    }
+                });
+            }
+
+            @Override
+            public void onPermissionRequestCanceled(PermissionRequest request) {
+                if (pendingPermissionRequest != null && pendingPermissionRequest.equals(request)) {
+                    pendingPermissionRequest = null;
+                }
+            }
+        });
 
         webView.loadUrl("https://nursesstudy.onrender.com/");
 
@@ -138,6 +188,23 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_RECORD_AUDIO_PERMISSION) {
+            if (grantResults != null && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                if (pendingPermissionRequest != null) {
+                    pendingPermissionRequest.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+                }
+            } else {
+                if (pendingPermissionRequest != null) {
+                    pendingPermissionRequest.deny();
+                }
+            }
+            pendingPermissionRequest = null;
+        }
+    }
+
+    @Override
     public void onBackPressed() {
         if (webView != null && webView.canGoBack()) {
             webView.goBack();
@@ -145,4 +212,18 @@ public class MainActivity extends Activity {
             super.onBackPressed();
         }
     }
+
+    @Override
+    protected void onDestroy() {
+        if (pendingPermissionRequest != null) {
+            try {
+                pendingPermissionRequest.deny();
+            } catch (Exception e) {}
+            pendingPermissionRequest = null;
+        }
+        if (webView != null) {
+            webView.destroy();
+        }
+        super.onDestroy();
     }
+}

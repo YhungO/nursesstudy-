@@ -349,8 +349,11 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
       return;
     }
 
-    // Determine voice using safe English voice selection from mediaUtils
-    const chosenVoice = getBestEnglishVoice(availableVoices);
+    // Dynamically retrieve available voices if not preloaded
+    const voices = availableVoices && availableVoices.length > 0
+      ? availableVoices
+      : (typeof window !== 'undefined' && 'speechSynthesis' in window ? window.speechSynthesis.getVoices() : []);
+    const chosenVoice = getBestEnglishVoice(voices);
 
     const { cancel, utterance } = speakText(cleanQuestion, {
       voice: chosenVoice,
@@ -397,7 +400,7 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
 
     try {
       // 2. Request permission on-demand and start recording session via mediaUtils
-      const session = await startAudioRecording({ timeslice: 250 });
+      const session = await startAudioRecording({ timeslice: 1000 });
       recordingSessionRef.current = session;
       mediaStreamRef.current = session.stream;
       mediaRecorderRef.current = session.mediaRecorder;
@@ -476,6 +479,13 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
         audioPlayerRef.current.pause();
       } catch {}
       setIsPlayingAudio(false);
+    }
+
+    const prevUrl = answers[qId]?.voiceAudioUrl;
+    if (prevUrl) {
+      try {
+        URL.revokeObjectURL(prevUrl);
+      } catch {}
     }
 
     setAnswers((prev) => ({
@@ -1001,16 +1011,16 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
                 ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 animate-pulse'
                 : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
             }`}
-            title={isSpeaking ? 'Stop reading' : 'Read question text aloud'}
+            title={isSpeaking ? 'Stop reading question aloud' : 'Read question text aloud'}
           >
             {isSpeaking ? (
               <>
-                <VolumeX className="w-3.5 h-3.5 text-amber-400" />
+                <VolumeX className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span>Stop Reading</span>
               </>
             ) : (
               <>
-                <Volume2 className="w-3.5 h-3.5 text-teal-400" />
+                <Volume2 className="w-3.5 h-3.5 text-teal-400 shrink-0" />
                 <span>Read Question</span>
               </>
             )}
@@ -1046,8 +1056,8 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
                     : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
                 }`}
               >
-                <Mic className="w-4 h-4 text-purple-400" />
-                <span>{currentAnswerState.voiceAudioUrl ? 'Re-record Voice Answer' : 'Record Voice Answer'}</span>
+                <Mic className="w-4 h-4 text-purple-400 shrink-0" />
+                <span>{currentAnswerState.voiceAudioUrl ? 'Re-record Voice Answer' : 'Start Recording'}</span>
               </button>
             ) : (
               <button
@@ -1055,7 +1065,7 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
                 onClick={handleStopRecording}
                 className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all animate-pulse flex items-center gap-2 cursor-pointer shadow-sm"
               >
-                <Square className="w-4 h-4 fill-current" />
+                <Square className="w-4 h-4 fill-current shrink-0" />
                 <span>Stop Recording ({recordDuration}s)</span>
               </button>
             )}
@@ -1070,12 +1080,12 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
                 >
                   {isPlayingAudio ? (
                     <>
-                      <Pause className="w-3 h-3 fill-current" />
+                      <Pause className="w-3 h-3 fill-current shrink-0" />
                       <span>Pause</span>
                     </>
                   ) : (
                     <>
-                      <Play className="w-3 h-3 fill-current" />
+                      <Play className="w-3 h-3 fill-current shrink-0" />
                       <span>Play</span>
                     </>
                   )}
@@ -1086,7 +1096,7 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
                   className="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
                   title="Delete recorded answer"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-3.5 h-3.5 shrink-0" />
                 </button>
               </div>
             )}
@@ -1094,8 +1104,8 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
 
           {currentAnswerState.voiceAudioUrl && !isRecording && (
             <span className="text-xs text-teal-400 font-medium flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5 text-teal-400" />
-              Voice answer saved
+              <CheckCircle2 className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+              Recording saved / ready
             </span>
           )}
         </div>

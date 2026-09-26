@@ -822,7 +822,11 @@ export const CbtExam: React.FC<CbtExamProps> = ({
       return;
     }
 
-    const chosenVoice = getBestEnglishVoice(availableVoices);
+    // Dynamically retrieve available voices if not preloaded
+    const voices = availableVoices && availableVoices.length > 0
+      ? availableVoices
+      : (typeof window !== 'undefined' && 'speechSynthesis' in window ? window.speechSynthesis.getVoices() : []);
+    const chosenVoice = getBestEnglishVoice(voices);
 
     const { cancel } = speakText(fullSpeechText, {
       voice: chosenVoice,
@@ -871,7 +875,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
 
     try {
       // 2. Request permission on-demand and start recording session via mediaUtils
-      const session = await startAudioRecording({ timeslice: 250 });
+      const session = await startAudioRecording({ timeslice: 1000 });
       recordingSessionRef.current = session;
       mediaStreamRef.current = session.stream;
 
@@ -948,6 +952,13 @@ export const CbtExam: React.FC<CbtExamProps> = ({
         audioPlayerRef.current.pause();
       } catch {}
       setIsPlayingAudio(false);
+    }
+
+    const prevRecording = voiceRecordings[qId];
+    if (prevRecording?.voiceAudioUrl) {
+      try {
+        URL.revokeObjectURL(prevRecording.voiceAudioUrl);
+      } catch {}
     }
 
     setVoiceRecordings((prev) => {
@@ -1787,12 +1798,12 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                       >
                         {isSpeaking ? (
                           <>
-                            <VolumeX className="w-3.5 h-3.5 text-amber-400" />
+                            <VolumeX className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                             <span>Stop Reading</span>
                           </>
                         ) : (
                           <>
-                            <Volume2 className="w-3.5 h-3.5 text-teal-400" />
+                            <Volume2 className="w-3.5 h-3.5 text-teal-400 shrink-0" />
                             <span>Read Question</span>
                           </>
                         )}
@@ -1856,16 +1867,16 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                               : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80'
                           }`}
                         >
-                          <Mic className="w-3.5 h-3.5 text-purple-400" />
-                          <span>{voiceRecordings[String(currentQ.id)] ? 'Re-record Voice Answer' : 'Record Voice Answer'}</span>
+                          <Mic className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                          <span>{voiceRecordings[String(currentQ.id)] ? 'Re-record Voice Answer' : 'Start Recording'}</span>
                         </button>
                       ) : (
                         <button
                           type="button"
                           onClick={handleStopRecording}
-                          className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold transition-all animate-pulse flex items-center gap-1.5 cursor-pointer"
+                          className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold transition-all animate-pulse flex items-center gap-1.5 cursor-pointer shadow-sm"
                         >
-                          <Square className="w-3.5 h-3.5 fill-current" />
+                          <Square className="w-3.5 h-3.5 fill-current shrink-0" />
                           <span>Stop Recording ({recordDuration}s)</span>
                         </button>
                       )}
@@ -1874,6 +1885,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                     {/* Recorded Audio Controls for Current Question */}
                     {voiceRecordings[String(currentQ.id)] && !isRecording && (
                       <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-teal-400 font-semibold hidden sm:inline">Recording ready</span>
                         <button
                           type="button"
                           onClick={togglePlayRecordedAudio}
@@ -1882,12 +1894,12 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                         >
                           {isPlayingAudio ? (
                             <>
-                              <Pause className="w-3 h-3 fill-current" />
+                              <Pause className="w-3 h-3 fill-current shrink-0" />
                               <span>Pause</span>
                             </>
                           ) : (
                             <>
-                              <Play className="w-3 h-3 fill-current" />
+                              <Play className="w-3 h-3 fill-current shrink-0" />
                               <span>Play</span>
                             </>
                           )}
@@ -1899,7 +1911,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                           className="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
                           title="Delete voice answer"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3.5 h-3.5 shrink-0" />
                         </button>
                       </div>
                     )}
