@@ -742,27 +742,27 @@ export const TheoryCbtExam: React.FC<TheoryCbtExamProps> = ({
               </p>
             </div>
 
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 text-center min-w-[160px]">
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 sm:p-4 text-center w-full sm:w-auto sm:min-w-[160px]">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Time Used</span>
-              <span className="text-2xl font-extrabold text-teal-400 font-mono">
+              <span className="text-xl sm:text-2xl font-extrabold text-teal-400 font-mono">
                 {formatTime(attempt.timeSpentSeconds)}
               </span>
             </div>
           </div>
 
           {/* Quick Metrics Grid */}
-          <div className="grid grid-cols-3 gap-3 mt-6 pt-6 border-t border-slate-800/80">
-            <div className="bg-slate-900/60 p-3.5 rounded-2xl border border-slate-800 text-center">
-              <span className="text-[10px] font-semibold text-slate-400 uppercase block">Total Questions</span>
-              <span className="text-lg font-black text-white">{totalQuestions}</span>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-6 pt-6 border-t border-slate-800/80">
+            <div className="bg-slate-900/60 p-2.5 sm:p-3.5 rounded-2xl border border-slate-800 text-center">
+              <span className="text-[9px] sm:text-[10px] font-semibold text-slate-400 uppercase block">Total</span>
+              <span className="text-base sm:text-lg font-black text-white">{totalQuestions}</span>
             </div>
-            <div className="bg-emerald-950/30 p-3.5 rounded-2xl border border-emerald-500/30 text-center">
-              <span className="text-[10px] font-semibold text-emerald-300 uppercase block">Attempted</span>
-              <span className="text-lg font-black text-emerald-400">{attemptedCount}</span>
+            <div className="bg-emerald-950/30 p-2.5 sm:p-3.5 rounded-2xl border border-emerald-500/30 text-center">
+              <span className="text-[9px] sm:text-[10px] font-semibold text-emerald-300 uppercase block">Attempted</span>
+              <span className="text-base sm:text-lg font-black text-emerald-400">{attemptedCount}</span>
             </div>
-            <div className="bg-rose-950/30 p-3.5 rounded-2xl border border-rose-500/30 text-center">
-              <span className="text-[10px] font-semibold text-rose-300 uppercase block">Unanswered</span>
-              <span className="text-lg font-black text-rose-400">{unansweredCount}</span>
+            <div className="bg-rose-950/30 p-2.5 sm:p-3.5 rounded-2xl border border-rose-500/30 text-center">
+              <span className="text-[9px] sm:text-[10px] font-semibold text-rose-300 uppercase block">Unanswered</span>
+              <span className="text-base sm:text-lg font-black text-rose-400">{unansweredCount}</span>
             </div>
           </div>
         </div>

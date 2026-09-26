@@ -481,11 +481,11 @@ export const ResultsProgress: React.FC<ResultsProgressProps> = ({
               <div
                 key={attempt.id}
                 onClick={() => openAttempt(attempt.id)}
-                className="p-5 flex items-center justify-between hover:bg-slate-800/40 transition-colors cursor-pointer"
+                className="p-3.5 sm:p-5 flex items-center justify-between gap-3 hover:bg-slate-800/40 transition-colors cursor-pointer"
               >
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
                   <div
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center font-extrabold text-sm border ${
+                    className={`w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center font-extrabold text-xs sm:text-sm border shrink-0 ${
                       attempt.passed
                         ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
                         : 'bg-rose-500/20 border-rose-500/40 text-rose-300'
@@ -494,9 +494,9 @@ export const ResultsProgress: React.FC<ResultsProgressProps> = ({
                     {attempt.score}%
                   </div>
 
-                  <div>
-                    <h4 className="font-bold text-sm text-white">{attempt.examTitle}</h4>
-                    <div className="flex items-center gap-3 text-xs text-slate-400 mt-0.5">
+                  <div className="min-w-0 flex-1">
+                    <h4 className="font-bold text-xs sm:text-sm text-white truncate">{attempt.examTitle}</h4>
+                    <div className="flex items-center gap-2 sm:gap-3 text-[11px] sm:text-xs text-slate-400 mt-0.5 flex-wrap">
                       <span className="text-amber-400">{attempt.subjectName}</span>
                       <span>•</span>
                       <span>
@@ -508,9 +508,9 @@ export const ResultsProgress: React.FC<ResultsProgressProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                   <span
-                    className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                    className={`text-[10px] font-bold uppercase tracking-wider px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full border ${
                       attempt.passed
                         ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                         : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
@@ -518,7 +518,7 @@ export const ResultsProgress: React.FC<ResultsProgressProps> = ({
                   >
                     {attempt.passed ? 'PASSED' : 'RETAKE'}
                   </span>
-                  <ChevronRight className="w-4 h-4 text-slate-500" />
+                  <ChevronRight className="w-4 h-4 text-slate-500 shrink-0" />
                 </div>
               </div>
             ))}

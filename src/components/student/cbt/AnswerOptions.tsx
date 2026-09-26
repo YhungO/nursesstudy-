@@ -72,7 +72,7 @@ export const AnswerOptions: React.FC<AnswerOptionsProps> = ({
             </span>
 
             {/* 3. Answer Text */}
-            <span className="flex-1 text-xs sm:text-sm leading-relaxed font-normal">
+            <span className="flex-1 text-xs sm:text-sm leading-relaxed font-normal min-w-0 break-words">
               {optObj.text}
             </span>
           </button>

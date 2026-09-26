@@ -23,7 +23,7 @@ export const BottomActionBar: React.FC<BottomActionBarProps> = ({
 
   return (
     <nav
-      className="sticky bottom-0 z-20 w-full bg-[#0c121e]/95 backdrop-blur-md border-t border-slate-800/90 py-2.5 px-3 sm:px-4 shadow-lg"
+      className="sticky bottom-0 z-20 w-full bg-[#0c121e]/95 backdrop-blur-md border-t border-slate-800/90 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] px-3 sm:px-4 shadow-lg"
       aria-label="Question Navigation"
     >
       <div className="max-w-2xl mx-auto flex items-center justify-between gap-2">

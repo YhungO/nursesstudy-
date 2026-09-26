@@ -42,26 +42,26 @@ export const ExamTopBar: React.FC<ExamTopBarProps> = ({
 
   return (
     <header className="sticky top-0 z-30 w-full bg-[#0c121e]/95 backdrop-blur-md border-b border-slate-800/90 shadow-md transition-colors">
-      <div className="max-w-3xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-2">
+      <div className="max-w-3xl mx-auto px-2 sm:px-4 h-14 flex items-center justify-between gap-1 sm:gap-2">
         {/* Left: Back / Exit & Flag Tool */}
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           <button
             type="button"
             onClick={onExitClick}
             disabled={isSubmitting}
-            className="h-9 px-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/80 active:bg-slate-800 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer disabled:opacity-50"
+            className="h-9 px-2 sm:px-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/80 active:bg-slate-800 transition-colors flex items-center gap-1 text-xs font-semibold cursor-pointer disabled:opacity-50"
             title="Exit Examination"
             aria-label="Exit examination"
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="hidden xs:inline sm:inline">Exit</span>
+            <ArrowLeft className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">Exit</span>
           </button>
 
           <button
             type="button"
             onClick={onToggleFlag}
             disabled={isSubmitting}
-            className={`h-9 px-2.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer border disabled:opacity-50 ${
+            className={`h-9 px-2 sm:px-2.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer border disabled:opacity-50 ${
               isFlagged
                 ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-xs shadow-amber-900/20'
                 : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800/80'
@@ -70,7 +70,7 @@ export const ExamTopBar: React.FC<ExamTopBarProps> = ({
             aria-label={isFlagged ? 'Unflag question' : 'Flag question'}
           >
             <Flag
-              className={`w-3.5 h-3.5 transition-colors ${
+              className={`w-3.5 h-3.5 shrink-0 transition-colors ${
                 isFlagged ? 'fill-amber-400 text-amber-400' : 'text-slate-400'
               }`}
             />
@@ -81,7 +81,7 @@ export const ExamTopBar: React.FC<ExamTopBarProps> = ({
         {/* Center: Live Countdown Timer with Circular Progress & Urgency Badging */}
         <div className="flex items-center justify-center shrink-0">
           <div
-            className={`relative flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-2xl text-xs font-mono font-bold tracking-wider transition-all border shadow-md ${
+            className={`relative flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 rounded-2xl text-xs font-mono font-bold tracking-wider transition-all border shadow-md ${
               isTimeExpired
                 ? 'bg-rose-950 border-rose-500 text-white animate-pulse ring-2 ring-rose-500/50'
                 : isTimeCritical

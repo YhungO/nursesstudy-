@@ -364,7 +364,7 @@ const MainAppContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#0b0f19] text-slate-100 flex flex-col font-sans selection:bg-teal-500 selection:text-white">
+    <div className="min-h-screen min-h-[100dvh] w-full max-w-full overflow-x-hidden bg-[#0b0f19] text-slate-100 flex flex-col font-sans selection:bg-teal-500 selection:text-white">
       {/* Main Top Navigation */}
       <Navbar
         currentView={currentView}
@@ -383,7 +383,7 @@ const MainAppContent: React.FC = () => {
       />
 
       {/* Main App Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-20">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-24 md:pb-20 min-w-0">
         {currentView === 'home' && (
           <StudentHome
             subjects={subjects}
@@ -516,7 +516,7 @@ const MainAppContent: React.FC = () => {
       </main>
 
       {/* Clinical Portal Footer */}
-      <footer className="mt-auto border-t border-slate-800/60 bg-[#09090d]">
+      <footer className="mt-auto border-t border-slate-800/60 bg-[#09090d] mb-16 md:mb-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-3 text-center md:text-left">
@@ -673,14 +673,14 @@ const MainAppContent: React.FC = () => {
       />
 
       {/* Floating Ask AI Tutor Button */}
-      {currentView !== 'admin' && aiSettings.aiFeaturesEnabled && aiSettings.aiTutorEnabled && (
+      {currentView !== 'admin' && currentView !== 'cbt' && aiSettings.aiFeaturesEnabled && aiSettings.aiTutorEnabled && (
         <button
           type="button"
           onClick={() => {
             setAiTutorTopic('');
             setAiTutorOpen(true);
           }}
-          className="fixed bottom-20 md:bottom-6 right-5 z-40 flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-gradient-to-r from-teal-600 via-teal-500 to-sky-600 hover:from-teal-500 hover:to-sky-500 text-white font-bold text-xs shadow-xl shadow-teal-900/40 border border-teal-300/40 hover:scale-105 active:scale-95 transition-all cursor-pointer ring-1 ring-white/20"
+          className="fixed bottom-20 md:bottom-6 right-4 sm:right-5 z-40 flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-gradient-to-r from-teal-600 via-teal-500 to-sky-600 hover:from-teal-500 hover:to-sky-500 text-white font-bold text-xs shadow-xl shadow-teal-900/40 border border-teal-300/40 hover:scale-105 active:scale-95 transition-all cursor-pointer ring-1 ring-white/20"
           title="Ask AI Study Tutor"
         >
           <Sparkles className="w-4 h-4 text-teal-100 animate-pulse" />

@@ -158,7 +158,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
 
                 {notificationsOpen && (
-                  <div className="absolute right-0 mt-2 w-80 bg-[#111827] rounded-2xl shadow-2xl border border-slate-800 p-4 z-50 animate-in fade-in zoom-in-95">
+                  <div className="absolute right-0 mt-2 w-72 sm:w-80 max-w-[calc(100vw-1.5rem)] bg-[#111827] rounded-2xl shadow-2xl border border-slate-800 p-4 z-50 animate-in fade-in zoom-in-95">
                     <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                       <span className="text-xs font-bold text-white flex items-center gap-1.5">
                         <Bell className="w-3.5 h-3.5 text-teal-400" />
@@ -248,7 +248,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </button>
 
                   {profileOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-64 bg-[#111827] rounded-2xl shadow-2xl border border-slate-800 py-2 z-50 animate-in fade-in zoom-in-95">
+                    <div className="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] bg-[#111827] rounded-2xl shadow-2xl border border-slate-800 py-2 z-50 animate-in fade-in zoom-in-95">
                       <div className="px-4 py-3 border-b border-slate-800">
                         <p className="text-xs font-bold text-white">{user.name}</p>
                         <p className="text-[11px] text-slate-400 truncate">{user.email}</p>
@@ -436,63 +436,68 @@ export const Navbar: React.FC<NavbarProps> = ({
       </header>
 
       {/* Mobile Bottom Navigation Bar (Thumb Friendly) */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0b0f19]/95 backdrop-blur-xl border-t border-slate-800/80 px-2 py-2 flex items-center justify-around shadow-[0_-4px_24px_rgba(0,0,0,0.7)]">
-        <button
-          onClick={() => onNavigate('home')}
-          className={`flex flex-col items-center justify-center min-h-[44px] px-3 rounded-xl text-[10px] font-semibold transition-all ${
-            currentView === 'home'
-              ? 'bg-teal-500/15 text-teal-300 font-bold border border-teal-500/30'
-              : 'text-slate-400 hover:text-slate-200 border border-transparent'
-          }`}
+      {currentView !== 'admin' && (
+        <nav
+          aria-label="Mobile Bottom Navigation"
+          className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0b0f19]/95 backdrop-blur-xl border-t border-slate-800/80 px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex items-center justify-around shadow-[0_-4px_24px_rgba(0,0,0,0.7)]"
         >
-          <Activity className="w-4 h-4 mb-0.5" />
-          <span>Home</span>
-        </button>
-        <button
-          onClick={() => onNavigate('notes')}
-          className={`flex flex-col items-center justify-center min-h-[44px] px-3 rounded-xl text-[10px] font-semibold transition-all ${
-            currentView === 'notes'
-              ? 'bg-teal-500/15 text-teal-300 font-bold border border-teal-500/30'
-              : 'text-slate-400 hover:text-slate-200 border border-transparent'
-          }`}
-        >
-          <BookOpen className="w-4 h-4 mb-0.5" />
-          <span>Notes</span>
-        </button>
-        <button
-          onClick={() => onNavigate('practice')}
-          className={`flex flex-col items-center justify-center min-h-[44px] px-3 rounded-xl text-[10px] font-semibold transition-all ${
-            currentView === 'practice'
-              ? 'bg-sky-500/15 text-sky-300 font-bold border border-sky-500/30'
-              : 'text-slate-400 hover:text-slate-200 border border-transparent'
-          }`}
-        >
-          <HelpCircle className="w-4 h-4 mb-0.5" />
-          <span>Practice</span>
-        </button>
-        <button
-          onClick={() => onNavigate('cbt')}
-          className={`flex flex-col items-center justify-center min-h-[44px] px-3 rounded-xl text-[10px] font-semibold transition-all ${
-            currentView === 'cbt'
-              ? 'bg-purple-500/15 text-purple-300 font-bold border border-purple-500/30'
-              : 'text-slate-400 hover:text-slate-200 border border-transparent'
-          }`}
-        >
-          <Clock className="w-4 h-4 mb-0.5" />
-          <span>CBT Hall</span>
-        </button>
-        <button
-          onClick={() => onNavigate('results')}
-          className={`flex flex-col items-center justify-center min-h-[44px] px-3 rounded-xl text-[10px] font-semibold transition-all ${
-            currentView === 'results'
-              ? 'bg-amber-500/15 text-amber-300 font-bold border border-amber-500/30'
-              : 'text-slate-400 hover:text-slate-200 border border-transparent'
-          }`}
-        >
-          <Award className="w-4 h-4 mb-0.5" />
-          <span>Results</span>
-        </button>
-      </div>
+          <button
+            onClick={() => onNavigate('home')}
+            className={`flex flex-col items-center justify-center min-h-[44px] px-2 sm:px-3 rounded-xl text-[10px] font-semibold transition-all touch-manipulation min-w-0 flex-1 ${
+              currentView === 'home'
+                ? 'bg-teal-500/15 text-teal-300 font-bold border border-teal-500/30'
+                : 'text-slate-400 hover:text-slate-200 border border-transparent'
+            }`}
+          >
+            <Activity className="w-4 h-4 mb-0.5 shrink-0" />
+            <span className="truncate">Home</span>
+          </button>
+          <button
+            onClick={() => onNavigate('notes')}
+            className={`flex flex-col items-center justify-center min-h-[44px] px-2 sm:px-3 rounded-xl text-[10px] font-semibold transition-all touch-manipulation min-w-0 flex-1 ${
+              currentView === 'notes'
+                ? 'bg-teal-500/15 text-teal-300 font-bold border border-teal-500/30'
+                : 'text-slate-400 hover:text-slate-200 border border-transparent'
+            }`}
+          >
+            <BookOpen className="w-4 h-4 mb-0.5 shrink-0" />
+            <span className="truncate">Notes</span>
+          </button>
+          <button
+            onClick={() => onNavigate('practice')}
+            className={`flex flex-col items-center justify-center min-h-[44px] px-2 sm:px-3 rounded-xl text-[10px] font-semibold transition-all touch-manipulation min-w-0 flex-1 ${
+              currentView === 'practice'
+                ? 'bg-sky-500/15 text-sky-300 font-bold border border-sky-500/30'
+                : 'text-slate-400 hover:text-slate-200 border border-transparent'
+            }`}
+          >
+            <HelpCircle className="w-4 h-4 mb-0.5 shrink-0" />
+            <span className="truncate">Practice</span>
+          </button>
+          <button
+            onClick={() => onNavigate('cbt')}
+            className={`flex flex-col items-center justify-center min-h-[44px] px-2 sm:px-3 rounded-xl text-[10px] font-semibold transition-all touch-manipulation min-w-0 flex-1 ${
+              currentView === 'cbt'
+                ? 'bg-purple-500/15 text-purple-300 font-bold border border-purple-500/30'
+                : 'text-slate-400 hover:text-slate-200 border border-transparent'
+            }`}
+          >
+            <Clock className="w-4 h-4 mb-0.5 shrink-0" />
+            <span className="truncate">CBT Hall</span>
+          </button>
+          <button
+            onClick={() => onNavigate('results')}
+            className={`flex flex-col items-center justify-center min-h-[44px] px-2 sm:px-3 rounded-xl text-[10px] font-semibold transition-all touch-manipulation min-w-0 flex-1 ${
+              currentView === 'results'
+                ? 'bg-amber-500/15 text-amber-300 font-bold border border-amber-500/30'
+                : 'text-slate-400 hover:text-slate-200 border border-transparent'
+            }`}
+          >
+            <Award className="w-4 h-4 mb-0.5 shrink-0" />
+            <span className="truncate">Results</span>
+          </button>
+        </nav>
+      )}
     </>
   );
 };

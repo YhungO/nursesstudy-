@@ -63,19 +63,19 @@ export const StudyNotes: React.FC<StudyNotesProps> = ({
     return (
       <div className="max-w-4xl mx-auto space-y-6 pb-16 animate-in fade-in">
         {/* Navigation & Action Bar */}
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <button
             onClick={() => setActiveNoteId(null)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#111827] border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#111827] border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors shadow-sm self-start cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4 text-slate-400" />
             <span>Back to All Notes</span>
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => onToggleBookmark(activeNote.id)}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all ${
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                 isBookmarked
                   ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
                   : 'bg-[#111827] text-slate-300 border-slate-800 hover:bg-slate-800'
@@ -89,7 +89,7 @@ export const StudyNotes: React.FC<StudyNotesProps> = ({
 
             <button
               onClick={() => onNavigateToPractice(activeNote.subjectId)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white text-xs font-bold transition-colors shadow-md shadow-teal-900/30"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white text-xs font-bold transition-colors shadow-md shadow-teal-900/30 cursor-pointer"
             >
               <HelpCircle className="w-4 h-4" />
               <span>Practice Questions</span>
