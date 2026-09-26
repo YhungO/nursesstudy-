@@ -103,26 +103,40 @@ app.post('/api/ai/tutor', async (req, res) => {
   const user = getAuthUser(req);
   const clientKey = user?.id || (req.headers['x-forwarded-for'] as string) || req.ip || 'anonymous';
 
-  // Cost & Free-tier protection: Rate limit requests
+  // Cost & Free-tier protection: Rate limit requests (15 requests per 60 seconds)
   const rateCheck = checkRateLimit(`tutor_${clientKey}`, 15, 60000);
   if (!rateCheck.allowed) {
+    const retrySec = rateCheck.retryAfterSec || 30;
     return res.status(429).json({
-      error: `AI assistance is temporarily rate limited. Please wait ${rateCheck.retryAfterSec || 30} seconds before asking another question.`,
+      error: `AI assistance is rate limited. Please wait ${retrySec} seconds before asking another question.`,
+      reply: `AI assistance is rate limited. Please wait ${retrySec} seconds before asking another question.`,
+      retryAfterSec: retrySec,
     });
   }
 
-  const { prompt, context } = req.body;
+  const { prompt, context, history } = req.body;
   if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
-    return res.status(400).json({ error: 'Please enter a question for the AI Tutor.' });
+    return res.status(400).json({
+      error: 'Please enter a question for the AI Tutor.',
+      reply: 'Please enter a question for the AI Tutor.',
+    });
   }
 
   try {
-    const result = await askAiTutor(prompt, context);
+    const result = await askAiTutor(prompt, context, history);
     res.json(result);
   } catch (error: any) {
-    console.warn('[AI Tutor handler notice]:', error?.message || error);
-    res.json({
-      reply: 'AI assistance is temporarily unavailable. You can continue using the normal CBT features.',
+    const statusCode = error.statusCode || 500;
+    const userMessage = error.userMessage || 'AI assistance is temporarily unavailable. Please try again in a moment.';
+    console.error('[AI Tutor Route Error]:', {
+      statusCode,
+      code: error?.code,
+      message: error?.message,
+    });
+    res.status(statusCode).json({
+      error: userMessage,
+      reply: userMessage,
+      code: error?.code,
     });
   }
 });

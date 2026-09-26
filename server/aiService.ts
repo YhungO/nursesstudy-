@@ -2,13 +2,23 @@ import 'dotenv/config';
 import fs from 'fs';
 import { GoogleGenAI } from '@google/genai';
 
-let resolvedApiKey: string | null = null;
+export class AiServiceError extends Error {
+  statusCode: number;
+  code: string;
+  userMessage: string;
+
+  constructor(statusCode: number, code: string, userMessage: string, technicalDetails?: string) {
+    super(technicalDetails || userMessage);
+    this.name = 'AiServiceError';
+    this.statusCode = statusCode;
+    this.code = code;
+    this.userMessage = userMessage;
+  }
+}
 
 function getApiKey(): string | null {
-  if (resolvedApiKey) return resolvedApiKey;
   if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()) {
-    resolvedApiKey = process.env.GEMINI_API_KEY.trim();
-    return resolvedApiKey;
+    return process.env.GEMINI_API_KEY.trim();
   }
   const possiblePaths = ['/app/.dev.env.json', '.dev.env.json', '../.dev.env.json'];
   for (const p of possiblePaths) {
@@ -17,9 +27,8 @@ function getApiKey(): string | null {
         const raw = fs.readFileSync(p, 'utf8');
         const parsed = JSON.parse(raw);
         if (parsed.GEMINI_API_KEY && typeof parsed.GEMINI_API_KEY === 'string') {
-          resolvedApiKey = parsed.GEMINI_API_KEY.trim();
-          process.env.GEMINI_API_KEY = resolvedApiKey;
-          return resolvedApiKey;
+          process.env.GEMINI_API_KEY = parsed.GEMINI_API_KEY.trim();
+          return process.env.GEMINI_API_KEY;
         }
       }
     } catch {}
@@ -42,6 +51,158 @@ const getAiClient = () => {
     },
   });
 };
+
+function classifyGeminiError(err: any): AiServiceError {
+  const rawMsg = String(err?.message || err || '');
+  const status = Number(err?.status || err?.code || err?.statusCode || 0);
+
+  // Sanitize any key occurrences from internal trace
+  const safeMsg = rawMsg.replace(/AIza[0-9A-Za-z-_]{35}/g, '[REDACTED_API_KEY]');
+
+  if (safeMsg.includes('API_KEY') || safeMsg.includes('API key') || status === 401 || status === 403) {
+    return new AiServiceError(
+      401,
+      'AUTH_ERROR',
+      'AI service authentication error. Please contact the platform administrator.',
+      safeMsg
+    );
+  }
+  if (safeMsg.includes('RESOURCE_EXHAUSTED') || safeMsg.includes('quota') || status === 429) {
+    return new AiServiceError(
+      429,
+      'RATE_LIMIT',
+      'The AI service is currently handling high student volume. Please wait a few seconds and try again.',
+      safeMsg
+    );
+  }
+  if (safeMsg.includes('INVALID_ARGUMENT') || status === 400) {
+    return new AiServiceError(
+      400,
+      'BAD_REQUEST',
+      'Your question could not be processed. Please rephrase or shorten your question.',
+      safeMsg
+    );
+  }
+  if (safeMsg.includes('NOT_FOUND') || status === 404) {
+    return new AiServiceError(
+      404,
+      'MODEL_NOT_FOUND',
+      'The requested AI model is unavailable. Please notify the administrator.',
+      safeMsg
+    );
+  }
+  if (safeMsg.includes('UNAVAILABLE') || safeMsg.includes('high demand') || status === 503 || status === 500) {
+    return new AiServiceError(
+      503,
+      'SERVICE_UNAVAILABLE',
+      'The AI service is temporarily experiencing high traffic. Please try again in a few moments.',
+      safeMsg
+    );
+  }
+  if (safeMsg.includes('timeout') || safeMsg.includes('ETIMEDOUT') || safeMsg.includes('ECONNRESET')) {
+    return new AiServiceError(
+      504,
+      'TIMEOUT',
+      'AI request timed out. Please check your internet connection and try again.',
+      safeMsg
+    );
+  }
+  return new AiServiceError(
+    500,
+    'INTERNAL_AI_ERROR',
+    'AI assistance is momentarily unavailable. You can continue using your normal CBT exam features.',
+    safeMsg
+  );
+}
+
+/**
+ * Robust caller with automatic retry for transient spikes (503/429)
+ * and seamless fallback between gemini-3.8-flash and gemini-3.1-flash-lite.
+ */
+async function callGeminiWithFallback(options: {
+  contents: any;
+  config?: any;
+  preferredModel?: string;
+  fallbackModel?: string;
+  timeoutMs?: number;
+}): Promise<{ text: string; modelUsed: string }> {
+  const ai = getAiClient();
+  if (!ai) {
+    throw new AiServiceError(
+      401,
+      'AUTH_MISSING_KEY',
+      'AI service is not configured. Please contact the platform administrator.',
+      'GEMINI_API_KEY environment variable is missing or empty'
+    );
+  }
+
+  const primaryModel = options.preferredModel || 'gemini-3.8-flash';
+  const secondaryModel = options.fallbackModel || 'gemini-3.1-flash-lite';
+  const modelsToTry = [primaryModel, secondaryModel];
+
+  let lastError: any = null;
+
+  for (let mIdx = 0; mIdx < modelsToTry.length; mIdx++) {
+    const currentModel = modelsToTry[mIdx];
+    // For each model, attempt up to 2 times for transient network/503 spikes
+    const maxAttempts = mIdx === 0 ? 2 : 1;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model: currentModel,
+          contents: options.contents,
+          config: options.config,
+        });
+
+        const textOutput = response?.text?.trim();
+        if (textOutput) {
+          return { text: textOutput, modelUsed: currentModel };
+        }
+
+        // If candidates exist with content parts, try manual extraction
+        const candidateParts = response?.candidates?.[0]?.content?.parts;
+        if (Array.isArray(candidateParts)) {
+          const joined = candidateParts
+            .map((p: any) => p.text || '')
+            .join('')
+            .trim();
+          if (joined) {
+            return { text: joined, modelUsed: currentModel };
+          }
+        }
+
+        throw new Error('AI model returned an empty response.');
+      } catch (err: any) {
+        lastError = err;
+        const errMsg = String(err?.message || '');
+        const isTransient =
+          errMsg.includes('503') ||
+          errMsg.includes('UNAVAILABLE') ||
+          errMsg.includes('high demand') ||
+          errMsg.includes('429') ||
+          errMsg.includes('RESOURCE_EXHAUSTED') ||
+          errMsg.includes('ETIMEDOUT') ||
+          errMsg.includes('ECONNRESET');
+
+        console.warn(
+          `[AI Pipeline Notice]: Model ${currentModel} (attempt ${attempt}/${maxAttempts}) failed:`,
+          errMsg.slice(0, 100)
+        );
+
+        // If transient error and have another attempt for this model, wait briefly
+        if (isTransient && attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, 600));
+        } else {
+          // Break to next fallback model
+          break;
+        }
+      }
+    }
+  }
+
+  throw classifyGeminiError(lastError);
+}
 
 // ==================== RATE LIMITER & COST PROTECTION ==================== //
 // Tracks requests per user/IP: max 15 requests per 60-second window
@@ -133,40 +294,24 @@ export async function getAiServiceStatus(): Promise<{
     };
   }
 
-  const ai = getAiClient();
-  if (!ai) {
-    return {
-      available: false,
-      status: 'Offline',
-      model: 'gemini-3.8-flash',
-      provider: 'Google Gemini AI',
-      latencyMs: 0,
-      checkedAt,
-      statusText: 'AI Service Offline - Client Initialization Failed',
-      details: 'GoogleGenAI client could not be instantiated.',
-    };
-  }
-
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: 'Ping',
+    const { text, modelUsed } = await callGeminiWithFallback({
+      contents: 'Respond with "Ready" to confirm service operational status.',
       config: {
-        maxOutputTokens: 5,
-        temperature: 0,
+        temperature: 0.1,
       },
     });
 
     const latencyMs = Date.now() - start;
-    if (response && response.text) {
+    if (text) {
       return {
         available: true,
         status: 'Operational',
-        model: 'gemini-3.8-flash',
+        model: modelUsed,
         provider: 'Google Gemini AI',
         latencyMs,
         checkedAt,
-        statusText: `Operational - Gemini 3.8 Flash Connected (${latencyMs}ms)`,
+        statusText: `Operational - ${modelUsed} Connected (${latencyMs}ms)`,
         details: 'AI Service is operational with live model responses verified.',
       };
     }
@@ -174,11 +319,11 @@ export async function getAiServiceStatus(): Promise<{
     return {
       available: true,
       status: 'Degraded',
-      model: 'gemini-3.8-flash',
+      model: modelUsed,
       provider: 'Google Gemini AI',
       latencyMs,
       checkedAt,
-      statusText: 'Degraded - Response format unexpected',
+      statusText: 'Degraded - Empty response',
       details: 'Service responded without text content.',
     };
   } catch (err: any) {
@@ -191,7 +336,7 @@ export async function getAiServiceStatus(): Promise<{
       provider: 'Google Gemini AI',
       latencyMs,
       checkedAt,
-      statusText: `Degraded - ${err?.message?.substring(0, 60) || 'Service error'}`,
+      statusText: `Degraded - ${err?.userMessage || err?.message?.substring(0, 60) || 'Service error'}`,
       details: err?.message || 'Error communicating with Gemini API',
     };
   }
@@ -250,62 +395,76 @@ function parseJsonSafely<T>(rawText: string, fallback: T): T {
 // ==================== FEATURE 1: AI STUDY TUTOR ==================== //
 export async function askAiTutor(
   prompt: string,
-  context?: string
-): Promise<{ reply: string }> {
+  context?: string,
+  history?: { role: 'user' | 'model'; text: string }[]
+): Promise<{ reply: string; modelUsed: string }> {
   if (!isAiTutorEnabled()) {
-    return {
-      reply: 'The AI Clinical Tutor has been disabled by the administrator. Normal CBT examination and curriculum features remain accessible.',
-    };
+    throw new AiServiceError(
+      403,
+      'FEATURE_DISABLED',
+      'The AI Clinical Tutor has been disabled by the administrator. Normal CBT examination and curriculum features remain accessible.'
+    );
   }
 
   const cleanPrompt = (prompt || '').trim();
   if (!cleanPrompt) {
-    return {
-      reply: 'Please enter a clinical question or concept you would like explained.',
-    };
+    throw new AiServiceError(
+      400,
+      'EMPTY_PROMPT',
+      'Please enter a clinical question or concept you would like explained.'
+    );
   }
 
-  const ai = getAiClient();
-  if (!ai) {
-    return {
-      reply: 'AI assistance is temporarily unavailable. You can continue using the normal CBT features.',
-    };
+  // Cost protection & context bounding
+  const safePrompt = cleanPrompt.slice(0, 1000);
+  const safeContext = context ? context.slice(0, 500) : '';
+
+  // Format bounded history if provided (last 6 turns, max 300 chars each)
+  let formattedHistory = '';
+  if (Array.isArray(history) && history.length > 0) {
+    const recent = history.slice(-6).map((h) => {
+      const speaker = h.role === 'user' ? 'Student' : 'Tutor';
+      const safeText = (h.text || '').slice(0, 300).replace(/\n+/g, ' ');
+      return `${speaker}: ${safeText}`;
+    });
+    formattedHistory = recent.join('\n');
   }
 
-  // Cost protection: restrict prompt length
-  const safePrompt = cleanPrompt.slice(0, 800);
-  const safeContext = context ? context.slice(0, 400) : '';
-
-  const systemInstruction = `You are a supportive, knowledgeable clinical nursing education tutor for student nurses.
+  const systemInstruction = `You are an expert, supportive clinical nursing education tutor for student nurses.
 Explain concepts in clear, student-friendly language suitable for nursing and health science students.
-Give step-by-step explanations when appropriate (e.g. pathophysiological steps, drug mechanisms, nursing care plans).
-Keep your responses concise and focused (under 250 words) to avoid information overload.
+Cover core clinical concepts including anatomy, physiology, pharmacology, pathology, clinical assessment, medical-surgical nursing, and NCLEX-style exam reasoning.
+Provide clear, step-by-step explanations when appropriate (e.g. pathophysiological steps, drug mechanisms of action, or the 5 phases of the nursing process: Assessment, Diagnosis, Planning, Implementation, Evaluation).
+Keep your tone encouraging, professional, and accessible.
 Admit when you do not know something and never invent facts.
-Encourage deep clinical understanding rather than rote memorization.
-Never discuss changing student CBT exam scores or official records.`;
+Never modify or discuss changing examination scores, CBT results, or official student records.`;
 
-  const userContent = safeContext
-    ? `Topic/Context: ${safeContext}\n\nStudent Question: ${safePrompt}`
-    : `Student Question: ${safePrompt}`;
+  let userContent = '';
+  if (formattedHistory) {
+    userContent += `Recent Conversation History:\n${formattedHistory}\n\n`;
+  }
+  if (safeContext) {
+    userContent += `Clinical Context/Topic: ${safeContext}\n\n`;
+  }
+  userContent += `Student Question: ${safePrompt}`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
+    const { text, modelUsed } = await callGeminiWithFallback({
       contents: userContent,
       config: {
         systemInstruction,
-        temperature: 0.4,
-        maxOutputTokens: 600,
+        temperature: 0.35,
       },
     });
 
-    const reply = response.text?.trim() || 'No response generated by tutor.';
-    return { reply };
-  } catch (error: any) {
-    console.warn('[AI Tutor notice]:', error?.message || error);
     return {
-      reply: 'AI assistance is temporarily unavailable. You can continue using the normal CBT features.',
+      reply: text || 'No response generated by tutor.',
+      modelUsed,
     };
+  } catch (error: any) {
+    if (error instanceof AiServiceError) {
+      throw error;
+    }
+    throw classifyGeminiError(error);
   }
 }
 
@@ -350,24 +509,8 @@ export async function explainMcqQuestion(params: McqExplainParams): Promise<McqE
     return cached;
   }
 
-  const ai = getAiClient();
-  if (!ai) {
-    // Return fallback rationale without throwing so user experience is smooth
-    const fallbackText = rationale || 'The selected option aligns with evidence-based nursing clinical standards.';
-    return {
-      whyCorrect: `Option ${correctOption} is correct according to nursing curriculum. ${fallbackText}`,
-      whyStudentChoice: selectedOption === correctOption
-        ? 'You selected the correct key! Great clinical assessment.'
-        : selectedOption
-        ? `Option ${selectedOption} is incorrect for this clinical presentation.`
-        : 'You did not select an option for this question.',
-      keyTakeaway: fallbackText,
-      summary: fallbackText,
-    };
-  }
-
   const formattedOptions = (options || [])
-    .map(o => `${o.id}: ${o.text}`)
+    .map((o) => `${o.id}: ${o.text}`)
     .join('\n');
 
   const prompt = `You are an expert clinical nursing instructor explaining a multiple-choice question to a nursing student.
@@ -392,17 +535,15 @@ Respond in strict JSON with the following schema:
 }`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
+    const { text } = await callGeminiWithFallback({
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
         temperature: 0.2,
-        maxOutputTokens: 600,
       },
     });
 
-    const parsed = parseJsonSafely<McqExplainResult>(response.text || '', {
+    const parsed = parseJsonSafely<McqExplainResult>(text || '', {
       whyCorrect: rationale || `Option ${correctOption} is the verified clinical answer.`,
       whyStudentChoice: selectedOption === correctOption ? 'Your choice was correct.' : 'Your choice did not meet the criteria.',
       keyTakeaway: rationale || 'Remember to evaluate patient stability and ABCs first.',
@@ -478,12 +619,6 @@ export async function markTheoryAnswer(params: TheoryMarkParams): Promise<Theory
     return cached;
   }
 
-  const ai = getAiClient();
-  if (!ai) {
-    // Graceful fallback to deterministic keyword/substance estimation
-    return fallbackDeterministicMarking(cleanStudent, expectedAnswer, safeMaxMarks);
-  }
-
   const prompt = `You are a strict, fair clinical nursing examiner assessing a student's written response to a theory question against the official marking criteria and model answer.
 
 Question Category: ${category || 'General Clinical Nursing'}
@@ -521,17 +656,15 @@ Respond ONLY with valid JSON with this exact structure:
 }`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
+    const { text } = await callGeminiWithFallback({
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
         temperature: 0.1,
-        maxOutputTokens: 800,
       },
     });
 
-    const parsed = parseJsonSafely<any>(response.text || '', null);
+    const parsed = parseJsonSafely<any>(text || '', null);
 
     if (!parsed || typeof parsed.score !== 'number' || isNaN(parsed.score)) {
       console.warn('[AI Theory Mark] Invalid structured response, using deterministic fallback');

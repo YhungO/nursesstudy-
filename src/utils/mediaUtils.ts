@@ -358,6 +358,9 @@ export function speakText(
         setTimeout(() => {
           if (!isCancelled) {
             try {
+              if (window.speechSynthesis && window.speechSynthesis.paused) {
+                window.speechSynthesis.resume();
+              }
               window.speechSynthesis.speak(utterance);
             } catch (speakErr) {
               activeUtterances.delete(utterance);
@@ -366,6 +369,9 @@ export function speakText(
           }
         }, 35);
       } else {
+        if (window.speechSynthesis && window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
         window.speechSynthesis.speak(utterance);
       }
     } catch (chunkErr) {
@@ -597,8 +603,22 @@ export async function startAudioRecording(options?: {
     }
   };
 
-  // 1000ms timeslice provides reliable chunking across Android mobile devices
-  mediaRecorder.start(options?.timeslice ?? 1000);
+  // Start recording with chunking, with fallback for Android WebViews that reject timeslice parameter
+  try {
+    if (typeof options?.timeslice === 'number' && options.timeslice > 0) {
+      mediaRecorder.start(options.timeslice);
+    } else {
+      mediaRecorder.start(1000);
+    }
+  } catch (startWithTimesliceErr) {
+    console.warn('MediaRecorder.start with timeslice failed on this device, attempting without timeslice:', startWithTimesliceErr);
+    try {
+      mediaRecorder.start();
+    } catch (startWithoutTimesliceErr) {
+      cleanupMediaStreamTracks(stream);
+      throw new Error(mapMicrophoneError(startWithoutTimesliceErr));
+    }
+  }
 
   return {
     mediaRecorder,

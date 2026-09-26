@@ -332,10 +332,14 @@ export const api = {
     request<{ success: boolean; message: string }>('/api/admin/reset-data', { method: 'POST' }),
 
   // AI Learning Features
-  askAiTutor: (prompt: string, context?: string) =>
-    request<{ reply: string }>('/api/ai/tutor', {
+  askAiTutor: (
+    prompt: string,
+    context?: string,
+    history?: { role: 'user' | 'model'; text: string }[]
+  ) =>
+    request<{ reply: string; modelUsed?: string }>('/api/ai/tutor', {
       method: 'POST',
-      body: JSON.stringify({ prompt, context }),
+      body: JSON.stringify({ prompt, context, history }),
     }),
 
   explainMcq: (data: McqExplanationRequest) =>

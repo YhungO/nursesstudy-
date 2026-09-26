@@ -77,12 +77,23 @@ export const AiTutorDrawer: React.FC<AiTutorDrawerProps> = ({
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
+    // Save prompt before clearing input so we can restore it if request fails
+    const pendingPrompt = prompt;
     setMessages((prev) => [...prev, userMsg]);
     setInputPrompt('');
     setIsLoading(true);
 
     try {
-      const response = await api.askAiTutor(prompt, initialTopic);
+      // Gather bounded conversation history (last 6 messages, excluding welcomes)
+      const recentHistory = messages
+        .filter((m) => m.id !== 'welcome' && m.id !== 'welcome-reset')
+        .slice(-6)
+        .map((m) => ({
+          role: (m.sender === 'user' ? 'user' : 'model') as 'user' | 'model',
+          text: m.text,
+        }));
+
+      const response = await api.askAiTutor(prompt, initialTopic, recentHistory);
       const tutorMsg: AiTutorMessage = {
         id: `tut-${Date.now()}`,
         sender: 'tutor',
@@ -92,9 +103,13 @@ export const AiTutorDrawer: React.FC<AiTutorDrawerProps> = ({
       setMessages((prev) => [...prev, tutorMsg]);
     } catch (err: any) {
       console.warn('AI Tutor request notice:', err);
+      // Restore input prompt so student can retry or edit without retyping
+      setInputPrompt(pendingPrompt);
+      // Remove the unanswered user message so the thread remains clean
+      setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
       setErrorMsg(
-        err.message ||
-          'AI assistance is temporarily unavailable. You can continue using the normal CBT features.'
+        err?.message ||
+          'AI assistance is temporarily unavailable. Your question has been restored below so you can try again.'
       );
     } finally {
       setIsLoading(false);
