@@ -14,8 +14,10 @@ import { AdminLogin } from './components/admin/AdminLogin';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { AuthGate } from './components/auth/AuthGate';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { OfflineIndicator } from './components/common/OfflineIndicator';
 import { AiTutorDrawer } from './components/student/AiTutorDrawer';
 import { api } from './services/api';
+import { offlineStorage } from './services/offlineStorage';
 import {
   subscribeToLevels,
   subscribeToSubjects,
@@ -77,10 +79,10 @@ const MainAppContent: React.FC = () => {
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch all app data and seed Firestore if necessary
+  // Fetch all app data with offline IndexedDB fallback and seed Firestore if necessary
   const fetchData = async () => {
     try {
-      const [lvls, subjs, nts, qts, exms, anns] = await Promise.all([
+      const results = await Promise.allSettled([
         api.getLevels(),
         api.getSubjects(),
         api.getNotes(),
@@ -89,30 +91,48 @@ const MainAppContent: React.FC = () => {
         api.getAnnouncements(),
       ]);
 
-      if (Array.isArray(lvls)) setLevels(lvls);
-      if (Array.isArray(subjs)) setSubjects(subjs);
-      if (Array.isArray(nts)) setNotes(nts);
-      if (Array.isArray(qts)) setQuestions(qts);
-      if (Array.isArray(exms)) setExams(exms);
-      if (Array.isArray(anns)) setAnnouncements(anns);
+      const [lvlRes, subjRes, noteRes, qRes, examRes, annRes] = results;
+
+      if (lvlRes.status === 'fulfilled' && Array.isArray(lvlRes.value) && lvlRes.value.length > 0) {
+        setLevels(lvlRes.value);
+      }
+      if (subjRes.status === 'fulfilled' && Array.isArray(subjRes.value) && subjRes.value.length > 0) {
+        setSubjects(subjRes.value);
+      }
+      if (noteRes.status === 'fulfilled' && Array.isArray(noteRes.value) && noteRes.value.length > 0) {
+        setNotes(noteRes.value);
+      }
+      if (qRes.status === 'fulfilled' && Array.isArray(qRes.value) && qRes.value.length > 0) {
+        setQuestions(qRes.value);
+      }
+      if (examRes.status === 'fulfilled' && Array.isArray(examRes.value) && examRes.value.length > 0) {
+        setExams(examRes.value);
+      }
+      if (annRes.status === 'fulfilled' && Array.isArray(annRes.value) && annRes.value.length > 0) {
+        setAnnouncements(annRes.value);
+      }
 
       // Auto-seed Firestore in background if Firestore is currently fresh/empty and user is admin
       if (user?.role === 'admin' || user?.email === 'chigaemezuaugustine43@gmail.com' || user?.email === 'tiktokyhung@gmail.com') {
-        seedFirestoreIfEmpty({
-          levels: lvls,
-          subjects: subjs,
-          notes: nts,
-          questions: qts,
-          exams: exms,
-          announcements: anns,
-        }, user).catch((e) => console.warn('Firestore auto-seed notice:', e));
+        const lvls = lvlRes.status === 'fulfilled' ? lvlRes.value : [];
+        const subjs = subjRes.status === 'fulfilled' ? subjRes.value : [];
+        const nts = noteRes.status === 'fulfilled' ? noteRes.value : [];
+        const qts = qRes.status === 'fulfilled' ? qRes.value : [];
+        const exms = examRes.status === 'fulfilled' ? examRes.value : [];
+        const anns = annRes.status === 'fulfilled' ? annRes.value : [];
+        if (lvls.length > 0) {
+          seedFirestoreIfEmpty(
+            { levels: lvls, subjects: subjs, notes: nts, questions: qts, exams: exms, announcements: anns },
+            user
+          ).catch((e) => console.warn('Firestore auto-seed notice:', e));
+        }
       }
 
       if (user) {
         try {
           const [attempts, bmarksData] = await Promise.all([
-            api.getAttempts(),
-            api.getBookmarks(),
+            api.getAttempts().catch(() => []),
+            api.getBookmarks().catch(() => ({ bookmarks: [] })),
           ]);
           if (Array.isArray(attempts)) setRecentAttempts(attempts);
           setBookmarks(
@@ -127,21 +147,43 @@ const MainAppContent: React.FC = () => {
         }
       }
     } catch (err) {
-      console.error('Failed to load platform data:', err);
+      console.warn('Network sync notice (using offline IndexedDB cache):', err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Real-time Firestore Subscriptions: Single Source of Truth
-  // Automatically propagates changes when admin creates, edits, publishes, archives, or deletes content
+  // Real-time Firestore Subscriptions & Immediate IndexedDB Hydration
   useEffect(() => {
+    // 1. Immediately hydrate from IndexedDB offline storage so students never see a blank screen
+    Promise.all([
+      offlineStorage.getLevels(),
+      offlineStorage.getSubjects(),
+      offlineStorage.getNotes(),
+      offlineStorage.getQuestions(),
+      offlineStorage.getExams(),
+      offlineStorage.getAnnouncements(),
+    ])
+      .then(([cachedLvls, cachedSubjs, cachedNotes, cachedQuestions, cachedExams, cachedAnns]) => {
+        if (cachedLvls.length > 0) setLevels((prev) => (prev.length > 0 ? prev : cachedLvls));
+        if (cachedSubjs.length > 0) setSubjects((prev) => (prev.length > 0 ? prev : cachedSubjs));
+        if (cachedNotes.length > 0) setNotes((prev) => (prev.length > 0 ? prev : cachedNotes));
+        if (cachedQuestions.length > 0) setQuestions((prev) => (prev.length > 0 ? prev : cachedQuestions));
+        if (cachedExams.length > 0) setExams((prev) => (prev.length > 0 ? prev : cachedExams));
+        if (cachedAnns.length > 0) setAnnouncements((prev) => (prev.length > 0 ? prev : cachedAnns));
+        if (cachedNotes.length > 0 || cachedQuestions.length > 0) {
+          setIsLoading(false);
+        }
+      })
+      .catch((e) => console.warn('Offline cache initial load notice:', e));
+
     fetchData();
 
     // Attach real-time listeners to Firestore collections
     const unsubLevels = subscribeToLevels((liveLevels) => {
       if (Array.isArray(liveLevels) && liveLevels.length > 0) {
         setLevels(liveLevels);
+        offlineStorage.saveLevels(liveLevels).catch(() => {});
       }
       setIsLoading(false);
     });
@@ -149,18 +191,21 @@ const MainAppContent: React.FC = () => {
     const unsubSubjects = subscribeToSubjects((liveSubjects) => {
       if (Array.isArray(liveSubjects) && liveSubjects.length > 0) {
         setSubjects(liveSubjects);
+        offlineStorage.saveSubjects(liveSubjects).catch(() => {});
       }
     });
 
     const unsubNotes = subscribeToNotes((liveNotes) => {
       if (Array.isArray(liveNotes) && liveNotes.length > 0) {
         setNotes(liveNotes);
+        offlineStorage.saveNotes(liveNotes).catch(() => {});
       }
     }, { publishedOnly: false });
 
     const unsubQuestions = subscribeToQuestions((liveQuestions) => {
       if (Array.isArray(liveQuestions) && liveQuestions.length > 0) {
         setQuestions(liveQuestions);
+        offlineStorage.saveQuestions(liveQuestions).catch(() => {});
       }
     });
 
@@ -168,6 +213,7 @@ const MainAppContent: React.FC = () => {
       if (Array.isArray(liveExams)) {
         if (liveExams.length > 0) {
           setExams(liveExams);
+          offlineStorage.saveExams(liveExams).catch(() => {});
         } else {
           setExams((prev) => (prev.length > 0 ? prev : []));
         }
@@ -177,6 +223,7 @@ const MainAppContent: React.FC = () => {
     const unsubAnnouncements = subscribeToAnnouncements((liveAnnouncements) => {
       if (Array.isArray(liveAnnouncements) && liveAnnouncements.length > 0) {
         setAnnouncements(liveAnnouncements);
+        offlineStorage.saveAnnouncements(liveAnnouncements).catch(() => {});
       }
     });
 
@@ -688,6 +735,8 @@ const MainAppContent: React.FC = () => {
           <span className="sm:hidden">Tutor</span>
         </button>
       )}
+      {/* Offline Mode Indicator */}
+      <OfflineIndicator />
     </div>
   );
 };

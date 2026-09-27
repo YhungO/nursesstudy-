@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { NursingLevel } from '../../types';
+import { PWAInstallButton } from '../common/PWAInstallButton';
 import {
   Activity,
   BookOpen,
@@ -112,6 +113,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* Right Action Area */}
             <div className="flex items-center gap-2 sm:gap-3">
+              {/* PWA Install Button */}
+              <PWAInstallButton compact />
+
               {/* Ask AI Tutor Button */}
               {onOpenAiTutor && aiTutorEnabled && (
                 <button

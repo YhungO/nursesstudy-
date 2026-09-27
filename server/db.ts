@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { SEED_STUDY_NOTES } from './seedNotes.ts';
 
 export interface User {
   id: string;
@@ -39,6 +40,8 @@ export interface Subject {
 export interface StudyNote {
   id: string;
   subjectId: string;
+  subjectName?: string;
+  subjectColor?: string;
   levelId: string;
   title: string;
   topic: string;
@@ -403,7 +406,7 @@ export function getInitialData(): DatabaseSchema {
         createdAt: '2026-02-14T09:30:00.000Z',
       },
     ],
-    notes: [],
+    notes: SEED_STUDY_NOTES,
     questions: [],
     exams: [],
     attempts: [],

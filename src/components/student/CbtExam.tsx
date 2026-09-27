@@ -29,7 +29,10 @@ import {
   Play,
   Pause,
   Trash2,
+  HardDrive,
+  Download,
 } from 'lucide-react';
+import { offlineStorage } from '../../services/offlineStorage';
 import {
   checkSpeechSynthesisSupport,
   loadSpeechSynthesisVoices,
@@ -135,6 +138,43 @@ export const CbtExam: React.FC<CbtExamProps> = ({
     attempt: ExamAttempt;
     detailedAnswers: any[];
   } | null>(null);
+
+  // Offline CBT download state
+  const [downloadedExamIds, setDownloadedExamIds] = useState<string[]>([]);
+  const [downloadingExamId, setDownloadingExamId] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    offlineStorage.getExams().then((cached) => {
+      if (isMounted && cached) {
+        setDownloadedExamIds(cached.filter((e: any) => e.isDownloadedOffline).map((e) => e.id));
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [exams]);
+
+  const handleDownloadExam = async (examId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (downloadingExamId) return;
+    setDownloadingExamId(examId);
+    try {
+      const details = await api.getExamDetails(examId);
+      if (details) {
+        await offlineStorage.saveExamDetails(examId, details);
+        setDownloadedExamIds((prev) => Array.from(new Set([...prev, examId])));
+        setToastMessage(`"${details.title}" saved with all questions for offline CBT practice!`);
+        setTimeout(() => setToastMessage(null), 4000);
+      }
+    } catch {
+      setToastMessage('Failed to download exam for offline practice.');
+      setTimeout(() => setToastMessage(null), 3000);
+    } finally {
+      setDownloadingExamId(null);
+    }
+  };
 
   // CRITICAL REFS: Bypasses React state stale closures during async callbacks and setInterval ticks
   const answersRef = useRef<Record<string, 'A' | 'B' | 'C' | 'D' | null>>({});
@@ -2076,6 +2116,14 @@ export const CbtExam: React.FC<CbtExamProps> = ({
         </div>
       </div>
 
+      {/* CBT Hall Notification Toast */}
+      {toastMessage && (
+        <div className="fixed top-20 right-4 z-50 px-4 py-2.5 rounded-xl bg-teal-600 text-white font-semibold text-xs shadow-xl backdrop-blur-md border border-teal-400 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+          <CheckCircle2 className="w-4 h-4 text-white" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       {/* CBT Hall Category Selector: Objective CBT vs Theory CBT */}
       <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
         <button
@@ -2158,13 +2206,19 @@ export const CbtExam: React.FC<CbtExamProps> = ({
             >
               <div>
                 <div className="flex items-center justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-teal-500/15 text-teal-300 border border-teal-500/30">
                       THEORY CBT
                     </span>
                     <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700">
                       {exam.subjectName}
                     </span>
+                    {downloadedExamIds.includes(exam.id) && (
+                      <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-950/70 border border-emerald-500/40 px-2 py-0.5 rounded-md inline-flex items-center gap-1">
+                        <HardDrive className="w-2.5 h-2.5 text-emerald-400" />
+                        <span>Offline Ready</span>
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 text-xs font-semibold text-teal-300">
                     <Clock className="w-3.5 h-3.5 text-teal-400" />
@@ -2193,14 +2247,31 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                 </div>
               </div>
 
-              <div className="mt-6">
+              <div className="mt-6 flex items-center gap-2">
                 <button
                   disabled={loading}
                   onClick={() => setActiveTheoryExam(exam)}
-                  className="w-full py-2.5 px-4 bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-900/30 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  className="flex-1 py-2.5 px-4 bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-900/30 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   <BookOpen className="w-4 h-4" />
                   <span>Start Exam</span>
+                </button>
+                <button
+                  onClick={(e) => handleDownloadExam(exam.id, e)}
+                  disabled={downloadingExamId === exam.id}
+                  type="button"
+                  className={`p-2.5 rounded-xl border transition-colors cursor-pointer ${
+                    downloadedExamIds.includes(exam.id)
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : 'bg-[#111827] text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white'
+                  }`}
+                  title={downloadedExamIds.includes(exam.id) ? 'Exam bundle saved offline in IndexedDB' : 'Download exam bundle for offline practice'}
+                >
+                  {downloadedExamIds.includes(exam.id) ? (
+                    <Check className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <Download className={`w-4 h-4 ${downloadingExamId === exam.id ? 'animate-bounce' : ''}`} />
+                  )}
                 </button>
               </div>
             </div>
@@ -2216,9 +2287,17 @@ export const CbtExam: React.FC<CbtExamProps> = ({
             >
               <div>
                 <div className="flex items-center justify-between gap-2 mb-3">
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-purple-500/15 text-purple-300 border border-purple-500/30">
-                    {exam.subjectName}
-                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                      {exam.subjectName}
+                    </span>
+                    {downloadedExamIds.includes(exam.id) && (
+                      <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-950/70 border border-emerald-500/40 px-2 py-0.5 rounded-md inline-flex items-center gap-1">
+                        <HardDrive className="w-2.5 h-2.5 text-emerald-400" />
+                        <span>Offline Ready</span>
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1 text-xs font-semibold text-purple-300">
                     <Clock className="w-3.5 h-3.5 text-purple-400" />
                     <span>{exam.durationMinutes} mins</span>
@@ -2248,14 +2327,31 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                 </div>
               </div>
 
-              <div className="mt-6">
+              <div className="mt-6 flex items-center gap-2">
                 <button
                   disabled={loading}
                   onClick={() => startExam(exam.id)}
-                  className="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-purple-900/30 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  className="flex-1 py-2.5 px-4 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-purple-900/30 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   <Clock className="w-4 h-4" />
                   <span>Start Exam</span>
+                </button>
+                <button
+                  onClick={(e) => handleDownloadExam(exam.id, e)}
+                  disabled={downloadingExamId === exam.id}
+                  type="button"
+                  className={`p-2.5 rounded-xl border transition-colors cursor-pointer ${
+                    downloadedExamIds.includes(exam.id)
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : 'bg-[#111827] text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white'
+                  }`}
+                  title={downloadedExamIds.includes(exam.id) ? 'Exam bundle saved offline in IndexedDB' : 'Download exam bundle for offline practice'}
+                >
+                  {downloadedExamIds.includes(exam.id) ? (
+                    <Check className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <Download className={`w-4 h-4 ${downloadingExamId === exam.id ? 'animate-bounce' : ''}`} />
+                  )}
                 </button>
               </div>
             </div>

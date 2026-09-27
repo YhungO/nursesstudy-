@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
   Subject,
@@ -27,7 +27,9 @@ import {
   Activity,
   AlertCircle,
   ShieldCheck,
+  HardDrive,
 } from 'lucide-react';
+import { offlineStorage } from '../../services/offlineStorage';
 
 interface StudentHomeProps {
   subjects: Subject[];
@@ -203,6 +205,26 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
     (a) => a.targetLevel === 'all' || a.targetLevel === user?.levelId
   );
 
+  const [offlineStats, setOfflineStats] = useState<{ downloadedNotesCount: number; questionsCount: number }>({
+    downloadedNotesCount: 0,
+    questionsCount: 0,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    offlineStorage.getOfflineSummary().then((summary) => {
+      if (isMounted) {
+        setOfflineStats({
+          downloadedNotesCount: summary.downloadedNotesCount,
+          questionsCount: summary.questionsCount,
+        });
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [notes]);
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
@@ -290,6 +312,19 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
               <span className="text-slate-400 text-[11px]">Passed:</span>{' '}
               <strong className="text-emerald-400 font-bold">{passedCount}</strong>
             </div>
+            {(offlineStats.downloadedNotesCount > 0 || offlineStats.questionsCount > 0) && (
+              <button
+                type="button"
+                onClick={() => onNavigate('notes')}
+                className="px-3 py-1.5 rounded-xl bg-teal-500/15 hover:bg-teal-500/25 border border-teal-500/40 flex items-center gap-1.5 shadow-inner text-teal-300 transition-colors cursor-pointer"
+                title="View study notes and question banks available offline in IndexedDB"
+              >
+                <HardDrive className="w-3.5 h-3.5 text-teal-400" />
+                <span className="text-[11px] font-bold">
+                  {offlineStats.downloadedNotesCount > 0 ? `${offlineStats.downloadedNotesCount} Notes` : `${offlineStats.questionsCount} Questions`} Offline
+                </span>
+              </button>
+            )}
           </div>
         </div>
 

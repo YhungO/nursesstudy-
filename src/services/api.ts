@@ -15,6 +15,7 @@ import {
   AiSettings,
   AiServiceStatus,
 } from '../types';
+import { offlineStorage } from './offlineStorage';
 
 let authToken: string | null = localStorage.getItem('nursesstudy_token');
 let authUserEmail: string | null = localStorage.getItem('nursesstudy_user_email');
@@ -171,7 +172,21 @@ export const api = {
     }),
 
   // Levels
-  getLevels: () => request<NursingLevel[]>('/api/levels'),
+  getLevels: async () => {
+    try {
+      const data = await request<NursingLevel[]>('/api/levels');
+      if (Array.isArray(data) && data.length > 0) {
+        offlineStorage.saveLevels(data).catch(() => {});
+      }
+      return data;
+    } catch (err) {
+      const offline = await offlineStorage.getLevels();
+      if (offline && offline.length > 0) {
+        return offline;
+      }
+      return [];
+    }
+  },
   createLevel: (data: Partial<NursingLevel>) =>
     request<NursingLevel>('/api/levels', { method: 'POST', body: JSON.stringify(data) }),
   updateLevel: (id: string, data: Partial<NursingLevel>) =>
@@ -180,9 +195,21 @@ export const api = {
     request<{ success: boolean }>(`/api/levels/${id}`, { method: 'DELETE' }),
 
   // Subjects
-  getSubjects: (levelId?: string) => {
+  getSubjects: async (levelId?: string) => {
     const query = levelId ? `?levelId=${encodeURIComponent(levelId)}` : '';
-    return request<Subject[]>(`/api/subjects${query}`);
+    try {
+      const data = await request<Subject[]>(`/api/subjects${query}`);
+      if (Array.isArray(data) && data.length > 0) {
+        offlineStorage.saveSubjects(data).catch(() => {});
+      }
+      return data;
+    } catch (err) {
+      const offline = await offlineStorage.getSubjects();
+      if (offline && offline.length > 0) {
+        return levelId ? offline.filter((s) => !s.levelId || s.levelId === levelId) : offline;
+      }
+      return [];
+    }
   },
   createSubject: (data: Partial<Subject>) =>
     request<Subject>('/api/subjects', { method: 'POST', body: JSON.stringify(data) }),
@@ -192,14 +219,50 @@ export const api = {
     request<{ success: boolean }>(`/api/subjects/${id}`, { method: 'DELETE' }),
 
   // Study Notes
-  getNotes: (params?: { subjectId?: string; levelId?: string; search?: string }) => {
+  getNotes: async (params?: { subjectId?: string; levelId?: string; search?: string }) => {
     const query = new URLSearchParams();
     if (params?.subjectId) query.set('subjectId', params.subjectId);
     if (params?.levelId) query.set('levelId', params.levelId);
     if (params?.search) query.set('search', params.search);
-    return request<StudyNote[]>(`/api/notes?${query.toString()}`);
+    try {
+      const data = await request<StudyNote[]>(`/api/notes?${query.toString()}`);
+      if (Array.isArray(data) && data.length > 0) {
+        offlineStorage.saveNotes(data).catch(() => {});
+      }
+      return data;
+    } catch (err) {
+      let offline = await offlineStorage.getNotes(params?.subjectId);
+      if (params?.levelId) {
+        offline = offline.filter((n) => !n.levelId || n.levelId === params.levelId);
+      }
+      if (params?.search) {
+        const q = params.search.toLowerCase();
+        offline = offline.filter(
+          (n) =>
+            n.title.toLowerCase().includes(q) ||
+            n.summary.toLowerCase().includes(q) ||
+            n.topic.toLowerCase().includes(q) ||
+            n.content.toLowerCase().includes(q)
+        );
+      }
+      return offline;
+    }
   },
-  getNote: (id: string) => request<StudyNote>(`/api/notes/${id}`),
+  getNote: async (id: string) => {
+    try {
+      const data = await request<StudyNote>(`/api/notes/${id}`);
+      if (data && data.id) {
+        offlineStorage.saveNotes([data]).catch(() => {});
+      }
+      return data;
+    } catch (err) {
+      const offline = await offlineStorage.getNote(id);
+      if (offline) {
+        return offline;
+      }
+      throw err;
+    }
+  },
   createNote: (data: Partial<StudyNote>) =>
     request<StudyNote>('/api/notes', { method: 'POST', body: JSON.stringify(data) }),
   updateNote: (id: string, data: Partial<StudyNote>) =>
@@ -208,13 +271,33 @@ export const api = {
     request<{ success: boolean }>(`/api/notes/${id}`, { method: 'DELETE' }),
 
   // Questions
-  getQuestions: (params?: { subjectId?: string; difficulty?: string; search?: string; limit?: number }) => {
+  getQuestions: async (params?: { subjectId?: string; difficulty?: string; search?: string; limit?: number }) => {
     const query = new URLSearchParams();
     if (params?.subjectId) query.set('subjectId', params.subjectId);
     if (params?.difficulty) query.set('difficulty', params.difficulty);
     if (params?.search) query.set('search', params.search);
     if (params?.limit) query.set('limit', String(params.limit));
-    return request<Question[]>(`/api/questions?${query.toString()}`);
+    try {
+      const data = await request<Question[]>(`/api/questions?${query.toString()}`);
+      if (Array.isArray(data) && data.length > 0) {
+        offlineStorage.saveQuestions(data).catch(() => {});
+      }
+      return data;
+    } catch (err) {
+      let offline = await offlineStorage.getQuestions(params?.subjectId, params?.difficulty);
+      if (params?.search) {
+        const q = params.search.toLowerCase();
+        offline = offline.filter(
+          (item) =>
+            item.question.toLowerCase().includes(q) ||
+            Boolean(item.topic && item.topic.toLowerCase().includes(q))
+        );
+      }
+      if (params?.limit && params.limit > 0) {
+        offline = offline.slice(0, params.limit);
+      }
+      return offline;
+    }
   },
   createQuestion: (data: Partial<Question>) =>
     request<Question>('/api/questions', { method: 'POST', body: JSON.stringify(data) }),
@@ -224,9 +307,33 @@ export const api = {
     request<{ success: boolean }>(`/api/questions/${id}`, { method: 'DELETE' }),
 
   // CBT Exams
-  getExams: () => request<CBTExam[]>('/api/exams'),
-  getExamDetails: (id: string) =>
-    request<CBTExam & { questions: Question[] }>(`/api/exams/${id}`),
+  getExams: async () => {
+    try {
+      const data = await request<CBTExam[]>('/api/exams');
+      if (Array.isArray(data) && data.length > 0) {
+        offlineStorage.saveExams(data).catch(() => {});
+      }
+      return data;
+    } catch (err) {
+      const offline = await offlineStorage.getExams();
+      return offline;
+    }
+  },
+  getExamDetails: async (id: string) => {
+    try {
+      const data = await request<CBTExam & { questions: Question[] }>(`/api/exams/${id}`);
+      if (data && data.id) {
+        offlineStorage.saveExamDetails(id, data).catch(() => {});
+      }
+      return data;
+    } catch (err) {
+      const offline = await offlineStorage.getExamDetails(id);
+      if (offline) {
+        return offline;
+      }
+      throw err;
+    }
+  },
   createExam: (data: Partial<CBTExam>) =>
     request<CBTExam>('/api/exams', { method: 'POST', body: JSON.stringify(data) }),
   updateExam: (id: string, data: Partial<CBTExam>) =>
@@ -302,7 +409,18 @@ export const api = {
     }),
 
   // Announcements
-  getAnnouncements: () => request<Announcement[]>('/api/announcements'),
+  getAnnouncements: async () => {
+    try {
+      const data = await request<Announcement[]>('/api/announcements');
+      if (Array.isArray(data) && data.length > 0) {
+        offlineStorage.saveAnnouncements(data).catch(() => {});
+      }
+      return data;
+    } catch {
+      const offline = await offlineStorage.getAnnouncements();
+      return offline;
+    }
+  },
   createAnnouncement: (data: Partial<Announcement>) =>
     request<Announcement>('/api/announcements', { method: 'POST', body: JSON.stringify(data) }),
   deleteAnnouncement: (id: string) =>

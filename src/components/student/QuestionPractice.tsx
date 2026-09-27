@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Question, Subject } from '../../types';
 import { AiMcqExplanation } from './AiMcqExplanation';
+import { offlineStorage } from '../../services/offlineStorage';
 import {
   HelpCircle,
   CheckCircle2,
@@ -12,6 +13,9 @@ import {
   Sparkles,
   Clock,
   ArrowRight,
+  Download,
+  HardDrive,
+  Check,
 } from 'lucide-react';
 
 interface QuestionPracticeProps {
@@ -35,6 +39,61 @@ export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
   const [selectedSubject, setSelectedSubject] = useState<string>(initialSubjectId || 'all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isSavedOffline, setIsSavedOffline] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [localQuestions, setLocalQuestions] = useState<Question[]>(questions);
+
+  // Sync questions prop or hydrate from IndexedDB offline storage
+  useEffect(() => {
+    let isMounted = true;
+    if (questions && questions.length > 0) {
+      setLocalQuestions(questions);
+    } else {
+      offlineStorage.getQuestions().then((cached) => {
+        if (isMounted && cached && cached.length > 0) {
+          setLocalQuestions(cached);
+        }
+      });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [questions]);
+
+  useEffect(() => {
+    let isMounted = true;
+    offlineStorage.getQuestions().then((cached) => {
+      if (isMounted && cached && cached.length > 0) {
+        setIsSavedOffline(true);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [questions, localQuestions]);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage((curr) => (curr === msg ? null : curr));
+    }, 3500);
+  };
+
+  const handleDownloadQuestions = async () => {
+    const targetQuestions = localQuestions.length > 0 ? localQuestions : questions;
+    if (!targetQuestions || targetQuestions.length === 0 || isSaving) return;
+    setIsSaving(true);
+    try {
+      await offlineStorage.saveQuestions(targetQuestions, true);
+      setIsSavedOffline(true);
+      showToast(`${targetQuestions.length} question bank items saved to device for offline practice!`);
+    } catch {
+      showToast('Failed to save questions offline.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // Per-question state in this practice session
   const [selectedOption, setSelectedOption] = useState<'A' | 'B' | 'C' | 'D' | null>(null);
@@ -45,13 +104,13 @@ export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
 
   // Filter questions
   const filteredQuestions = useMemo(() => {
-    return questions.filter((q) => {
+    return (localQuestions || []).filter((q) => {
       const matchSubject = selectedSubject === 'all' || q.subjectId === selectedSubject;
       const matchDifficulty =
         selectedDifficulty === 'all' || q.difficulty === selectedDifficulty;
       return matchSubject && matchDifficulty;
     });
-  }, [questions, selectedSubject, selectedDifficulty]);
+  }, [localQuestions, selectedSubject, selectedDifficulty]);
 
   const currentQuestion: Question | undefined =
     filteredQuestions[currentIndex] || (filteredQuestions.length > 0 ? filteredQuestions[0] : undefined);
@@ -154,7 +213,7 @@ export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
             }}
             className="px-3 py-1.5 bg-[#111827] border border-slate-800 rounded-xl text-xs font-semibold text-slate-200 shadow-sm focus:outline-none focus:border-sky-500"
           >
-            <option value="all">All Subjects ({questions.length})</option>
+            <option value="all">All Subjects ({localQuestions.length})</option>
             {subjects.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -177,14 +236,44 @@ export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
           </select>
 
           <button
+            onClick={handleDownloadQuestions}
+            disabled={isSaving || localQuestions.length === 0}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+              isSavedOffline
+                ? 'bg-teal-500/20 text-teal-300 border-teal-500/40'
+                : 'bg-[#111827] border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
+            }`}
+            title="Download question bank into IndexedDB for offline clinical practice"
+          >
+            {isSavedOffline ? (
+              <>
+                <HardDrive className="w-3.5 h-3.5 text-teal-400" />
+                <span>Offline Ready ({localQuestions.length})</span>
+              </>
+            ) : (
+              <>
+                <Download className={`w-3.5 h-3.5 ${isSaving ? 'animate-bounce' : ''}`} />
+                <span>Save Offline</span>
+              </>
+            )}
+          </button>
+
+          <button
             onClick={handleResetSession}
-            className="p-2 rounded-xl border border-slate-800 bg-[#111827] text-slate-300 hover:text-white hover:bg-slate-800 shadow-sm transition-colors"
+            className="p-2 rounded-xl border border-slate-800 bg-[#111827] text-slate-300 hover:text-white hover:bg-slate-800 shadow-sm transition-colors cursor-pointer"
             title="Reset Practice Session"
           >
             <RotateCcw className="w-4 h-4" />
           </button>
         </div>
       </div>
+
+      {toastMessage && (
+        <div className="fixed top-20 right-4 z-50 px-4 py-2.5 rounded-xl bg-teal-600 text-white font-semibold text-xs shadow-xl backdrop-blur-md border border-teal-400 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+          <CheckCircle2 className="w-4 h-4 text-white" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
 
       {/* Timed CBT Hall Notification Banner */}
       {onNavigateToCbt && (
@@ -212,6 +301,14 @@ export const QuestionPractice: React.FC<QuestionPracticeProps> = ({
             <span>Enter CBT Hall</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
+        </div>
+      )}
+
+      {/* Offline Mode Active Banner */}
+      {typeof navigator !== 'undefined' && !navigator.onLine && (
+        <div className="bg-amber-500/10 border border-amber-500/30 text-amber-300 p-3.5 rounded-2xl flex items-center gap-2.5 text-xs font-medium">
+          <HardDrive className="w-4 h-4 text-amber-400 shrink-0" />
+          <span>Offline Mode Active — Practicing with saved questions. Clinical rationales and answer checks work seamlessly without internet.</span>
         </div>
       )}
 

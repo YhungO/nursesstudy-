@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Subject, StudyNote, NursingLevel } from '../../types';
+import { offlineStorage } from '../../services/offlineStorage';
 import {
   BookOpen,
   Search,
@@ -10,6 +11,10 @@ import {
   CheckCircle2,
   Sparkles,
   HelpCircle,
+  Download,
+  HardDrive,
+  Check,
+  WifiOff,
 } from 'lucide-react';
 
 interface StudyNotesProps {
@@ -35,15 +40,90 @@ export const StudyNotes: React.FC<StudyNotesProps> = ({
   const [activeNoteId, setActiveNoteId] = useState<string | null>(selectedNoteId);
   const [selectedSubject, setSelectedSubject] = useState<string>(initialSubjectId || 'all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterMode, setFilterMode] = useState<'all' | 'bookmarked' | 'offline'>('all');
+  const [downloadedNoteIds, setDownloadedNoteIds] = useState<string[]>([]);
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [localNotes, setLocalNotes] = useState<StudyNote[]>(notes);
+
+  // Sync notes prop or hydrate from IndexedDB offline storage
+  useEffect(() => {
+    let isMounted = true;
+    if (notes && notes.length > 0) {
+      setLocalNotes(notes);
+    } else {
+      offlineStorage.getNotes().then((cached) => {
+        if (isMounted && cached && cached.length > 0) {
+          setLocalNotes(cached);
+        }
+      });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [notes]);
+
+  // Load downloaded notes from IndexedDB
+  useEffect(() => {
+    let isMounted = true;
+    offlineStorage.getDownloadedNotes().then((dNotes) => {
+      if (isMounted) {
+        setDownloadedNoteIds(dNotes.map((n) => n.id));
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [notes, localNotes]);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage((curr) => (curr === msg ? null : curr));
+    }, 3500);
+  };
+
+  const handleToggleDownloadNote = async (note: StudyNote) => {
+    const isDownloaded = downloadedNoteIds.includes(note.id);
+    if (isDownloaded) {
+      await offlineStorage.markNoteDownloaded(note.id, false);
+      setDownloadedNoteIds((prev) => prev.filter((id) => id !== note.id));
+      showToast('Note removed from offline storage');
+    } else {
+      await offlineStorage.saveNotes([note], true);
+      await offlineStorage.markNoteDownloaded(note.id, true);
+      setDownloadedNoteIds((prev) => [...prev, note.id]);
+      showToast('Note saved to device for offline reading!');
+    }
+  };
+
+  const handleDownloadAllNotes = async () => {
+    const targetNotes = localNotes.length > 0 ? localNotes : notes;
+    if (!targetNotes || targetNotes.length === 0 || isDownloadingAll) return;
+    setIsDownloadingAll(true);
+    try {
+      await offlineStorage.saveNotes(targetNotes, true);
+      const allIds = targetNotes.map((n) => n.id);
+      for (const id of allIds) {
+        await offlineStorage.markNoteDownloaded(id, true);
+      }
+      setDownloadedNoteIds(allIds);
+      showToast(`All ${targetNotes.length} notes saved for offline reading!`);
+    } catch {
+      showToast('Failed to save notes offline.');
+    } finally {
+      setIsDownloadingAll(false);
+    }
+  };
 
   // Find active note if open
   const activeNote = useMemo(() => {
-    return notes?.find((n) => n.id === activeNoteId) || null;
-  }, [notes, activeNoteId]);
+    return (localNotes || []).find((n) => n.id === activeNoteId) || null;
+  }, [localNotes, activeNoteId]);
 
   // Filter notes
   const filteredNotes = useMemo(() => {
-    return (notes || []).filter((note) => {
+    return (localNotes || []).filter((note) => {
       const matchSubject = selectedSubject === 'all' || note.subjectId === selectedSubject;
       const matchSearch =
         !searchQuery.trim() ||
@@ -51,17 +131,31 @@ export const StudyNotes: React.FC<StudyNotesProps> = ({
         note.topic.toLowerCase().includes(searchQuery.toLowerCase()) ||
         note.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
         note.content.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchSubject && matchSearch;
+      
+      const matchFilterMode =
+        filterMode === 'all' ||
+        (filterMode === 'bookmarked' && bookmarkedNoteIds.includes(note.id)) ||
+        (filterMode === 'offline' && downloadedNoteIds.includes(note.id));
+
+      return matchSubject && matchSearch && matchFilterMode;
     });
-  }, [notes, selectedSubject, searchQuery]);
+  }, [localNotes, selectedSubject, searchQuery, filterMode, bookmarkedNoteIds, downloadedNoteIds]);
 
   // Reader View
   if (activeNote) {
     const isBookmarked = bookmarkedNoteIds.includes(activeNote.id);
+    const isNoteDownloaded = downloadedNoteIds.includes(activeNote.id);
     const noteSubject = subjects?.find((s) => s.id === activeNote.subjectId);
 
     return (
       <div className="max-w-4xl mx-auto space-y-6 pb-16 animate-in fade-in">
+        {toastMessage && (
+          <div className="fixed top-20 right-4 z-50 px-4 py-2.5 rounded-xl bg-teal-600 text-white font-semibold text-xs shadow-xl backdrop-blur-md border border-teal-400 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+            <CheckCircle2 className="w-4 h-4 text-white" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
+
         {/* Navigation & Action Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <button
@@ -73,6 +167,29 @@ export const StudyNotes: React.FC<StudyNotesProps> = ({
           </button>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Offline Download Button */}
+            <button
+              onClick={() => handleToggleDownloadNote(activeNote)}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                isNoteDownloaded
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                  : 'bg-[#111827] text-slate-300 border-slate-800 hover:bg-slate-800'
+              }`}
+              title={isNoteDownloaded ? 'Stored in IndexedDB for offline reading' : 'Save for offline access'}
+            >
+              {isNoteDownloaded ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-400" />
+                  <span>Saved to Device</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4 text-slate-400" />
+                  <span>Save Offline</span>
+                </>
+              )}
+            </button>
+
             <button
               onClick={() => onToggleBookmark(activeNote.id)}
               className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
@@ -108,6 +225,12 @@ export const StudyNotes: React.FC<StudyNotesProps> = ({
               <span className="text-[10px] font-semibold text-slate-300 bg-slate-800/80 border border-slate-700 px-2.5 py-1 rounded-md">
                 Topic: {activeNote.topic}
               </span>
+              {isNoteDownloaded && (
+                <span className="text-[10px] font-bold text-emerald-300 bg-emerald-950/70 border border-emerald-500/40 px-2 py-0.5 rounded-md flex items-center gap-1">
+                  <HardDrive className="w-3 h-3 text-emerald-400" />
+                  <span>Available Offline</span>
+                </span>
+              )}
               <span className="text-xs text-slate-400 flex items-center gap-1 ml-auto font-medium">
                 <Clock className="w-3.5 h-3.5 text-slate-500" />
                 {activeNote.readingTime} min read
@@ -264,6 +387,13 @@ export const StudyNotes: React.FC<StudyNotesProps> = ({
   // Listing View
   return (
     <div className="space-y-6 pb-16">
+      {toastMessage && (
+        <div className="fixed top-20 right-4 z-50 px-4 py-2.5 rounded-xl bg-teal-600 text-white font-semibold text-xs shadow-xl backdrop-blur-md border border-teal-400 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+          <CheckCircle2 className="w-4 h-4 text-white" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -276,17 +406,75 @@ export const StudyNotes: React.FC<StudyNotesProps> = ({
           </p>
         </div>
 
+        {/* Action Controls: Batch Offline Download */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={handleDownloadAllNotes}
+            disabled={isDownloadingAll || notes.length === 0}
+            type="button"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#111827] hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+            title="Download all notes to IndexedDB for offline clinical reading"
+          >
+            <Download className={`w-3.5 h-3.5 ${isDownloadingAll ? 'animate-bounce' : ''}`} />
+            <span>{isDownloadingAll ? 'Saving to Device...' : `Download All (${localNotes.length})`}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Filter Mode & Subject Navigation */}
+      <div className="space-y-3">
+        {/* Primary Filter Tabs: All, Bookmarked, Saved Offline */}
+        <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+          <button
+            type="button"
+            onClick={() => setFilterMode('all')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+              filterMode === 'all'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'bg-[#111827] text-slate-400 hover:text-white border border-slate-800'
+            }`}
+          >
+            All Notes ({localNotes.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFilterMode('bookmarked')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer ${
+              filterMode === 'bookmarked'
+                ? 'bg-amber-600 text-white shadow-sm'
+                : 'bg-[#111827] text-slate-400 hover:text-white border border-slate-800'
+            }`}
+          >
+            <Bookmark className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+            <span>Bookmarked ({bookmarkedNoteIds.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFilterMode('offline')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer ${
+              filterMode === 'offline'
+                ? 'bg-teal-600 text-white shadow-sm'
+                : 'bg-[#111827] text-slate-400 hover:text-white border border-slate-800'
+            }`}
+          >
+            <HardDrive className="w-3.5 h-3.5 text-teal-400" />
+            <span>Saved Offline ({downloadedNoteIds.length})</span>
+          </button>
+        </div>
+
         {/* Subject Filter Pills */}
         <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
           <button
             onClick={() => setSelectedSubject('all')}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors border ${
               selectedSubject === 'all'
-                ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
-                : 'bg-[#111827] border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white'
+                ? 'bg-slate-800 text-emerald-300 border-emerald-500/50 shadow-sm'
+                : 'bg-[#111827] border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white'
             }`}
           >
-            All Subjects ({notes.length})
+            All Subjects
           </button>
           {subjects.map((s) => (
             <button
@@ -294,8 +482,8 @@ export const StudyNotes: React.FC<StudyNotesProps> = ({
               onClick={() => setSelectedSubject(s.id)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors border ${
                 selectedSubject === s.id
-                  ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
-                  : 'bg-[#111827] border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white'
+                  ? 'bg-slate-800 text-emerald-300 border-emerald-500/50 shadow-sm'
+                  : 'bg-[#111827] border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white'
               }`}
             >
               {s.name}
@@ -365,6 +553,7 @@ export const StudyNotes: React.FC<StudyNotesProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredNotes.map((note) => {
             const isBookmarked = bookmarkedNoteIds.includes(note.id);
+            const isDownloaded = downloadedNoteIds.includes(note.id);
             const noteSubject = subjects?.find((s) => s.id === note.subjectId);
 
             return (
@@ -373,21 +562,47 @@ export const StudyNotes: React.FC<StudyNotesProps> = ({
                 className="group bg-[#111827] rounded-2xl p-5 border border-slate-800 hover:border-emerald-500/50 hover:shadow-lg transition-all flex flex-col justify-between shadow-md"
               >
                 <div>
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                      {noteSubject?.name || 'General Nursing'}
-                    </span>
+                  <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-slate-400 flex items-center gap-1 font-medium">
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                        {noteSubject?.name || 'General Nursing'}
+                      </span>
+                      {isDownloaded && (
+                        <span className="text-[10px] font-semibold text-teal-300 bg-teal-950/70 border border-teal-500/40 px-2 py-0.5 rounded-md inline-flex items-center gap-1">
+                          <HardDrive className="w-2.5 h-2.5 text-teal-400" />
+                          <span>Saved</span>
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 ml-auto">
+                      <span className="text-[11px] text-slate-400 flex items-center gap-1 font-medium mr-1">
                         <Clock className="w-3 h-3 text-slate-500" />
                         {note.readingTime} min
                       </span>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          handleToggleDownloadNote(note);
+                        }}
+                        className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                          isDownloaded
+                            ? 'bg-teal-500/20 border-teal-500/40 text-teal-300'
+                            : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white'
+                        }`}
+                        title={isDownloaded ? 'Saved in IndexedDB (offline)' : 'Download for offline access'}
+                      >
+                        {isDownloaded ? (
+                          <Check className="w-3.5 h-3.5 text-teal-400" />
+                        ) : (
+                          <Download className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
                           onToggleBookmark(note.id);
                         }}
-                        className={`p-1.5 rounded-lg border transition-colors ${
+                        className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
                           isBookmarked
                             ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
                             : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white'
