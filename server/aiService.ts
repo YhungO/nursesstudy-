@@ -116,8 +116,8 @@ function classifyGeminiError(err: any): AiServiceError {
 }
 
 /**
- * Robust caller with automatic retry for transient spikes (503/429)
- * and seamless fallback between gemini-3.8-flash and gemini-3.1-flash-lite.
+ * Robust caller with automatic failover for high demand (503) spikes
+ * and seamless fallback across gemini-3.8-flash, gemini-flash-latest, and gemini-3.1-flash-lite.
  */
 async function callGeminiWithFallback(options: {
   contents: any;
@@ -137,66 +137,64 @@ async function callGeminiWithFallback(options: {
   }
 
   const primaryModel = options.preferredModel || 'gemini-3.8-flash';
-  const secondaryModel = options.fallbackModel || 'gemini-3.1-flash-lite';
-  const modelsToTry = [primaryModel, secondaryModel];
+  const secondaryModel = options.fallbackModel || 'gemini-flash-latest';
+  const tertiaryModel = 'gemini-3.1-flash-lite';
+  
+  // Deduplicate model list while preserving priority
+  const modelsToTry = Array.from(new Set([primaryModel, secondaryModel, tertiaryModel]));
 
   let lastError: any = null;
 
   for (let mIdx = 0; mIdx < modelsToTry.length; mIdx++) {
     const currentModel = modelsToTry[mIdx];
-    // For each model, attempt up to 2 times for transient network/503 spikes
-    const maxAttempts = mIdx === 0 ? 2 : 1;
+    const isLastModel = mIdx === modelsToTry.length - 1;
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        const response = await ai.models.generateContent({
-          model: currentModel,
-          contents: options.contents,
-          config: options.config,
-        });
+    try {
+      const response = await ai.models.generateContent({
+        model: currentModel,
+        contents: options.contents,
+        config: options.config,
+      });
 
-        const textOutput = response?.text?.trim();
-        if (textOutput) {
-          return { text: textOutput, modelUsed: currentModel };
+      const textOutput = response?.text?.trim();
+      if (textOutput) {
+        return { text: textOutput, modelUsed: currentModel };
+      }
+
+      // If candidates exist with content parts, try manual extraction
+      const candidateParts = response?.candidates?.[0]?.content?.parts;
+      if (Array.isArray(candidateParts)) {
+        const joined = candidateParts
+          .map((p: any) => p.text || '')
+          .join('')
+          .trim();
+        if (joined) {
+          return { text: joined, modelUsed: currentModel };
         }
+      }
 
-        // If candidates exist with content parts, try manual extraction
-        const candidateParts = response?.candidates?.[0]?.content?.parts;
-        if (Array.isArray(candidateParts)) {
-          const joined = candidateParts
-            .map((p: any) => p.text || '')
-            .join('')
-            .trim();
-          if (joined) {
-            return { text: joined, modelUsed: currentModel };
-          }
-        }
+      throw new Error('AI model returned an empty response.');
+    } catch (err: any) {
+      lastError = err;
+      const rawMsg = String(err?.message || '');
+      const is503 = rawMsg.includes('503') || rawMsg.includes('high demand') || rawMsg.includes('UNAVAILABLE');
+      const isRateLimit = rawMsg.includes('429') || rawMsg.includes('RESOURCE_EXHAUSTED');
+      const isNetworkTimeout = rawMsg.includes('ETIMEDOUT') || rawMsg.includes('ECONNRESET');
 
-        throw new Error('AI model returned an empty response.');
-      } catch (err: any) {
-        lastError = err;
-        const errMsg = String(err?.message || '');
-        const isTransient =
-          errMsg.includes('503') ||
-          errMsg.includes('UNAVAILABLE') ||
-          errMsg.includes('high demand') ||
-          errMsg.includes('429') ||
-          errMsg.includes('RESOURCE_EXHAUSTED') ||
-          errMsg.includes('ETIMEDOUT') ||
-          errMsg.includes('ECONNRESET');
-
-        console.warn(
-          `[AI Pipeline Notice]: Model ${currentModel} (attempt ${attempt}/${maxAttempts}) failed:`,
-          errMsg.slice(0, 100)
-        );
-
-        // If transient error and have another attempt for this model, wait briefly
-        if (isTransient && attempt < maxAttempts) {
-          await new Promise((resolve) => setTimeout(resolve, 600));
+      if (!isLastModel) {
+        const nextModel = modelsToTry[mIdx + 1];
+        if (is503) {
+          console.log(`[AI Failover]: ${currentModel} experiencing high demand; routing to ${nextModel}...`);
+        } else if (isRateLimit) {
+          console.log(`[AI Failover]: ${currentModel} quota boundary reached; routing to ${nextModel}...`);
+        } else if (isNetworkTimeout) {
+          console.log(`[AI Failover]: ${currentModel} connection reset; routing to ${nextModel}...`);
         } else {
-          // Break to next fallback model
-          break;
+          console.log(`[AI Failover]: ${currentModel} unavailable; routing to ${nextModel}...`);
         }
+        // Small 200ms yield before trying next model to allow network buffer to clear
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        continue;
       }
     }
   }
@@ -328,7 +326,7 @@ export async function getAiServiceStatus(): Promise<{
     };
   } catch (err: any) {
     const latencyMs = Date.now() - start;
-    console.warn('[AI Service Status Check Notice]:', err?.message || err);
+    console.log('[AI Service Status Check]:', err?.userMessage || err?.message || 'Degraded');
     return {
       available: false,
       status: 'Degraded',

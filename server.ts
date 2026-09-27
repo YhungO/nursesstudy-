@@ -128,10 +128,10 @@ app.post('/api/ai/tutor', async (req, res) => {
   } catch (error: any) {
     const statusCode = error.statusCode || 500;
     const userMessage = error.userMessage || 'AI assistance is temporarily unavailable. Please try again in a moment.';
-    console.error('[AI Tutor Route Error]:', {
+    console.warn('[AI Tutor Notice]:', {
       statusCode,
-      code: error?.code,
-      message: error?.message,
+      code: error?.code || 'AI_ERROR',
+      message: userMessage,
     });
     res.status(statusCode).json({
       error: userMessage,
