@@ -1870,6 +1870,67 @@ async function startServer() {
       };
     }
 
+    // Provide clean, silent Vite client for AI Studio (WebSocket/HMR disabled per platform guidelines)
+    app.get(['/@vite/client', '/@vite/client?*'], (_req, res) => {
+      res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      res.send(`
+        const sheetsMap = new Map();
+
+        export function updateStyle(id, content) {
+          let style = sheetsMap.get(id) || document.querySelector(\`style[data-vite-dev-id="\${id}"]\`);
+          if (!style) {
+            style = document.createElement('style');
+            style.setAttribute('type', 'text/css');
+            style.setAttribute('data-vite-dev-id', id);
+            document.head.appendChild(style);
+            sheetsMap.set(id, style);
+          }
+          style.textContent = content;
+        }
+
+        export function removeStyle(id) {
+          let style = sheetsMap.get(id) || document.querySelector(\`style[data-vite-dev-id="\${id}"]\`);
+          if (style) {
+            style.remove();
+            sheetsMap.delete(id);
+          }
+        }
+
+        export function injectQuery(url, queryToInject) {
+          return url + (url.includes('?') ? '&' : '?') + queryToInject;
+        }
+
+        class HMRContext {
+          constructor(ownerPath) {
+            this.ownerPath = ownerPath;
+            this.data = {};
+          }
+          accept(deps, callback) {
+            if (typeof deps === 'function') deps();
+            else if (typeof callback === 'function') callback();
+          }
+          acceptExports(_, callback) {
+            if (typeof callback === 'function') callback();
+          }
+          dispose() {}
+          prune() {}
+          invalidate() {}
+          on() {}
+          off() {}
+          send() {}
+        }
+
+        export function createHotContext(ownerPath) {
+          return new HMRContext(ownerPath);
+        }
+
+        export class ErrorOverlay extends (typeof HTMLElement !== 'undefined' ? HTMLElement : Object) {}
+        if (typeof customElements !== 'undefined' && !customElements.get('vite-error-overlay')) {
+          customElements.define('vite-error-overlay', ErrorOverlay);
+        }
+      `);
+    });
+
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
