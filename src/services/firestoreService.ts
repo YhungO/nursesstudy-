@@ -51,8 +51,6 @@ import {
   AuditLog,
   ContentStatus,
   AiSettings,
-  ChatChannel,
-  ChatMessage,
 } from '../types';
 
 export const COLLECTIONS = {
@@ -67,8 +65,6 @@ export const COLLECTIONS = {
   USERS: 'users',
   SETTINGS: 'settings',
   AUDIT_LOGS: 'audit_logs',
-  CHAT_CHANNELS: 'chat_channels',
-  CHAT_MESSAGES: 'chat_messages',
 };
 
 // ==================== CONNECTION TEST ==================== //
@@ -1547,141 +1543,3 @@ export function subscribeToAiSettings(callback: (settings: AiSettings | null) =>
   }
 }
 
-// ==================== REAL-TIME STUDENT STUDY CHAT ==================== //
-export function subscribeToChatChannels(
-  callback: (channels: ChatChannel[]) => void,
-  onError?: (err: any) => void
-): () => void {
-  try {
-    const q = collection(db, COLLECTIONS.CHAT_CHANNELS);
-    return onSnapshot(
-      q,
-      (snapshot) => {
-        const channels: ChatChannel[] = [];
-        snapshot.forEach((docSnap) => {
-          channels.push({ ...(docSnap.data() as ChatChannel), id: docSnap.id });
-        });
-        callback(channels);
-      },
-      (err) => {
-        console.warn('[Firestore] Chat channels subscription notice:', err);
-        if (onError) onError(err);
-      }
-    );
-  } catch (err) {
-    console.warn('[Firestore] Failed to subscribe to chat channels:', err);
-    return () => {};
-  }
-}
-
-export function subscribeToChatMessages(
-  channelId: string,
-  callback: (messages: ChatMessage[]) => void,
-  onError?: (err: any) => void
-): () => void {
-  try {
-    const q = query(
-      collection(db, COLLECTIONS.CHAT_MESSAGES),
-      where('channelId', '==', channelId),
-      orderBy('createdAt', 'asc'),
-      limit(150)
-    );
-    return onSnapshot(
-      q,
-      (snapshot) => {
-        const messages: ChatMessage[] = [];
-        snapshot.forEach((docSnap) => {
-          messages.push({ ...(docSnap.data() as ChatMessage), id: docSnap.id });
-        });
-        callback(messages);
-      },
-      (err) => {
-        console.warn('[Firestore] Chat messages subscription notice:', err);
-        if (onError) onError(err);
-      }
-    );
-  } catch (err) {
-    console.warn('[Firestore] Failed to subscribe to chat messages:', err);
-    return () => {};
-  }
-}
-
-export async function sendChatMessageToFirestore(
-  message: Omit<ChatMessage, 'id' | 'createdAt'>
-): Promise<ChatMessage> {
-  const msgId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-  const now = new Date().toISOString();
-  const fullMessage: ChatMessage = {
-    ...message,
-    id: msgId,
-    reactions: message.reactions || {},
-    pinned: !!message.pinned,
-    createdAt: now,
-  };
-
-  try {
-    await setDoc(doc(db, COLLECTIONS.CHAT_MESSAGES, msgId), fullMessage);
-  } catch (err) {
-    console.warn('[Firestore] Error writing chat message to Firestore:', err);
-  }
-
-  return fullMessage;
-}
-
-export async function toggleChatMessageReactionInFirestore(
-  messageId: string,
-  emoji: string,
-  userId: string
-): Promise<void> {
-  try {
-    const msgRef = doc(db, COLLECTIONS.CHAT_MESSAGES, messageId);
-    const snap = await getDoc(msgRef);
-    if (!snap.exists()) return;
-
-    const data = snap.data() as ChatMessage;
-    const reactions = { ...(data.reactions || {}) };
-    const currentList = reactions[emoji] || [];
-    const idx = currentList.indexOf(userId);
-
-    if (idx >= 0) {
-      currentList.splice(idx, 1);
-      if (currentList.length === 0) {
-        delete reactions[emoji];
-      } else {
-        reactions[emoji] = currentList;
-      }
-    } else {
-      currentList.push(userId);
-      reactions[emoji] = currentList;
-    }
-
-    await setDoc(msgRef, { reactions, updatedAt: new Date().toISOString() }, { merge: true });
-  } catch (err) {
-    console.warn('[Firestore] Error updating reaction in Firestore:', err);
-  }
-}
-
-export async function pinChatMessageInFirestore(messageId: string, pinned: boolean): Promise<void> {
-  try {
-    const msgRef = doc(db, COLLECTIONS.CHAT_MESSAGES, messageId);
-    await setDoc(msgRef, { pinned, updatedAt: new Date().toISOString() }, { merge: true });
-  } catch (err) {
-    console.warn('[Firestore] Error updating pin in Firestore:', err);
-  }
-}
-
-export async function deleteChatMessageFromFirestore(messageId: string): Promise<void> {
-  try {
-    await deleteDoc(doc(db, COLLECTIONS.CHAT_MESSAGES, messageId));
-  } catch (err) {
-    console.warn('[Firestore] Error deleting chat message from Firestore:', err);
-  }
-}
-
-export async function createChatChannelInFirestore(channel: ChatChannel): Promise<void> {
-  try {
-    await setDoc(doc(db, COLLECTIONS.CHAT_CHANNELS, channel.id), channel, { merge: true });
-  } catch (err) {
-    console.warn('[Firestore] Error creating chat channel in Firestore:', err);
-  }
-}

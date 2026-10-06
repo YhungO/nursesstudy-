@@ -3,6 +3,122 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+    <script>
+      // HMR is disabled in AI Studio; ignore HMR WebSocket connection logs
+      (function() {
+        function shouldIgnore(args) {
+          if (!args) return false;
+          for (let i = 0; i < args.length; i++) {
+            const item = args[i];
+            const str = typeof item === 'string' ? item : (item && typeof item === 'object' ? (item.message || item.stack || '') : '');
+            if (
+              str.includes('[vite]') ||
+              str.includes('WebSocket') ||
+              str.includes('websocket') ||
+              str.includes('ws://') ||
+              str.includes('wss://') ||
+              str.includes('vite:ws')
+            ) {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        // Intercept MessagePort.postMessage to prevent _aistudio-iframe.js from posting [vite] errors to host
+        if (typeof MessagePort !== 'undefined' && MessagePort.prototype && MessagePort.prototype.postMessage) {
+          const origPortPostMessage = MessagePort.prototype.postMessage;
+          MessagePort.prototype.postMessage = function(data, ...rest) {
+            if (data && typeof data === 'object' && data.type === 'console_error') {
+              const msg = typeof data.message === 'string' ? data.message : '';
+              if (
+                msg.includes('[vite]') ||
+                msg.includes('WebSocket') ||
+                msg.includes('websocket') ||
+                msg.includes('ws://') ||
+                msg.includes('wss://')
+              ) {
+                return;
+              }
+            }
+            return origPortPostMessage.call(this, data, ...rest);
+          };
+        }
+
+        function wrapConsole(targetConsole) {
+          if (!targetConsole) return targetConsole;
+          const realError = targetConsole.error;
+          const realWarn = targetConsole.warn;
+
+          return new Proxy(targetConsole, {
+            get(target, prop) {
+              if (prop === 'error') {
+                return function(...args) {
+                  if (shouldIgnore(args)) return;
+                  return (target.error || realError).apply(target, args);
+                };
+              }
+              if (prop === 'warn') {
+                return function(...args) {
+                  if (shouldIgnore(args)) return;
+                  return (target.warn || realWarn).apply(target, args);
+                };
+              }
+              return target[prop];
+            },
+            set(target, prop, value) {
+              if (prop === 'error' && typeof value === 'function') {
+                target[prop] = function(...args) {
+                  if (shouldIgnore(args)) return;
+                  return value.apply(this, args);
+                };
+                return true;
+              }
+              if (prop === 'warn' && typeof value === 'function') {
+                target[prop] = function(...args) {
+                  if (shouldIgnore(args)) return;
+                  return value.apply(this, args);
+                };
+                return true;
+              }
+              target[prop] = value;
+              return true;
+            }
+          });
+        }
+
+        let currentConsole = wrapConsole(window.console);
+        try {
+          Object.defineProperty(window, 'console', {
+            configurable: true,
+            enumerable: true,
+            get() {
+              return currentConsole;
+            },
+            set(newConsole) {
+              currentConsole = wrapConsole(newConsole);
+            }
+          });
+        } catch (_) {}
+
+        window.addEventListener('error', function(event) {
+          const msg = event?.message || '';
+          if (msg.includes('[vite]') || msg.includes('WebSocket') || msg.includes('websocket')) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          const reason = event?.reason;
+          const msg = typeof reason === 'string' ? reason : (reason?.message || '');
+          if (msg.includes('[vite]') || msg.includes('WebSocket') || msg.includes('websocket')) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+          }
+        }, true);
+      })();
+    </script>
     <title>Remix NursesStudy - Nursing Education & CBT Exam Platform</title>
     <meta name="description" content="A modern, professional nursing education and CBT exam preparation platform for nursing students and administrators." />
     <meta name="theme-color" content="#0b0f19" />

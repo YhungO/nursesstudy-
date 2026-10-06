@@ -1,8 +1,6 @@
 // Prevent tsx from polluting global.__dirname with '.' which breaks createRequire('.') in Vite plugins
-if (typeof (globalThis as any).__dirname === 'string' && (globalThis as any).__dirname === '.') {
-  delete (globalThis as any).__dirname;
-  delete (global as any).__dirname;
-}
+delete (globalThis as any).__dirname;
+delete (global as any).__dirname;
 
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
