@@ -14,6 +14,8 @@ import {
   TheoryMarkingResponse,
   AiSettings,
   AiServiceStatus,
+  ChatMessage,
+  ChatChannel,
 } from '../types';
 import { offlineStorage } from './offlineStorage';
 
@@ -477,9 +479,41 @@ export const api = {
   getAiSettings: () => request<AiSettings>('/api/ai/settings'),
   getAdminAiSettings: () =>
     request<{ settings: AiSettings; status: AiServiceStatus }>('/api/admin/ai-settings'),
-  updateAdminAiSettings: (settings: Partial<AiSettings>) =>
+    updateAdminAiSettings: (settings: Partial<AiSettings>) =>
     request<{ success: boolean; message: string; settings: AiSettings }>('/api/admin/ai-settings', {
       method: 'PUT',
       body: JSON.stringify(settings),
+    }),
+
+  // Real-Time Student Study Chat
+  getChatChannels: () => request<ChatChannel[]>('/api/chat/channels'),
+  createChatChannel: (data: { name: string; description?: string; category?: string; activeTopic?: string }) =>
+    request<ChatChannel>('/api/chat/channels', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getChatMessages: (channelId: string, topic?: string) => {
+    let url = `/api/chat/messages?channelId=${encodeURIComponent(channelId)}`;
+    if (topic) url += `&topic=${encodeURIComponent(topic)}`;
+    return request<ChatMessage[]>(url);
+  },
+  sendChatMessage: (data: { channelId: string; content: string; topicTitle?: string; category?: string }) =>
+    request<ChatMessage>('/api/chat/messages', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  reactToChatMessage: (messageId: string, emoji: string) =>
+    request<ChatMessage>(`/api/chat/messages/${messageId}/react`, {
+      method: 'POST',
+      body: JSON.stringify({ emoji }),
+    }),
+  deleteChatMessage: (messageId: string) =>
+    request<{ success: boolean; deletedId: string }>(`/api/chat/messages/${messageId}`, {
+      method: 'DELETE',
+    }),
+  pinChatMessage: (messageId: string, pinned: boolean) =>
+    request<ChatMessage>(`/api/chat/messages/${messageId}/pin`, {
+      method: 'PUT',
+      body: JSON.stringify({ pinned }),
     }),
 };

@@ -1,3 +1,9 @@
+// Prevent tsx from polluting global.__dirname with '.' which breaks createRequire('.') in Vite plugins
+if (typeof (globalThis as any).__dirname === 'string' && (globalThis as any).__dirname === '.') {
+  delete (globalThis as any).__dirname;
+  delete (global as any).__dirname;
+}
+
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
@@ -94,21 +100,21 @@ export default defineConfig(() => {
           ],
         },
         devOptions: {
-          enabled: true,
-          type: 'module',
+          enabled: false,
         },
       }),
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(process.cwd(), '.'),
       },
     },
     server: {
       allowedHosts: true as true,
       // HMR is disabled in AI Studio
       // Do not modify file watching
-      hmr: process.env.DISABLE_HMR === 'true' ? false : undefined,
+      hmr: false,
+      ws: false as false,
       // Disable file watching when DISABLE_HMR is set
       watch: process.env.DISABLE_HMR === 'true' ? null : undefined,
     },

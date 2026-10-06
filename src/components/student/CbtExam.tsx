@@ -78,11 +78,17 @@ function randomizeQuestionOptions(options: any[]): any[] {
   const normalized = options.map((opt, idx) => {
     const defaultLetter = OPTION_LETTERS[idx] || 'A';
     if (typeof opt === 'string') {
-      return { id: defaultLetter, originalId: defaultLetter, text: opt };
+      const match = opt.match(/^([A-D])[\.\)]\s*(.*)$/i);
+      const origId = match ? (match[1].toUpperCase() as 'A' | 'B' | 'C' | 'D') : defaultLetter;
+      const cleanText = match ? match[2] : opt;
+      return { id: defaultLetter, originalId: origId, text: cleanText, rawText: opt };
     }
     const origId = (opt as any).originalId || (opt as any).id || defaultLetter;
-    const text = (opt as any).text || (opt as any).label || (opt as any).value || '';
-    return { id: defaultLetter, originalId: origId as 'A' | 'B' | 'C' | 'D', text };
+    const textVal = (opt as any).text || (opt as any).label || (opt as any).value || '';
+    const match = typeof textVal === 'string' ? textVal.match(/^([A-D])[\.\)]\s*(.*)$/i) : null;
+    const cleanText = match ? match[2] : textVal;
+    const finalOrigId = match ? (match[1].toUpperCase() as 'A' | 'B' | 'C' | 'D') : origId;
+    return { id: defaultLetter, originalId: finalOrigId as 'A' | 'B' | 'C' | 'D', text: cleanText, rawText: textVal };
   });
 
   // 2. Fisher-Yates unbiased shuffle
@@ -97,6 +103,7 @@ function randomizeQuestionOptions(options: any[]): any[] {
     id: OPTION_LETTERS[idx] || 'A',
     originalId: item.originalId,
     text: item.text,
+    rawText: item.rawText,
   }));
 }
 
@@ -1310,7 +1317,7 @@ export const CbtExam: React.FC<CbtExamProps> = ({
                           <span className="w-5 h-5 rounded-md bg-slate-800 text-slate-300 font-bold text-[11px] flex items-center justify-center">
                             {optObj.id}
                           </span>
-                          <span>{optObj.text}</span>
+                          <span>{(optObj.text || '').replace(new RegExp(`^${optObj.id}[\\.\\)]\\s*`, 'i'), '')}</span>
                         </div>
                         {isOptionCorrect && (
                           <span className="text-[10px] font-bold text-emerald-400 uppercase">

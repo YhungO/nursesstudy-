@@ -307,7 +307,7 @@ export const ResultsProgress: React.FC<ResultsProgressProps> = ({
                             <span className="w-5 h-5 rounded bg-slate-800 text-slate-300 font-bold text-[10px] flex items-center justify-center">
                               {opt.id}
                             </span>
-                            <span>{opt.text}</span>
+                            <span>{(opt.text || '').replace(new RegExp(`^${opt.id}[\\.\\)]\\s*`, 'i'), '')}</span>
                           </div>
                           {isCorrectKey && (
                             <span className="text-[10px] font-bold text-emerald-400 uppercase">

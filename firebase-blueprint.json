@@ -231,6 +231,44 @@
         "updatedBy": { "type": "string" }
       },
       "required": ["id", "aiFeaturesEnabled", "aiTutorEnabled", "aiExplanationEnabled"]
+    },
+    "ChatChannel": {
+      "title": "ChatChannel",
+      "description": "Study topic and discussion channel for nursing students",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string", "enum": ["exam-strategy", "study-topic", "clinical-pearl", "question-discussion", "general"] },
+        "badge": { "type": "string" },
+        "color": { "type": "string" },
+        "activeTopic": { "type": "string" },
+        "participantCount": { "type": "number" }
+      },
+      "required": ["id", "name", "category"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Real-time student study and exam discussion message",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "channelId": { "type": "string" },
+        "topicTitle": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderRole": { "type": "string", "enum": ["student", "admin"] },
+        "senderSchool": { "type": "string" },
+        "senderLevel": { "type": "string" },
+        "content": { "type": "string", "maxLength": 2000 },
+        "category": { "type": "string", "enum": ["exam-strategy", "study-topic", "clinical-pearl", "question-discussion", "general"] },
+        "reactions": { "type": "object" },
+        "pinned": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "channelId", "senderId", "senderName", "content", "createdAt"]
     }
   },
   "firestore": {
@@ -245,6 +283,8 @@
     "announcements": { "schema": "Announcement", "description": "Platform broadcast notices" },
     "bookmarks": { "schema": "Bookmark", "description": "Student bookmarked items" },
     "audit_logs": { "schema": "AuditLog", "description": "Admin action audit logs" },
-    "settings": { "schema": "SystemSettings", "description": "Platform system configurations and AI settings" }
+    "settings": { "schema": "SystemSettings", "description": "Platform system configurations and AI settings" },
+    "chat_channels": { "schema": "ChatChannel", "description": "Student discussion channels and topics" },
+    "chat_messages": { "schema": "ChatMessage", "description": "Real-time study discussion messages" }
   }
 }

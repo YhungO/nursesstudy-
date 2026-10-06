@@ -157,6 +157,34 @@ export interface Announcement {
   createdAt: string;
 }
 
+export interface ChatChannel {
+  id: string;
+  name: string;
+  description: string;
+  category: 'exam-strategy' | 'study-topic' | 'clinical-pearl' | 'question-discussion' | 'general';
+  badge?: string;
+  color?: string;
+  activeTopic?: string;
+  participantCount?: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  channelId: string;
+  topicTitle?: string;
+  senderId: string;
+  senderName: string;
+  senderRole: 'student' | 'admin';
+  senderSchool?: string;
+  senderLevel?: string;
+  content: string;
+  category?: 'exam-strategy' | 'study-topic' | 'clinical-pearl' | 'question-discussion' | 'general';
+  reactions?: Record<string, string[]>;
+  pinned?: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface DatabaseSchema {
   users: User[];
   levels: NursingLevel[];
@@ -167,6 +195,8 @@ export interface DatabaseSchema {
   attempts: ExamAttempt[];
   bookmarks: Bookmark[];
   announcements: Announcement[];
+  chatChannels: ChatChannel[];
+  chatMessages: ChatMessage[];
   settings: {
     platformName: string;
     maintenanceMode: boolean;
@@ -177,6 +207,128 @@ export interface DatabaseSchema {
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'database.json');
+
+export const DEFAULT_CHAT_CHANNELS: ChatChannel[] = [
+  {
+    id: 'exam-prep-strategies',
+    name: 'Exam Prep & Strategy Hub',
+    description: 'Timed CBT pacing, high-yield revision schedules, pass benchmark strategies, and clinical exam tips.',
+    category: 'exam-strategy',
+    badge: 'Strategy',
+    color: 'amber',
+    activeTopic: 'ND1 CBT Time Management & Negative Marking Myths',
+    participantCount: 38,
+  },
+  {
+    id: 'philosophy-history-science',
+    name: 'Philosophy & History of Science',
+    description: 'Active discussion on the 125-Question CBT bank, scientific methodology, early discoveries, and key philosophers.',
+    category: 'study-topic',
+    badge: '125-Q CBT',
+    color: 'purple',
+    activeTopic: 'Paleolithic artifacts, Thales, Archimedes & Arabic algebra review',
+    participantCount: 42,
+  },
+  {
+    id: 'anatomy-physiology',
+    name: 'Anatomy & Physiology Hub',
+    description: 'Endocrine system, Integumentary layers, burn percentage (Rule of Nines), and organ physiology.',
+    category: 'study-topic',
+    badge: 'Anatomy',
+    color: 'teal',
+    activeTopic: 'Endocrine hormonal feedback loops & skin membrane histology',
+    participantCount: 56,
+  },
+  {
+    id: 'primary-health-care',
+    name: 'PHC & Community Nursing',
+    description: 'Epidemiological triad, cold chain immunization, Alma-Ata principles, maternal child health, and community diagnosis.',
+    category: 'study-topic',
+    badge: 'PHC',
+    color: 'emerald',
+    activeTopic: 'PHC Sets 1–3 CBT questions review & cold-chain temperatures',
+    participantCount: 29,
+  },
+  {
+    id: 'clinical-pearls-mnemonics',
+    name: 'Clinical Pearls & Mnemonics',
+    description: 'High-yield memory tricks, pharmacology suffixes, vital sign thresholds, and clinical decision trees.',
+    category: 'clinical-pearl',
+    badge: 'Pearls',
+    color: 'sky',
+    activeTopic: 'Electrolyte imbalance ECG changes & endocrine feedback mnemonics',
+    participantCount: 34,
+  },
+  {
+    id: 'student-lounge',
+    name: 'Nursing Student Lounge',
+    description: 'Peer support, study motivation, group formation, and general nursing school check-ins.',
+    category: 'general',
+    badge: 'Community',
+    color: 'rose',
+    activeTopic: 'Daily clinical shift debrief & weekend revision plans',
+    participantCount: 65,
+  },
+];
+
+export const DEFAULT_CHAT_MESSAGES: ChatMessage[] = [
+  {
+    id: 'msg-1',
+    channelId: 'exam-prep-strategies',
+    topicTitle: 'CBT Time Management Advice for 125 Questions',
+    senderId: 'usr-admin-1',
+    senderName: 'YHUNGO (Lead Admin)',
+    senderRole: 'admin',
+    senderSchool: 'NursesStudy Clinical Faculty',
+    content: '📌 HIGH-YIELD TIP: For the 125-Question Philosophy & History of Science CBT, you have exactly 60 minutes. That is roughly 28 seconds per question. Never spend more than 40 seconds on one question; flag it, proceed, and use the Question Palette to return!',
+    category: 'exam-strategy',
+    pinned: true,
+    reactions: { '💡': ['usr-student-1'], '🔥': ['usr-student-1', 'usr-admin-2'], '👍': ['usr-student-1'] },
+    createdAt: '2026-09-28T09:00:00.000Z',
+  },
+  {
+    id: 'msg-2',
+    channelId: 'exam-prep-strategies',
+    topicTitle: 'CBT Time Management Advice for 125 Questions',
+    senderId: 'usr-student-1',
+    senderName: 'Amara Vance',
+    senderRole: 'student',
+    senderSchool: 'St. Jude College of Nursing',
+    senderLevel: 'ND 1',
+    content: 'Thank you for this advice! I took the practice run and finished in 48 minutes by trusting my first instinct on the factual history questions.',
+    category: 'exam-strategy',
+    reactions: { '❤️': ['usr-admin-1'], '👏': ['usr-admin-2'] },
+    createdAt: '2026-09-28T09:15:00.000Z',
+  },
+  {
+    id: 'msg-3',
+    channelId: 'philosophy-history-science',
+    topicTitle: 'Remembering Arabic algebra terms: Al-Jabr vs Al-Muqabala',
+    senderId: 'usr-student-1',
+    senderName: 'Amara Vance',
+    senderRole: 'student',
+    senderSchool: 'St. Jude College of Nursing',
+    senderLevel: 'ND 1',
+    content: 'Quick memory tip for Question 47: Al-muqabala means combining similar terms on either side of an equation! Al-jabr is restoring/transposing negative terms.',
+    category: 'study-topic',
+    reactions: { '💡': ['usr-admin-1'], '👍': ['usr-admin-1'] },
+    createdAt: '2026-09-28T10:30:00.000Z',
+  },
+  {
+    id: 'msg-4',
+    channelId: 'anatomy-physiology',
+    topicTitle: 'Rule of Nines in Burns - Integumentary Review',
+    senderId: 'usr-admin-2',
+    senderName: 'TikTokYhung',
+    senderRole: 'admin',
+    senderSchool: 'NursesStudy Platform Owner',
+    content: '📌 Integumentary Theory CBT Pearl: In adult burn evaluation, Head & Neck = 9%, Each Upper Limb = 9%, Anterior Trunk = 18%, Posterior Trunk = 18%, Each Lower Limb = 18%, Perineum = 1%. Always state this clearly in clinical case questions!',
+    category: 'clinical-pearl',
+    pinned: true,
+    reactions: { '💡': ['usr-student-1'], '🔥': ['usr-student-1'] },
+    createdAt: '2026-09-28T11:00:00.000Z',
+  },
+];
 
 // Realistic nursing curriculum initial seed
 export function getInitialData(): DatabaseSchema {
@@ -422,6 +574,8 @@ export function getInitialData(): DatabaseSchema {
         createdAt: '2026-03-17T08:00:00.000Z',
       },
     ],
+    chatChannels: DEFAULT_CHAT_CHANNELS,
+    chatMessages: DEFAULT_CHAT_MESSAGES,
   };
 }
 
@@ -446,10 +600,17 @@ class DatabaseService {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
         // ensure default arrays exist in case of partial structures
-        return {
+        const loaded: DatabaseSchema = {
           ...getInitialData(),
           ...parsed,
         };
+        if (!Array.isArray(loaded.chatChannels) || loaded.chatChannels.length === 0) {
+          loaded.chatChannels = DEFAULT_CHAT_CHANNELS;
+        }
+        if (!Array.isArray(loaded.chatMessages) || loaded.chatMessages.length === 0) {
+          loaded.chatMessages = DEFAULT_CHAT_MESSAGES;
+        }
+        return loaded;
       }
     } catch (err) {
       console.error('Error loading database file, initializing default:', err);

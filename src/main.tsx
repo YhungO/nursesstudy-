@@ -5,7 +5,7 @@ import './index.css';
 import { registerSW } from 'virtual:pwa-register';
 
 // Register service worker with auto-update for offline caching of app shell & study assets
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && import.meta.env.PROD) {
   registerSW({
     immediate: true,
     onNeedRefresh() {

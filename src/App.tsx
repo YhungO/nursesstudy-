@@ -16,6 +16,7 @@ import { AuthGate } from './components/auth/AuthGate';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
 import { AiTutorDrawer } from './components/student/AiTutorDrawer';
+import { StudyChat } from './components/student/StudyChat';
 import { api } from './services/api';
 import { offlineStorage } from './services/offlineStorage';
 import {
@@ -504,6 +505,15 @@ const MainAppContent: React.FC = () => {
           />
         )}
 
+        {currentView === 'chat' && (
+          <StudyChat
+            initialChannelId={extraParams?.channelId || 'exam-prep-strategies'}
+            initialTopic={extraParams?.topic}
+            onNavigateToExam={(examId) => handleNavigate('cbt', { examId })}
+            onNavigateToNotes={(noteId) => handleNavigate('notes', { noteId })}
+          />
+        )}
+
         {currentView === 'profile' && <Profile levels={levels} />}
 
         {currentView === 'admin' && (
@@ -592,6 +602,9 @@ const MainAppContent: React.FC = () => {
               </button>
               <button onClick={() => handleNavigate('cbt')} className="hover:text-teal-400 transition-colors">
                 CBT Exams
+              </button>
+              <button onClick={() => handleNavigate('chat')} className="hover:text-teal-400 transition-colors text-teal-400 font-semibold">
+                Study Chat
               </button>
               <button onClick={() => handleNavigate('results')} className="hover:text-teal-400 transition-colors">
                 Analytics

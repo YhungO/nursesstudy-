@@ -73,7 +73,7 @@ export const AnswerOptions: React.FC<AnswerOptionsProps> = ({
 
             {/* 3. Answer Text */}
             <span className="flex-1 text-xs sm:text-sm leading-relaxed font-normal min-w-0 break-words">
-              {optObj.text}
+              {(optObj.text || '').replace(new RegExp(`^${optObj.id}[\\.\\)]\\s*`, 'i'), '')}
             </span>
           </button>
         );

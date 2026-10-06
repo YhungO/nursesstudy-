@@ -1,8 +1,16 @@
+// Prevent tsx from polluting global.__dirname with '.' which breaks createRequire('.') in Vite plugins
+if (typeof (globalThis as any).__dirname === 'string' && (globalThis as any).__dirname === '.') {
+  delete (globalThis as any).__dirname;
+  delete (global as any).__dirname;
+}
+
 import 'dotenv/config';
 import express from 'express';
+import http from 'http';
 import path from 'path';
+import { WebSocketServer, WebSocket } from 'ws';
 import { createServer as createViteServer } from 'vite';
-import { db, User, NursingLevel, Subject, StudyNote, Question, CBTExam, ExamAttempt, Announcement } from './server/db.ts';
+import { db, User, NursingLevel, Subject, StudyNote, Question, CBTExam, ExamAttempt, Announcement, ChatMessage, ChatChannel } from './server/db.ts';
 import { validateEmail, hashPassword, verifyPassword, generateResetCode } from './server/authUtils.ts';
 import {
   askAiTutor,
@@ -15,6 +23,11 @@ import {
   isAiTutorEnabled,
   isAiExplanationEnabled,
 } from './server/aiService.ts';
+import {
+  PHILOSOPHY_SCIENCE_EXAM_ID,
+  buildPhilosophyScienceExamPayload,
+  buildPhilosophyScienceQuestionPayloads,
+} from './src/data/philosophyScienceQuestions.ts';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -1742,19 +1755,293 @@ app.delete('/api/admin/students/:id', requireAdmin, (req, res) => {
   res.json({ success: true, deletedId: targetId });
 });
 
+// ==================== REAL-TIME STUDENT STUDY CHAT ==================== //
+interface ChatClient {
+  ws: WebSocket;
+  channelId: string;
+  userId?: string;
+  userName?: string;
+}
+
+const activeChatClients = new Set<ChatClient>();
+
+function broadcastToChannel(channelId: string, payload: any) {
+  const messageStr = JSON.stringify(payload);
+  for (const client of activeChatClients) {
+    if (client.channelId === channelId && client.ws.readyState === WebSocket.OPEN) {
+      try {
+        client.ws.send(messageStr);
+      } catch (err) {
+        console.warn('[WS] Failed to send to client:', err);
+      }
+    }
+  }
+}
+
+function broadcastToAllChannels(payload: any) {
+  const messageStr = JSON.stringify(payload);
+  for (const client of activeChatClients) {
+    if (client.ws.readyState === WebSocket.OPEN) {
+      try {
+        client.ws.send(messageStr);
+      } catch (err) {
+        console.warn('[WS] Failed to broadcast to client:', err);
+      }
+    }
+  }
+}
+
+function getChannelPresence(channelId: string): number {
+  let count = 0;
+  for (const client of activeChatClients) {
+    if (client.channelId === channelId && client.ws.readyState === WebSocket.OPEN) {
+      count++;
+    }
+  }
+  return count;
+}
+
+app.get('/api/chat/channels', (req, res) => {
+  const database = db.get();
+  const channels = database.chatChannels || [];
+  const messages = database.chatMessages || [];
+
+  const enriched = channels.map(ch => {
+    const channelMsgs = messages.filter(m => m.channelId === ch.id);
+    return {
+      ...ch,
+      messageCount: channelMsgs.length,
+      lastMessage: channelMsgs[channelMsgs.length - 1] || null,
+    };
+  });
+
+  res.json(enriched);
+});
+
+app.post('/api/chat/channels', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Authentication required to create a study channel' });
+  }
+
+  const { name, description, category, activeTopic } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Channel name is required' });
+  }
+
+  const database = db.get();
+  if (!database.chatChannels) database.chatChannels = [];
+
+  const id = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  const existing = database.chatChannels.find(c => c.id === id);
+  if (existing) {
+    return res.json(existing);
+  }
+
+  const newChannel: ChatChannel = {
+    id: id || `channel-${Date.now()}`,
+    name: name.trim(),
+    description: description?.trim() || 'Student-created topic discussion channel',
+    category: category || 'study-topic',
+    badge: 'Topic',
+    color: 'teal',
+    activeTopic: activeTopic?.trim() || name.trim(),
+    participantCount: 1,
+  };
+
+  database.chatChannels.push(newChannel);
+  db.save();
+  broadcastToAllChannels({ type: 'channel_created', channel: newChannel });
+  res.status(201).json(newChannel);
+});
+
+app.get('/api/chat/messages', (req, res) => {
+  const channelId = req.query.channelId ? String(req.query.channelId) : 'exam-prep-strategies';
+  const topic = req.query.topic ? String(req.query.topic).toLowerCase() : null;
+  const database = db.get();
+  let messages = (database.chatMessages || []).filter(m => m.channelId === channelId);
+
+  if (topic) {
+    messages = messages.filter(m => m.topicTitle && m.topicTitle.toLowerCase().includes(topic));
+  }
+
+  messages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  res.json(messages);
+});
+
+app.post('/api/chat/messages', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Please sign in to participate in student study discussions' });
+  }
+
+  const { channelId, content, topicTitle, category } = req.body;
+  if (!content || !content.trim()) {
+    return res.status(400).json({ error: 'Message content cannot be empty' });
+  }
+  if (content.trim().length > 2000) {
+    return res.status(400).json({ error: 'Message content exceeds 2000 characters limit' });
+  }
+
+  const database = db.get();
+  if (!database.chatMessages) database.chatMessages = [];
+
+  const targetChannelId = channelId || 'exam-prep-strategies';
+
+  const newMsg: ChatMessage = {
+    id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+    channelId: targetChannelId,
+    topicTitle: topicTitle?.trim() || undefined,
+    senderId: user.id,
+    senderName: user.name,
+    senderRole: user.role,
+    senderSchool: user.school || 'College of Nursing',
+    senderLevel: user.levelId === 'lvl-nd1' ? 'ND 1' : 'Nursing Student',
+    content: content.trim(),
+    category: category || 'study-topic',
+    reactions: {},
+    pinned: false,
+    createdAt: new Date().toISOString(),
+  };
+
+  database.chatMessages.push(newMsg);
+  db.save();
+  broadcastToChannel(targetChannelId, { type: 'message_created', message: newMsg });
+  res.status(201).json(newMsg);
+});
+
+app.post('/api/chat/messages/:id/react', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const { id } = req.params;
+  const { emoji } = req.body;
+  if (!emoji) {
+    return res.status(400).json({ error: 'Emoji is required' });
+  }
+
+  const database = db.get();
+  const msg = (database.chatMessages || []).find(m => m.id === id);
+  if (!msg) {
+    return res.status(404).json({ error: 'Message not found' });
+  }
+
+  if (!msg.reactions) msg.reactions = {};
+  const currentList = msg.reactions[emoji] || [];
+  const userIndex = currentList.indexOf(user.id);
+
+  if (userIndex >= 0) {
+    // remove reaction
+    currentList.splice(userIndex, 1);
+    if (currentList.length === 0) {
+      delete msg.reactions[emoji];
+    } else {
+      msg.reactions[emoji] = currentList;
+    }
+  } else {
+    // add reaction
+    currentList.push(user.id);
+    msg.reactions[emoji] = currentList;
+  }
+
+  db.save();
+  broadcastToChannel(msg.channelId, { type: 'message_updated', message: msg });
+  res.json(msg);
+});
+
+app.delete('/api/chat/messages/:id', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const { id } = req.params;
+  const database = db.get();
+  const index = (database.chatMessages || []).findIndex(m => m.id === id);
+  if (index === -1) {
+    return res.status(404).json({ error: 'Message not found' });
+  }
+
+  const msg = database.chatMessages[index];
+  if (msg.senderId !== user.id && user.role !== 'admin') {
+    return res.status(403).json({ error: 'You are only allowed to delete your own messages' });
+  }
+
+  const channelId = msg.channelId;
+  database.chatMessages.splice(index, 1);
+  db.save();
+  broadcastToChannel(channelId, { type: 'message_deleted', messageId: id, channelId });
+  res.json({ success: true, deletedId: id });
+});
+
+app.put('/api/chat/messages/:id/pin', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { pinned } = req.body;
+  const database = db.get();
+  const msg = (database.chatMessages || []).find(m => m.id === id);
+  if (!msg) {
+    return res.status(404).json({ error: 'Message not found' });
+  }
+
+  msg.pinned = !!pinned;
+  db.save();
+  broadcastToChannel(msg.channelId, { type: 'message_updated', message: msg });
+  res.json(msg);
+});
+
 // Restore sample seed dataset
 app.post('/api/admin/reset-data', requireAdmin, (req, res) => {
   const resetDb = db.resetToSeed();
   res.json({ success: true, message: 'Database reset to initial clinical curriculum seed' });
 });
 
+// Ensure Philosophy and History of Science 125-Question CBT exam exists in database
+function ensurePhilosophyScienceExam() {
+  const database = db.get();
+  const existingExam = database.exams.find(e => e.id === PHILOSOPHY_SCIENCE_EXAM_ID);
+  const existingQCount = database.questions.filter(q => String(q.id).startsWith('phs-')).length;
+
+  if (!existingExam || existingQCount < 125) {
+    const examPayload = buildPhilosophyScienceExamPayload();
+    const questionPayloads = buildPhilosophyScienceQuestionPayloads();
+
+    const targetIds = new Set(questionPayloads.map(q => String(q.id)));
+    database.questions = database.questions.filter(q => !targetIds.has(String(q.id)));
+    database.questions.push(...questionPayloads);
+
+    if (!existingExam) {
+      database.exams.push(examPayload as any);
+    } else {
+      const idx = database.exams.findIndex(e => e.id === PHILOSOPHY_SCIENCE_EXAM_ID);
+      database.exams[idx] = { ...database.exams[idx], ...(examPayload as any) };
+    }
+    db.save();
+    console.log('[Server] Ensured 125-Question Philosophy and History of Science CBT exam in database.');
+  }
+}
+
 // ==================== VITE & STATIC SERVING ==================== //
 async function startServer() {
+  ensurePhilosophyScienceExam();
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false, ws: false },
       appType: 'spa',
     });
+
+    // Provide safe no-op fallback on vite.ws to prevent "Cannot read properties of undefined (reading 'send')"
+    if (!vite.ws) {
+      (vite as any).ws = {
+        send: () => {},
+        close: () => {},
+        on: () => {},
+        off: () => {},
+        clients: new Set(),
+      };
+    }
+
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
@@ -1764,7 +2051,64 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const httpServer = http.createServer(app);
+  const wss = new WebSocketServer({ server: httpServer, path: '/api/chat-ws' });
+
+  wss.on('connection', (ws: WebSocket) => {
+    const client: ChatClient = {
+      ws,
+      channelId: 'exam-prep-strategies',
+    };
+    activeChatClients.add(client);
+
+    try {
+      ws.send(JSON.stringify({
+        type: 'connected',
+        channelId: client.channelId,
+        presence: getChannelPresence(client.channelId),
+      }));
+    } catch (_) {}
+
+    ws.on('message', (rawData) => {
+      try {
+        const msg = JSON.parse(rawData.toString());
+        if (msg.type === 'join_channel' && msg.channelId) {
+          const oldChannel = client.channelId;
+          client.channelId = String(msg.channelId);
+          if (msg.user) {
+            client.userId = msg.user.id;
+            client.userName = msg.user.name;
+          }
+          broadcastToChannel(oldChannel, { type: 'presence', channelId: oldChannel, count: getChannelPresence(oldChannel) });
+          broadcastToChannel(client.channelId, { type: 'presence', channelId: client.channelId, count: getChannelPresence(client.channelId) });
+        } else if (msg.type === 'typing' && client.channelId) {
+          broadcastToChannel(client.channelId, {
+            type: 'typing',
+            channelId: client.channelId,
+            userName: msg.userName || client.userName || 'A nursing candidate',
+          });
+        }
+      } catch (err) {
+        console.warn('[WS] Error processing message:', err);
+      }
+    });
+
+    ws.on('close', () => {
+      activeChatClients.delete(client);
+      broadcastToChannel(client.channelId, {
+        type: 'presence',
+        channelId: client.channelId,
+        count: getChannelPresence(client.channelId),
+      });
+    });
+
+    ws.on('error', (err) => {
+      console.warn('[WS] Client socket error:', err);
+      activeChatClients.delete(client);
+    });
+  });
+
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`NursesStudy full-stack server running on http://0.0.0.0:${PORT}`);
   });
 }

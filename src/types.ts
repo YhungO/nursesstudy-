@@ -278,3 +278,36 @@ export interface AiServiceStatus {
   details?: string;
 }
 
+export type ChatCategory = 'exam-strategy' | 'study-topic' | 'clinical-pearl' | 'question-discussion' | 'general';
+
+export interface ChatChannel {
+  id: string;
+  name: string;
+  description: string;
+  category: ChatCategory;
+  badge?: string;
+  color?: string;
+  activeTopic?: string;
+  participantCount?: number;
+  messageCount?: number;
+  lastMessage?: ChatMessage | null;
+}
+
+export interface ChatMessage {
+  id: string;
+  channelId: string;
+  topicTitle?: string;
+  senderId: string;
+  senderName: string;
+  senderRole: 'student' | 'admin';
+  senderSchool?: string;
+  senderLevel?: string;
+  content: string;
+  category?: ChatCategory;
+  reactions?: Record<string, string[]>;
+  pinned?: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+

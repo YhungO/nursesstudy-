@@ -40,6 +40,7 @@ import {
   subscribeToAuditLogs,
   FIREBASE_CONFIG,
   importIntegumentaryTheoryExamToFirestore,
+  importPhilosophyScienceExamToFirestore,
   saveAiSettingsToFirestore,
   getAiSettingsFromFirestore,
   subscribeToAiSettings,
@@ -184,6 +185,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [localAnnouncements, setLocalAnnouncements] = useState<Announcement[]>(announcements);
   const [isSyncingIntegumentary, setIsSyncingIntegumentary] = useState(false);
   const [integumentarySyncFeedback, setIntegumentarySyncFeedback] = useState<string | null>(null);
+  const [isSyncingPhilosophyScience, setIsSyncingPhilosophyScience] = useState(false);
+  const [philosophyScienceSyncFeedback, setPhilosophyScienceSyncFeedback] = useState<string | null>(null);
+
+  const handleSyncPhilosophyScienceExam = async () => {
+    setIsSyncingPhilosophyScience(true);
+    setPhilosophyScienceSyncFeedback('Upserting Philosophy and History of Science (125 questions) to Cloud Firestore...');
+    try {
+      const res = await importPhilosophyScienceExamToFirestore({
+        adminActor: user ? { uid: user.id, email: user.email, name: user.name } : undefined,
+      });
+      if (res.success) {
+        setPhilosophyScienceSyncFeedback(`✓ ${res.message}`);
+        onDataChanged();
+        setTimeout(() => setPhilosophyScienceSyncFeedback(null), 8000);
+      } else {
+        setPhilosophyScienceSyncFeedback(`❌ Error: ${res.error || res.message}`);
+      }
+    } catch (err: any) {
+      setPhilosophyScienceSyncFeedback(`❌ Error: ${err.message || 'Import failed'}`);
+    } finally {
+      setIsSyncingPhilosophyScience(false);
+    }
+  };
 
   const handleSyncIntegumentaryExam = async () => {
     setIsSyncingIntegumentary(true);
@@ -1734,6 +1758,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
+                id="admin-sync-philosophy-science-cbt-btn"
+                onClick={handleSyncPhilosophyScienceExam}
+                disabled={isSyncingPhilosophyScience}
+                title="Perform one-time or re-sync upsert of 'Philosophy and History of Science' (125 objective questions) to Cloud Firestore with zero duplicates"
+                className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+              >
+                <Cloud className={`w-4 h-4 ${isSyncingPhilosophyScience ? 'animate-spin' : ''}`} />
+                <span>{isSyncingPhilosophyScience ? 'Upserting to Firestore...' : 'Sync Philosophy & Science (125 Qs) to Firestore'}</span>
+              </button>
+
+              <button
+                type="button"
                 id="admin-sync-theory-cbt-btn"
                 onClick={handleSyncIntegumentaryExam}
                 disabled={isSyncingIntegumentary}
@@ -1765,6 +1801,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </button>
             </div>
           </div>
+
+          {philosophyScienceSyncFeedback && (
+            <div className="p-3 bg-purple-950/40 border border-purple-500/40 rounded-xl flex items-center justify-between text-xs text-purple-200 animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0" />
+                <span>{philosophyScienceSyncFeedback}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPhilosophyScienceSyncFeedback(null)}
+                className="text-purple-400 hover:text-white font-bold ml-2 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {integumentarySyncFeedback && (
             <div className="p-3 bg-teal-950/40 border border-teal-500/40 rounded-xl flex items-center justify-between text-xs text-teal-200 animate-in fade-in">

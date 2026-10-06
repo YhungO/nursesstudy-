@@ -112,6 +112,29 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+
+    // Real-time Student Chat Channels & Discussion Topics
+    match /chat_channels/{channelId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    // Real-time Student Discussion Messages
+    match /chat_messages/{messageId} {
+      allow read: if true;
+      allow create: if isAuthenticated() &&
+        request.resource.data.senderId == request.auth.uid &&
+        request.resource.data.content is string &&
+        request.resource.data.content.size() > 0 &&
+        request.resource.data.content.size() <= 2000;
+      allow update: if isAuthenticated() &&
+        (resource.data.senderId == request.auth.uid || isAdmin() ||
+         // Allow any student to toggle reactions on messages
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'updatedAt']));
+      allow delete: if isAuthenticated() &&
+        (resource.data.senderId == request.auth.uid || isAdmin());
+    }
   }
 }
 

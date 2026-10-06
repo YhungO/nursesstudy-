@@ -18,6 +18,7 @@ import {
   GraduationCap,
   Bell,
   Sparkles,
+  MessageSquare,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -51,6 +52,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'notes', label: 'Study Notes', icon: BookOpen },
     { id: 'practice', label: 'Practice MCQs', icon: HelpCircle },
     { id: 'cbt', label: 'CBT Hall', icon: Clock },
+    { id: 'chat', label: 'Study Chat', icon: MessageSquare },
     { id: 'results', label: 'My Results', icon: Award },
     { id: 'bookmarks', label: 'Bookmarks', icon: Bookmark },
   ];
@@ -488,6 +490,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Clock className="w-4 h-4 mb-0.5 shrink-0" />
             <span className="truncate">CBT Hall</span>
+          </button>
+          <button
+            onClick={() => onNavigate('chat')}
+            className={`flex flex-col items-center justify-center min-h-[44px] px-2 sm:px-3 rounded-xl text-[10px] font-semibold transition-all touch-manipulation min-w-0 flex-1 ${
+              currentView === 'chat'
+                ? 'bg-teal-500/15 text-teal-300 font-bold border border-teal-500/30'
+                : 'text-slate-400 hover:text-slate-200 border border-transparent'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4 mb-0.5 shrink-0" />
+            <span className="truncate">Chat</span>
           </button>
           <button
             onClick={() => onNavigate('results')}

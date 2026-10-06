@@ -28,6 +28,8 @@ import {
   AlertCircle,
   ShieldCheck,
   HardDrive,
+  MessageSquare,
+  Radio,
 } from 'lucide-react';
 import { offlineStorage } from '../../services/offlineStorage';
 
@@ -556,6 +558,69 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
             <Trophy className="w-3.5 h-3.5 text-indigo-400" />
             <span>Cohort Leaderboard</span>
           </button>
+        </div>
+      </div>
+
+      {/* Real-time Student Study Discussions & Strategy Hub Banner */}
+      <div className="rounded-3xl bg-gradient-to-r from-teal-950/60 via-slate-900 to-[#101b2b] border border-teal-500/30 p-5 sm:p-6 shadow-xl relative overflow-hidden">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+          <div className="space-y-1.5 max-w-2xl">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="w-8 h-8 rounded-xl bg-teal-500/20 text-teal-300 flex items-center justify-center font-bold">
+                <MessageSquare className="w-4 h-4" />
+              </span>
+              <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                Peer Study Discussions & Exam Strategy Rooms
+              </h2>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
+                <Radio className="w-2.5 h-2.5 text-emerald-400 animate-pulse" />
+                Live WebSocket
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Collaborate in real time with fellow nursing students. Discuss question rationales for the 125-Question CBT bank, exchange high-yield mnemonics, and refine time pacing strategies.
+            </p>
+
+            {/* Quick Discussion Topics */}
+            <div className="flex items-center gap-1.5 flex-wrap pt-1 text-xs">
+              <span className="text-[11px] text-slate-400 font-semibold mr-0.5">Quick Rooms:</span>
+              <button
+                onClick={() => onNavigate('chat', { channelId: 'exam-prep-strategies' })}
+                className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px] font-semibold transition-colors cursor-pointer"
+              >
+                ⏱️ CBT Timing & Pacing
+              </button>
+              <button
+                onClick={() => onNavigate('chat', { channelId: 'philosophy-history-science' })}
+                className="px-2.5 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[11px] font-semibold transition-colors cursor-pointer"
+              >
+                🔬 125-Q Philosophy Bank
+              </button>
+              <button
+                onClick={() => onNavigate('chat', { channelId: 'anatomy-physiology' })}
+                className="px-2.5 py-1 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 text-[11px] font-semibold transition-colors cursor-pointer"
+              >
+                🫀 Anatomy & Endocrine
+              </button>
+              <button
+                onClick={() => onNavigate('chat', { channelId: 'clinical-pearls-mnemonics' })}
+                className="px-2.5 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[11px] font-semibold transition-colors cursor-pointer"
+              >
+                💡 High-Yield Mnemonics
+              </button>
+            </div>
+          </div>
+
+          <div className="shrink-0 w-full sm:w-auto">
+            <button
+              onClick={() => onNavigate('chat')}
+              className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-teal-900/40 transition-all cursor-pointer"
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>Enter Study Chat</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
