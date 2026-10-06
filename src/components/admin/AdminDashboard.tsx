@@ -41,6 +41,7 @@ import {
   FIREBASE_CONFIG,
   importIntegumentaryTheoryExamToFirestore,
   importPhilosophyScienceExamToFirestore,
+  importEntrepreneurshipExamToFirestore,
   saveAiSettingsToFirestore,
   getAiSettingsFromFirestore,
   subscribeToAiSettings,
@@ -187,6 +188,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [integumentarySyncFeedback, setIntegumentarySyncFeedback] = useState<string | null>(null);
   const [isSyncingPhilosophyScience, setIsSyncingPhilosophyScience] = useState(false);
   const [philosophyScienceSyncFeedback, setPhilosophyScienceSyncFeedback] = useState<string | null>(null);
+  const [isSyncingEntrepreneurship, setIsSyncingEntrepreneurship] = useState(false);
+  const [entrepreneurshipSyncFeedback, setEntrepreneurshipSyncFeedback] = useState<string | null>(null);
+
+  const handleSyncEntrepreneurshipExam = async () => {
+    setIsSyncingEntrepreneurship(true);
+    setEntrepreneurshipSyncFeedback('Upserting Introduction to Entrepreneurship (EED 126, 50 questions) to Cloud Firestore...');
+    try {
+      const res = await importEntrepreneurshipExamToFirestore({
+        adminActor: user ? { uid: user.id, email: user.email, name: user.name } : undefined,
+      });
+      if (res.success) {
+        setEntrepreneurshipSyncFeedback(`✓ ${res.message}`);
+        onDataChanged();
+        setTimeout(() => setEntrepreneurshipSyncFeedback(null), 8000);
+      } else {
+        setEntrepreneurshipSyncFeedback(`❌ Error: ${res.error || res.message}`);
+      }
+    } catch (err: any) {
+      setEntrepreneurshipSyncFeedback(`❌ Error: ${err.message || 'Import failed'}`);
+    } finally {
+      setIsSyncingEntrepreneurship(false);
+    }
+  };
 
   const handleSyncPhilosophyScienceExam = async () => {
     setIsSyncingPhilosophyScience(true);
@@ -1758,6 +1782,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
+                id="admin-sync-entrepreneurship-cbt-btn"
+                onClick={handleSyncEntrepreneurshipExam}
+                disabled={isSyncingEntrepreneurship}
+                title="Perform one-time or re-sync upsert of 'Introduction to Entrepreneurship (EED 126)' (50 objective questions) to Cloud Firestore with zero duplicates"
+                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+              >
+                <Cloud className={`w-4 h-4 ${isSyncingEntrepreneurship ? 'animate-spin' : ''}`} />
+                <span>{isSyncingEntrepreneurship ? 'Upserting to Firestore...' : 'Sync Entrepreneurship (EED 126, 50 Qs) to Firestore'}</span>
+              </button>
+
+              <button
+                type="button"
                 id="admin-sync-philosophy-science-cbt-btn"
                 onClick={handleSyncPhilosophyScienceExam}
                 disabled={isSyncingPhilosophyScience}
@@ -1801,6 +1837,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </button>
             </div>
           </div>
+
+          {entrepreneurshipSyncFeedback && (
+            <div className="p-3 bg-indigo-950/40 border border-indigo-500/40 rounded-xl flex items-center justify-between text-xs text-indigo-200 animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
+                <span>{entrepreneurshipSyncFeedback}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEntrepreneurshipSyncFeedback(null)}
+                className="text-indigo-400 hover:text-white font-bold ml-2 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {philosophyScienceSyncFeedback && (
             <div className="p-3 bg-purple-950/40 border border-purple-500/40 rounded-xl flex items-center justify-between text-xs text-purple-200 animate-in fade-in">

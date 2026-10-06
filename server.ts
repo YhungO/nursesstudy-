@@ -26,6 +26,13 @@ import {
   buildPhilosophyScienceExamPayload,
   buildPhilosophyScienceQuestionPayloads,
 } from './src/data/philosophyScienceQuestions.ts';
+import {
+  ENTREPRENEURSHIP_SUBJECT_ID,
+  ENTREPRENEURSHIP_EXAM_ID,
+  buildEntrepreneurshipSubjectPayload,
+  buildEntrepreneurshipExamPayload,
+  buildEntrepreneurshipQuestionPayloads,
+} from './src/data/entrepreneurshipQuestions.ts';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -1784,15 +1791,58 @@ function ensurePhilosophyScienceExam() {
   }
 }
 
+// Ensure Introduction to Entrepreneurship (EED 126) 50-Question CBT exam exists in database
+function ensureEntrepreneurshipExam() {
+  const database = db.get();
+
+  // Ensure subject has name "Introduction to Entrepreneurship" and code "EED 126"
+  const existingSubjIdx = database.subjects.findIndex(s => s.id === ENTREPRENEURSHIP_SUBJECT_ID);
+  const subjPayload = buildEntrepreneurshipSubjectPayload();
+  if (existingSubjIdx === -1) {
+    database.subjects.push(subjPayload);
+  } else {
+    database.subjects[existingSubjIdx] = {
+      ...database.subjects[existingSubjIdx],
+      ...subjPayload,
+    };
+  }
+
+  const existingExam = database.exams.find(e => e.id === ENTREPRENEURSHIP_EXAM_ID);
+  const existingQCount = database.questions.filter(q => String(q.id).startsWith('EED126-')).length;
+
+  if (!existingExam || existingQCount < 50) {
+    const examPayload = buildEntrepreneurshipExamPayload();
+    const questionPayloads = buildEntrepreneurshipQuestionPayloads();
+
+    const targetIds = new Set(questionPayloads.map(q => String(q.id)));
+    database.questions = database.questions.filter(q => !targetIds.has(String(q.id)));
+    database.questions.push(...questionPayloads);
+
+    if (!existingExam) {
+      database.exams.push(examPayload as any);
+    } else {
+      const idx = database.exams.findIndex(e => e.id === ENTREPRENEURSHIP_EXAM_ID);
+      database.exams[idx] = { ...database.exams[idx], ...(examPayload as any) };
+    }
+    db.save();
+    console.log('[Server] Ensured 50-Question Introduction to Entrepreneurship (EED 126) CBT exam in database.');
+  }
+}
+
 // ==================== VITE & STATIC SERVING ==================== //
 async function startServer() {
   ensurePhilosophyScienceExam();
+  ensureEntrepreneurshipExam();
   if (process.env.NODE_ENV !== 'production') {
     delete (globalThis as any).__dirname;
     delete (global as any).__dirname;
 
     const vite = await createViteServer({
-      server: { middlewareMode: true, hmr: false, ws: false },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+        ws: false,
+      },
       appType: 'spa',
     });
 

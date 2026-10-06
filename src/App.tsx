@@ -190,7 +190,14 @@ const MainAppContent: React.FC = () => {
 
     const unsubSubjects = subscribeToSubjects((liveSubjects) => {
       if (Array.isArray(liveSubjects) && liveSubjects.length > 0) {
-        setSubjects(liveSubjects);
+        setSubjects((prev) => {
+          const liveMap = new Map(liveSubjects.map((s) => [s.id, s]));
+          const merged = [...liveSubjects];
+          for (const ps of prev) {
+            if (!liveMap.has(ps.id)) merged.push(ps);
+          }
+          return merged;
+        });
         offlineStorage.saveSubjects(liveSubjects).catch(() => {});
       }
     });
@@ -204,7 +211,14 @@ const MainAppContent: React.FC = () => {
 
     const unsubQuestions = subscribeToQuestions((liveQuestions) => {
       if (Array.isArray(liveQuestions) && liveQuestions.length > 0) {
-        setQuestions(liveQuestions);
+        setQuestions((prev) => {
+          const liveMap = new Map(liveQuestions.map((q) => [String(q.id), q]));
+          const merged = [...liveQuestions];
+          for (const pq of prev) {
+            if (!liveMap.has(String(pq.id))) merged.push(pq);
+          }
+          return merged;
+        });
         offlineStorage.saveQuestions(liveQuestions).catch(() => {});
       }
     });
@@ -212,7 +226,14 @@ const MainAppContent: React.FC = () => {
     const unsubExams = subscribeToExams((liveExams) => {
       if (Array.isArray(liveExams)) {
         if (liveExams.length > 0) {
-          setExams(liveExams);
+          setExams((prev) => {
+            const liveMap = new Map(liveExams.map((e) => [e.id, e]));
+            const merged = [...liveExams];
+            for (const pe of prev) {
+              if (!liveMap.has(pe.id)) merged.push(pe);
+            }
+            return merged;
+          });
           offlineStorage.saveExams(liveExams).catch(() => {});
         } else {
           setExams((prev) => (prev.length > 0 ? prev : []));

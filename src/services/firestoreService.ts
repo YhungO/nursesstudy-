@@ -38,6 +38,17 @@ export type {
   ImportPhilosophyScienceResult,
   PhilosophyScienceStatus,
 } from './philosophyScienceImportService';
+export {
+  ENTREPRENEURSHIP_EXAM_ID,
+  ENTREPRENEURSHIP_EXAM_TITLE,
+  ENTREPRENEURSHIP_SUBJECT_ID,
+  importEntrepreneurshipExamToFirestore,
+  getEntrepreneurshipExamImportStatus,
+} from './entrepreneurshipImportService';
+export type {
+  ImportEntrepreneurshipResult,
+  EntrepreneurshipStatus,
+} from './entrepreneurshipImportService';
 import {
   NursingLevel,
   Subject,

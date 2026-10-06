@@ -109,8 +109,6 @@ export default defineConfig(() => {
     },
     server: {
       allowedHosts: true as true,
-      // HMR is disabled in AI Studio
-      // Do not modify file watching
       hmr: false,
       ws: false as false,
       // Disable file watching when DISABLE_HMR is set

@@ -4,20 +4,122 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
     <script>
-      // HMR is disabled in AI Studio; ignore HMR WebSocket connection logs
+      // Ensure React Fast Refresh preamble globals exist immediately
+      window.$RefreshReg$ = window.$RefreshReg$ || function() {};
+      window.$RefreshSig$ = window.$RefreshSig$ || function() { return function(type) { return type; }; };
+      window.__vite_plugin_react_preamble_installed__ = true;
+
+      // HMR is disabled in AI Studio; intercept Vite HMR WebSocket and ignore connection logs
       (function() {
-        function shouldIgnore(args) {
+        // 1. Mock WebSocket for vite-hmr to satisfy @vite/client without failing
+        if (typeof window !== 'undefined' && window.WebSocket) {
+          const RealWebSocket = window.WebSocket;
+          class ViteMockWebSocket {
+            constructor(url, protocols) {
+              this.url = url;
+              this.protocols = protocols;
+              this.readyState = 1; // WebSocket.OPEN
+              this.CONNECTING = 0;
+              this.OPEN = 1;
+              this.CLOSING = 2;
+              this.CLOSED = 3;
+              this.binaryType = 'blob';
+              this.bufferedAmount = 0;
+              this.extensions = '';
+              this.protocol = Array.isArray(protocols) ? protocols[0] || '' : (typeof protocols === 'string' ? protocols : '');
+              this.onopen = null;
+              this.onclose = null;
+              this.onerror = null;
+              this.onmessage = null;
+              this._listeners = {};
+
+              setTimeout(() => {
+                const openEvt = { type: 'open', target: this };
+                if (typeof this.onopen === 'function') this.onopen(openEvt);
+                this.dispatchEvent(openEvt);
+              }, 0);
+            }
+            addEventListener(type, listener) {
+              if (!this._listeners[type]) this._listeners[type] = [];
+              this._listeners[type].push(listener);
+              if (type === 'open') {
+                setTimeout(() => {
+                  try { listener({ type: 'open', target: this }); } catch (_) {}
+                }, 0);
+              }
+            }
+            removeEventListener(type, listener) {
+              if (this._listeners[type]) {
+                this._listeners[type] = this._listeners[type].filter((cb) => cb !== listener);
+              }
+            }
+            dispatchEvent(evt) {
+              const list = this._listeners[evt.type] || [];
+              for (let i = 0; i < list.length; i++) {
+                try { list[i](evt); } catch (_) {}
+              }
+              return true;
+            }
+            send(data) {
+              try {
+                if (typeof data === 'string') {
+                  const parsed = JSON.parse(data);
+                  if (parsed && parsed.type === 'ping') {
+                    setTimeout(() => {
+                      const msgEvt = {
+                        type: 'message',
+                        data: JSON.stringify({ type: 'pong' }),
+                        target: this,
+                      };
+                      if (typeof this.onmessage === 'function') this.onmessage(msgEvt);
+                      this.dispatchEvent(msgEvt);
+                    }, 0);
+                  }
+                }
+              } catch (_) {}
+            }
+            close() {
+              this.readyState = 3; // CLOSED
+              const closeEvt = { type: 'close', wasClean: true, code: 1000, reason: '', target: this };
+              if (typeof this.onclose === 'function') this.onclose(closeEvt);
+              this.dispatchEvent(closeEvt);
+            }
+          }
+
+          window.WebSocket = function(url, protocols) {
+            const urlStr = String(url || '');
+            const protoStr = Array.isArray(protocols) ? protocols.join(' ') : String(protocols || '');
+            if (
+              urlStr.includes(':24678') ||
+              urlStr.includes('vite-hmr') ||
+              protoStr.includes('vite-hmr') ||
+              urlStr.includes('token=')
+            ) {
+              return new ViteMockWebSocket(url, protocols);
+            }
+            return new RealWebSocket(url, protocols);
+          };
+          window.WebSocket.prototype = RealWebSocket.prototype;
+          window.WebSocket.CONNECTING = 0;
+          window.WebSocket.OPEN = 1;
+          window.WebSocket.CLOSING = 2;
+          window.WebSocket.CLOSED = 3;
+        }
+
+        // 2. Direct console silencing for [vite] and WebSocket messages
+        function isViteIgnored(args) {
           if (!args) return false;
           for (let i = 0; i < args.length; i++) {
             const item = args[i];
             const str = typeof item === 'string' ? item : (item && typeof item === 'object' ? (item.message || item.stack || '') : '');
             if (
               str.includes('[vite]') ||
+              str.includes('vite-hmr') ||
+              str.includes('vite:ws') ||
               str.includes('WebSocket') ||
               str.includes('websocket') ||
               str.includes('ws://') ||
-              str.includes('wss://') ||
-              str.includes('vite:ws')
+              str.includes('wss://')
             ) {
               return true;
             }
@@ -25,80 +127,76 @@
           return false;
         }
 
-        // Intercept MessagePort.postMessage to prevent _aistudio-iframe.js from posting [vite] errors to host
-        if (typeof MessagePort !== 'undefined' && MessagePort.prototype && MessagePort.prototype.postMessage) {
-          const origPortPostMessage = MessagePort.prototype.postMessage;
-          MessagePort.prototype.postMessage = function(data, ...rest) {
-            if (data && typeof data === 'object' && data.type === 'console_error') {
-              const msg = typeof data.message === 'string' ? data.message : '';
-              if (
-                msg.includes('[vite]') ||
-                msg.includes('WebSocket') ||
-                msg.includes('websocket') ||
-                msg.includes('ws://') ||
-                msg.includes('wss://')
-              ) {
-                return;
-              }
-            }
-            return origPortPostMessage.call(this, data, ...rest);
+        const realConsole = window.console;
+        if (realConsole) {
+          const origError = realConsole.error ? realConsole.error.bind(realConsole) : () => {};
+          const origWarn = realConsole.warn ? realConsole.warn.bind(realConsole) : () => {};
+          const origDebug = realConsole.debug ? realConsole.debug.bind(realConsole) : () => {};
+
+          realConsole.error = function(...args) {
+            if (isViteIgnored(args)) return;
+            return origError(...args);
+          };
+
+          realConsole.warn = function(...args) {
+            if (isViteIgnored(args)) return;
+            return origWarn(...args);
+          };
+
+          realConsole.debug = function(...args) {
+            if (isViteIgnored(args)) return;
+            return origDebug(...args);
           };
         }
 
-        function wrapConsole(targetConsole) {
-          if (!targetConsole) return targetConsole;
-          const realError = targetConsole.error;
-          const realWarn = targetConsole.warn;
-
-          return new Proxy(targetConsole, {
-            get(target, prop) {
-              if (prop === 'error') {
-                return function(...args) {
-                  if (shouldIgnore(args)) return;
-                  return (target.error || realError).apply(target, args);
-                };
-              }
-              if (prop === 'warn') {
-                return function(...args) {
-                  if (shouldIgnore(args)) return;
-                  return (target.warn || realWarn).apply(target, args);
-                };
-              }
-              return target[prop];
-            },
-            set(target, prop, value) {
-              if (prop === 'error' && typeof value === 'function') {
-                target[prop] = function(...args) {
-                  if (shouldIgnore(args)) return;
-                  return value.apply(this, args);
-                };
-                return true;
-              }
-              if (prop === 'warn' && typeof value === 'function') {
-                target[prop] = function(...args) {
-                  if (shouldIgnore(args)) return;
-                  return value.apply(this, args);
-                };
-                return true;
-              }
-              target[prop] = value;
+        // 3. Intercept postMessage to prevent _aistudio-iframe.js from posting [vite] errors to host
+        function shouldFilterData(data) {
+          if (!data) return false;
+          if (typeof data === 'string') {
+            return data.includes('[vite]') || data.includes('WebSocket') || data.includes('websocket');
+          }
+          if (typeof data === 'object') {
+            const msg = typeof data.message === 'string' ? data.message : '';
+            const err = typeof data.error === 'string' ? data.error : '';
+            if (
+              msg.includes('[vite]') ||
+              msg.includes('WebSocket') ||
+              msg.includes('websocket') ||
+              err.includes('[vite]') ||
+              err.includes('WebSocket')
+            ) {
               return true;
             }
-          });
+            try {
+              const str = JSON.stringify(data);
+              if (str.includes('[vite]')) return true;
+            } catch (_) {}
+          }
+          return false;
         }
 
-        let currentConsole = wrapConsole(window.console);
+        if (typeof MessagePort !== 'undefined' && MessagePort.prototype && MessagePort.prototype.postMessage) {
+          const origPortPost = MessagePort.prototype.postMessage;
+          MessagePort.prototype.postMessage = function(data, ...rest) {
+            if (shouldFilterData(data)) return;
+            return origPortPost.call(this, data, ...rest);
+          };
+        }
+
+        const origWinPost = window.postMessage;
+        window.postMessage = function(data, ...rest) {
+          if (shouldFilterData(data)) return;
+          return origWinPost.call(this, data, ...rest);
+        };
+
         try {
-          Object.defineProperty(window, 'console', {
-            configurable: true,
-            enumerable: true,
-            get() {
-              return currentConsole;
-            },
-            set(newConsole) {
-              currentConsole = wrapConsole(newConsole);
-            }
-          });
+          if (window.parent && window.parent !== window && window.parent.postMessage) {
+            const origParentPost = window.parent.postMessage;
+            window.parent.postMessage = function(data, ...rest) {
+              if (shouldFilterData(data)) return;
+              return origParentPost.call(this, data, ...rest);
+            };
+          }
         } catch (_) {}
 
         window.addEventListener('error', function(event) {

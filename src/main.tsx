@@ -1,3 +1,10 @@
+// Ensure React Fast Refresh preamble globals exist immediately
+if (typeof window !== 'undefined') {
+  (window as any).$RefreshReg$ = (window as any).$RefreshReg$ || (() => {});
+  (window as any).$RefreshSig$ = (window as any).$RefreshSig$ || (() => (type: any) => type);
+  (window as any).__vite_plugin_react_preamble_installed__ = true;
+}
+
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';

@@ -478,9 +478,9 @@ export function getInitialData(): DatabaseSchema {
       {
         id: 'subj-entrepreneurship',
         levelId: 'lvl-nd1',
-        name: 'Entrepreneurship',
-        code: 'ENT-101',
-        description: 'Fundamentals of entrepreneurship, innovation in healthcare delivery, business management, financial literacy, and career independence for nurses.',
+        name: 'Introduction to Entrepreneurship',
+        code: 'EED 126',
+        description: 'Motivational pattern of entrepreneurs, venture establishment, innovation, self-reliance, and business planning for healthcare professionals.',
         icon: 'Briefcase',
         color: 'amber',
         order: 8,
