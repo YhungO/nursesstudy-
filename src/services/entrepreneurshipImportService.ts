@@ -7,16 +7,27 @@ import {
 } from '../firebase.ts';
 import { CBTExam, Question } from '../types.ts';
 import {
+  ENTREPRENEURSHIP_EXAM_BATCH_A_ID,
+  ENTREPRENEURSHIP_EXAM_BATCH_B_ID,
   ENTREPRENEURSHIP_EXAM_ID,
   ENTREPRENEURSHIP_EXAM_TITLE,
+  ENTREPRENEURSHIP_EXAM_BATCH_B_TITLE,
   ENTREPRENEURSHIP_QUESTION_IDS,
   ENTREPRENEURSHIP_SUBJECT_ID,
   buildEntrepreneurshipExamPayload,
+  buildEntrepreneurshipBatchBExamPayload,
   buildEntrepreneurshipQuestionPayloads,
   buildEntrepreneurshipSubjectPayload,
 } from '../data/entrepreneurshipQuestions.ts';
 
-export { ENTREPRENEURSHIP_EXAM_ID, ENTREPRENEURSHIP_EXAM_TITLE, ENTREPRENEURSHIP_SUBJECT_ID };
+export {
+  ENTREPRENEURSHIP_EXAM_BATCH_A_ID,
+  ENTREPRENEURSHIP_EXAM_BATCH_B_ID,
+  ENTREPRENEURSHIP_EXAM_ID,
+  ENTREPRENEURSHIP_EXAM_TITLE,
+  ENTREPRENEURSHIP_EXAM_BATCH_B_TITLE,
+  ENTREPRENEURSHIP_SUBJECT_ID,
+};
 
 export interface ImportEntrepreneurshipResult {
   success: boolean;
@@ -36,7 +47,8 @@ export interface ImportEntrepreneurshipResult {
 
 export interface EntrepreneurshipStatus {
   examExists: boolean;
-  examData?: CBTExam;
+  batchAExists: boolean;
+  batchBExists: boolean;
   existingQuestionCount: number;
   expectedQuestionCount: number;
   allQuestionsImported: boolean;
@@ -44,17 +56,19 @@ export interface EntrepreneurshipStatus {
 }
 
 /**
- * Checks Firestore to see if the Introduction to Entrepreneurship (EED 126) exam and its 50 questions
- * already exist in the database.
+ * Checks Firestore to see if the Introduction to Entrepreneurship (EED 126) exams (Batch A and Batch B)
+ * and all 100 questions already exist in the database.
  */
 export async function getEntrepreneurshipExamImportStatus(
   firestoreInstance: any = db
 ): Promise<EntrepreneurshipStatus> {
   try {
-    const examDocRef = doc(firestoreInstance, 'exams', ENTREPRENEURSHIP_EXAM_ID);
-    const examSnap = await getDoc(examDocRef);
-    const examExists = examSnap.exists();
-    const examData = examExists ? (examSnap.data() as CBTExam) : undefined;
+    const batchARef = doc(firestoreInstance, 'exams', ENTREPRENEURSHIP_EXAM_BATCH_A_ID);
+    const batchBRef = doc(firestoreInstance, 'exams', ENTREPRENEURSHIP_EXAM_BATCH_B_ID);
+    const [snapA, snapB] = await Promise.all([getDoc(batchARef), getDoc(batchBRef)]);
+
+    const batchAExists = snapA.exists();
+    const batchBExists = snapB.exists();
 
     const expectedIds = ENTREPRENEURSHIP_QUESTION_IDS;
     let existingCount = 0;
@@ -78,17 +92,20 @@ export async function getEntrepreneurshipExamImportStatus(
     }
 
     return {
-      examExists,
-      examData,
+      examExists: batchAExists && batchBExists,
+      batchAExists,
+      batchBExists,
       existingQuestionCount: existingCount,
       expectedQuestionCount: expectedIds.length,
-      allQuestionsImported: examExists && existingCount === expectedIds.length,
+      allQuestionsImported: batchAExists && batchBExists && existingCount === expectedIds.length,
       missingQuestionIds,
     };
   } catch (err) {
     console.warn('[Entrepreneurship] Error querying status from Firestore:', err);
     return {
       examExists: false,
+      batchAExists: false,
+      batchBExists: false,
       existingQuestionCount: 0,
       expectedQuestionCount: ENTREPRENEURSHIP_QUESTION_IDS.length,
       allQuestionsImported: false,
@@ -98,8 +115,8 @@ export async function getEntrepreneurshipExamImportStatus(
 }
 
 /**
- * Robustly upserts the Introduction to Entrepreneurship (EED 126) Subject, Exam,
- * and all 50 multiple-choice questions into Cloud Firestore.
+ * Robustly upserts the Introduction to Entrepreneurship (EED 126) Subject,
+ * both CBT Exams (Batch A and Batch B), and all 100 multiple-choice questions into Cloud Firestore.
  */
 export async function importEntrepreneurshipExamToFirestore(
   options: {
@@ -116,7 +133,7 @@ export async function importEntrepreneurshipExamToFirestore(
     onProgress({
       stage: 'INIT',
       current: 0,
-      total: 52,
+      total: 103,
       message: 'Inspecting existing Firestore records for Introduction to Entrepreneurship (EED 126)...',
     });
 
@@ -125,29 +142,42 @@ export async function importEntrepreneurshipExamToFirestore(
     const subjectPayload = buildEntrepreneurshipSubjectPayload();
     await setDoc(subjectRef, subjectPayload, { merge: true });
 
-    // 2. Ensure Exam exists in Firestore
-    const examRef = doc(firestore, 'exams', ENTREPRENEURSHIP_EXAM_ID);
-    const existingExamSnap = await getDoc(examRef);
-    const examExisted = existingExamSnap.exists();
+    // 2. Ensure Batch A Exam exists in Firestore
+    const examARef = doc(firestore, 'exams', ENTREPRENEURSHIP_EXAM_BATCH_A_ID);
+    const existingASnap = await getDoc(examARef);
+    const examAExisted = existingASnap.exists();
 
-    const baseExam = buildEntrepreneurshipExamPayload();
-    const finalExamPayload: CBTExam = {
-      ...baseExam,
-      createdAt: examExisted ? (existingExamSnap.data()?.createdAt || baseExam.createdAt) : baseExam.createdAt,
+    const baseExamA = buildEntrepreneurshipExamPayload();
+    const finalExamAPayload: CBTExam = {
+      ...baseExamA,
+      createdAt: examAExisted ? (existingASnap.data()?.createdAt || baseExamA.createdAt) : baseExamA.createdAt,
       updatedAt: new Date().toISOString(),
       updatedBy: options.adminActor?.email || 'admin',
     };
+    await setDoc(examARef, finalExamAPayload, { merge: true });
+
+    // 3. Ensure Batch B Exam exists in Firestore
+    const examBRef = doc(firestore, 'exams', ENTREPRENEURSHIP_EXAM_BATCH_B_ID);
+    const existingBSnap = await getDoc(examBRef);
+    const examBExisted = existingBSnap.exists();
+
+    const baseExamB = buildEntrepreneurshipBatchBExamPayload();
+    const finalExamBPayload: CBTExam = {
+      ...baseExamB,
+      createdAt: examBExisted ? (existingBSnap.data()?.createdAt || baseExamB.createdAt) : baseExamB.createdAt,
+      updatedAt: new Date().toISOString(),
+      updatedBy: options.adminActor?.email || 'admin',
+    };
+    await setDoc(examBRef, finalExamBPayload, { merge: true });
 
     onProgress({
       stage: 'EXAM',
-      current: 1,
-      total: 52,
-      message: `${examExisted ? 'Updating' : 'Creating'} examination document '${ENTREPRENEURSHIP_EXAM_ID}'...`,
+      current: 3,
+      total: 103,
+      message: 'Synchronized Batch A and Batch B examination documents in Firestore...',
     });
 
-    await setDoc(examRef, finalExamPayload, { merge: true });
-
-    // 3. Prepare questions
+    // 4. Prepare all 100 questions
     const questionPayloads = buildEntrepreneurshipQuestionPayloads();
     let questionsAdded = 0;
     let questionsUpdated = 0;
@@ -191,8 +221,8 @@ export async function importEntrepreneurshipExamToFirestore(
 
       onProgress({
         stage: 'QUESTIONS',
-        current: Math.min(i + chunk.length + 1, 52),
-        total: 52,
+        current: Math.min(i + chunk.length + 3, 103),
+        total: 103,
         message: `Committed ${Math.min(i + chunk.length, questionStatusList.length)} of ${questionStatusList.length} questions...`,
       });
     }
@@ -200,25 +230,25 @@ export async function importEntrepreneurshipExamToFirestore(
     const durationMs = Date.now() - startTime;
     return {
       success: true,
-      examId: ENTREPRENEURSHIP_EXAM_ID,
-      examTitle: ENTREPRENEURSHIP_EXAM_TITLE,
+      examId: ENTREPRENEURSHIP_EXAM_BATCH_A_ID,
+      examTitle: 'Introduction to Entrepreneurship (EED 126) – Batch A & Batch B',
       totalQuestions: questionPayloads.length,
       questionsAdded,
       questionsUpdated,
-      examCreated: !examExisted,
-      examUpdated: examExisted,
+      examCreated: !examAExisted || !examBExisted,
+      examUpdated: examAExisted && examBExisted,
       questionIds: questionPayloads.map((q) => String(q.id)),
       durationMs,
       timestamp: new Date().toISOString(),
-      message: `Successfully synchronized Introduction to Entrepreneurship (EED 126) CBT (${questionPayloads.length} questions) in ${durationMs}ms. Added: ${questionsAdded}, Updated: ${questionsUpdated}.`,
+      message: `Successfully synchronized Introduction to Entrepreneurship (EED 126) CBT (Batch A & Batch B, ${questionPayloads.length} total questions) in ${durationMs}ms. Added: ${questionsAdded}, Updated: ${questionsUpdated}.`,
     };
   } catch (err: any) {
     console.error('[Entrepreneurship Import] Failed to upsert to Firestore:', err);
     return {
       success: false,
-      examId: ENTREPRENEURSHIP_EXAM_ID,
-      examTitle: ENTREPRENEURSHIP_EXAM_TITLE,
-      totalQuestions: 50,
+      examId: ENTREPRENEURSHIP_EXAM_BATCH_A_ID,
+      examTitle: 'Introduction to Entrepreneurship (EED 126)',
+      totalQuestions: 100,
       questionsAdded: 0,
       questionsUpdated: 0,
       examCreated: false,

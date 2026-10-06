@@ -28,9 +28,12 @@ import {
 } from './src/data/philosophyScienceQuestions.ts';
 import {
   ENTREPRENEURSHIP_SUBJECT_ID,
+  ENTREPRENEURSHIP_EXAM_BATCH_A_ID,
+  ENTREPRENEURSHIP_EXAM_BATCH_B_ID,
   ENTREPRENEURSHIP_EXAM_ID,
   buildEntrepreneurshipSubjectPayload,
   buildEntrepreneurshipExamPayload,
+  buildEntrepreneurshipBatchBExamPayload,
   buildEntrepreneurshipQuestionPayloads,
 } from './src/data/entrepreneurshipQuestions.ts';
 
@@ -1791,7 +1794,7 @@ function ensurePhilosophyScienceExam() {
   }
 }
 
-// Ensure Introduction to Entrepreneurship (EED 126) 50-Question CBT exam exists in database
+// Ensure Introduction to Entrepreneurship (EED 126) 100-Question CBT exams (Batch A and Batch B) exist in database
 function ensureEntrepreneurshipExam() {
   const database = db.get();
 
@@ -1807,25 +1810,35 @@ function ensureEntrepreneurshipExam() {
     };
   }
 
-  const existingExam = database.exams.find(e => e.id === ENTREPRENEURSHIP_EXAM_ID);
+  const existingExamA = database.exams.find(e => e.id === ENTREPRENEURSHIP_EXAM_BATCH_A_ID);
+  const existingExamB = database.exams.find(e => e.id === ENTREPRENEURSHIP_EXAM_BATCH_B_ID);
   const existingQCount = database.questions.filter(q => String(q.id).startsWith('EED126-')).length;
 
-  if (!existingExam || existingQCount < 50) {
-    const examPayload = buildEntrepreneurshipExamPayload();
+  if (!existingExamA || !existingExamB || existingQCount < 100) {
+    const examPayloadA = buildEntrepreneurshipExamPayload();
+    const examPayloadB = buildEntrepreneurshipBatchBExamPayload();
     const questionPayloads = buildEntrepreneurshipQuestionPayloads();
 
     const targetIds = new Set(questionPayloads.map(q => String(q.id)));
     database.questions = database.questions.filter(q => !targetIds.has(String(q.id)));
     database.questions.push(...questionPayloads);
 
-    if (!existingExam) {
-      database.exams.push(examPayload as any);
+    if (!existingExamA) {
+      database.exams.push(examPayloadA as any);
     } else {
-      const idx = database.exams.findIndex(e => e.id === ENTREPRENEURSHIP_EXAM_ID);
-      database.exams[idx] = { ...database.exams[idx], ...(examPayload as any) };
+      const idx = database.exams.findIndex(e => e.id === ENTREPRENEURSHIP_EXAM_BATCH_A_ID);
+      database.exams[idx] = { ...database.exams[idx], ...(examPayloadA as any) };
     }
+
+    if (!existingExamB) {
+      database.exams.push(examPayloadB as any);
+    } else {
+      const idx = database.exams.findIndex(e => e.id === ENTREPRENEURSHIP_EXAM_BATCH_B_ID);
+      database.exams[idx] = { ...database.exams[idx], ...(examPayloadB as any) };
+    }
+
     db.save();
-    console.log('[Server] Ensured 50-Question Introduction to Entrepreneurship (EED 126) CBT exam in database.');
+    console.log('[Server] Ensured 100-Question Introduction to Entrepreneurship (EED 126) Batch A & Batch B CBT exams in database.');
   }
 }
 

@@ -193,7 +193,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleSyncEntrepreneurshipExam = async () => {
     setIsSyncingEntrepreneurship(true);
-    setEntrepreneurshipSyncFeedback('Upserting Introduction to Entrepreneurship (EED 126, 50 questions) to Cloud Firestore...');
+    setEntrepreneurshipSyncFeedback('Upserting Introduction to Entrepreneurship (EED 126, 100 questions – Batch A & Batch B) to Cloud Firestore...');
     try {
       const res = await importEntrepreneurshipExamToFirestore({
         adminActor: user ? { uid: user.id, email: user.email, name: user.name } : undefined,
@@ -1785,11 +1785,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 id="admin-sync-entrepreneurship-cbt-btn"
                 onClick={handleSyncEntrepreneurshipExam}
                 disabled={isSyncingEntrepreneurship}
-                title="Perform one-time or re-sync upsert of 'Introduction to Entrepreneurship (EED 126)' (50 objective questions) to Cloud Firestore with zero duplicates"
+                title="Perform one-time or re-sync upsert of 'Introduction to Entrepreneurship (EED 126)' (100 objective questions – Batch A & Batch B) to Cloud Firestore with zero duplicates"
                 className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
               >
                 <Cloud className={`w-4 h-4 ${isSyncingEntrepreneurship ? 'animate-spin' : ''}`} />
-                <span>{isSyncingEntrepreneurship ? 'Upserting to Firestore...' : 'Sync Entrepreneurship (EED 126, 50 Qs) to Firestore'}</span>
+                <span>{isSyncingEntrepreneurship ? 'Upserting to Firestore...' : 'Sync Entrepreneurship (EED 126, 100 Qs) to Firestore'}</span>
               </button>
 
               <button
